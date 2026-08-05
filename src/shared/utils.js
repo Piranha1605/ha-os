@@ -28,6 +28,40 @@ export const isEqualConfig = (a, b) => {
   }
 };
 
+/**
+ * Zieht Felder aus alten, verschachtelten Editor-Blöcken nach oben.
+ *
+ * Bis Version 0.3.0 legte `ha-form-expandable` die Felder der aufklappbaren
+ * Blöcke unter deren Namen ab – `darstellung: { name, icon }` statt `name`
+ * und `icon`. Gespeicherte Konfigurationen sehen deshalb noch so aus. Ohne
+ * diese Umsetzung verlöre Enrico beim Update alle vergebenen Namen und
+ * Symbole.
+ *
+ * Gibt bewusst dasselbe Objekt zurück, wenn nichts zu tun war: die Karten
+ * vergleichen Konfigurationen, um unnötiges Neuzeichnen zu vermeiden.
+ */
+const LEGACY_GROUPS = ["darstellung", "aktion"];
+
+export const flattenLegacyGroups = (config) => {
+  if (!config || typeof config !== "object") return config;
+
+  let touched = false;
+  const flat = { ...config };
+
+  LEGACY_GROUPS.forEach((group) => {
+    const nested = flat[group];
+    if (!nested || typeof nested !== "object" || Array.isArray(nested)) return;
+    Object.entries(nested).forEach(([key, value]) => {
+      // Ein bereits flach gesetzter Wert gewinnt – er ist der neuere.
+      if (flat[key] === undefined) flat[key] = value;
+    });
+    delete flat[group];
+    touched = true;
+  });
+
+  return touched ? flat : config;
+};
+
 export const fireEvent = (node, type, detail = {}) => {
   node.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
 };
@@ -183,24 +217,43 @@ export const createCardElement = async (config) => {
   return element;
 };
 
-/** Gemeinsames CSS für eine Entitäts-Glasfläche. */
+/**
+ * Gemeinsames CSS für eine Entitäts-Glasfläche.
+ *
+ * Der Aufbau ist bewusst dreischichtig:
+ *   1. `--haos-*-gloss` – diagonaler Schimmer, liegt als Verlauf oben auf
+ *   2. die eingefärbte Fläche darunter
+ *   3. `--haos-*-sheen` – helle Kante oben, dunkle unten, als inset-Schatten
+ *
+ * Genau diese Trennung erzeugt den Eindruck von Glas. Eine gleichmäßig
+ * getrübte Fläche mit rundum gleich hellem Rahmen wirkt stattdessen flach,
+ * egal wie stark man die Weichzeichnung dreht.
+ */
 export const ENTITY_SURFACE_CSS = `
-  border: 1px solid rgba(var(--haos-entity-border-rgb, 255,255,255), var(--haos-entity-border-opacity, .25));
-  border-radius: var(--haos-entity-radius, 14px);
-  background: rgba(var(--haos-entity-surface-rgb, 255,255,255), var(--haos-entity-opacity, .10));
-  box-shadow: var(--haos-entity-shadow, 0 12px 30px rgba(0,0,0,.18));
-  backdrop-filter: blur(var(--haos-entity-blur, 16px)) saturate(var(--haos-entity-saturation, 160%));
-  -webkit-backdrop-filter: blur(var(--haos-entity-blur, 16px)) saturate(var(--haos-entity-saturation, 160%));
+  border: 1px solid rgba(var(--haos-entity-border-rgb, 255,255,255), var(--haos-entity-border-opacity, .20));
+  border-radius: var(--haos-entity-radius, 20px);
+  background:
+    var(--haos-entity-gloss, linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0))),
+    rgba(var(--haos-entity-surface-rgb, 255,255,255), var(--haos-entity-opacity, .10));
+  box-shadow:
+    var(--haos-entity-shadow, 0 12px 30px rgba(0,0,0,.20)),
+    var(--haos-entity-sheen, inset 0 1px 0 rgba(255,255,255,.32));
+  backdrop-filter: blur(var(--haos-entity-blur, 12px)) saturate(var(--haos-entity-saturation, 180%));
+  -webkit-backdrop-filter: blur(var(--haos-entity-blur, 12px)) saturate(var(--haos-entity-saturation, 180%));
 `;
 
 /** Gemeinsames CSS für die grosse Hintergrund-Glasfläche. */
 export const CARD_SURFACE_CSS = `
-  border: 1px solid rgba(var(--haos-card-border-rgb, 255,255,255), var(--haos-card-border-opacity, .25));
-  border-radius: var(--haos-card-radius, 14px);
-  background: rgba(var(--haos-card-surface-rgb, 255,255,255), var(--haos-card-opacity, .10));
-  box-shadow: var(--haos-card-shadow, 0 24px 70px rgba(0,0,0,.28));
-  backdrop-filter: blur(var(--haos-card-blur, 16px)) saturate(var(--haos-card-saturation, 160%));
-  -webkit-backdrop-filter: blur(var(--haos-card-blur, 16px)) saturate(var(--haos-card-saturation, 160%));
+  border: 1px solid rgba(var(--haos-card-border-rgb, 255,255,255), var(--haos-card-border-opacity, .22));
+  border-radius: var(--haos-card-radius, 24px);
+  background:
+    var(--haos-card-gloss, linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0))),
+    rgba(var(--haos-card-surface-rgb, 255,255,255), var(--haos-card-opacity, .10));
+  box-shadow:
+    var(--haos-card-shadow, 0 24px 70px rgba(0,0,0,.30)),
+    var(--haos-card-sheen, inset 0 1px 0 rgba(255,255,255,.28));
+  backdrop-filter: blur(var(--haos-card-blur, 14px)) saturate(var(--haos-card-saturation, 180%));
+  -webkit-backdrop-filter: blur(var(--haos-card-blur, 14px)) saturate(var(--haos-card-saturation, 180%));
 `;
 
 /** Registriert eine Karte im HA-Kartenauswahldialog. */

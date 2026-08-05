@@ -196,5 +196,24 @@ const hourlyLabels = labelsOf(hourly);
 check("Stundenvorhersage zeigt weiter Uhrzeiten", hourlyLabels.every((l) => /^\d{2}:\d{2}$/.test(l)),
   hourlyLabels.join(" | "));
 
+// Kurz nach Mitternacht liefert HA den gestrigen Tageseintrag noch mit.
+const gestern = document.createElement("ha-os-card");
+gestern.setConfig({
+  type: "custom:ha-os-card", card_type: "weather", entity: "weather.zuhause",
+  forecast_type: "daily", forecast_count: 4,
+});
+document.body.append(gestern);
+const gesternHass = makeHass();
+gesternHass.states["weather.zuhause"].attributes.forecast = [-1, 0, 1, 2].map((i) => {
+  const d = new Date();
+  d.setDate(d.getDate() + i);
+  d.setHours(0, 0, 0, 0);
+  return { datetime: d.toISOString(), temperature: 20 + i, condition: "sunny" };
+});
+gestern.hass = gesternHass;
+const gesternLabels = labelsOf(gestern);
+check("gestriger Tag wird ausgeblendet", gesternLabels[0] === "Heute", gesternLabels.join(" | "));
+check("drei Spalten übrig", gesternLabels.length === 3, gesternLabels.join(" | "));
+
 console.log(failures === 0 ? "\nAlle Prüfungen bestanden.\n" : `\n${failures} FEHLER.\n`);
 process.exit(failures === 0 ? 0 : 1);

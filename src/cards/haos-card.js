@@ -14,6 +14,7 @@ import {
   clampNumber,
   domainIcon,
   domainOf,
+  flattenLegacyGroups,
   formatState,
   friendlyName,
   handleAction,
@@ -71,7 +72,10 @@ const STYLES = `
 
   /* Aktiv = neutraler Glasrahmen + inneres Akzentleuchten, KEIN blauer Aussenrahmen */
   .card.is-on {
-    box-shadow: var(--haos-entity-shadow), inset 0 0 40px color-mix(in srgb, var(--haos-accent, #0a84ff) 20%, transparent);
+    box-shadow:
+      var(--haos-entity-shadow),
+      var(--haos-entity-sheen),
+      inset 0 0 40px color-mix(in srgb, var(--haos-accent, #0a84ff) 20%, transparent);
   }
   .card.is-unavailable { opacity: .55; }
 
@@ -312,6 +316,29 @@ const forecastLabel = (datetime, forecastType) => {
   }
 
   return `${pad(when.getHours())}:${pad(when.getMinutes())}`;
+};
+
+/**
+ * Wirft vergangene Tage aus der Vorhersage.
+ *
+ * Home Assistant liefert bei Tagesvorhersagen den laufenden Tag ab 00:00 UTC
+ * mit. Kurz nach Mitternacht Ortszeit ist dieser Eintrag bereits gestern –
+ * die Karte zeigte dann „Mi" vor „Heute". Stundenvorhersagen bleiben
+ * unangetastet, dort ist die nächste volle Stunde erwünscht.
+ */
+const dropPastDays = (forecast, forecastType) => {
+  if (forecastType !== "daily" && forecastType !== "twice_daily") return forecast;
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const future = forecast.filter((entry) => {
+    const when = new Date(entry?.datetime);
+    return Number.isNaN(when.getTime()) || when.getTime() >= startOfToday.getTime();
+  });
+
+  // Lieber eine veraltete Spalte als eine leere Karte.
+  return future.length ? future : forecast;
 };
 
 /**
@@ -749,7 +776,10 @@ const renderers = {
 
       // Vorhersage: neuere HA-Versionen liefern sie nicht mehr als Attribut.
       const forecast = state.attributes.forecast || ctx.nodes.forecastData || [];
-      const items = forecast.slice(0, Number(ctx.config.forecast_count) || 5);
+      const items = dropPastDays(forecast, ctx.config.forecast_type).slice(
+        0,
+        Number(ctx.config.forecast_count) || 5
+      );
 
       if (ctx.nodes.forecast.childElementCount !== items.length) {
         ctx.nodes.forecast.replaceChildren();
@@ -1225,7 +1255,10 @@ class HaOsCard extends HTMLElement {
     return { type: `custom:${TAG}`, card_type: "button", entity: "" };
   }
 
-  setConfig(config) {
+  setConfig(rawConfig) {
+    // Ältere Konfigurationen haben Name und Symbol unter "darstellung" liegen.
+    const config = flattenLegacyGroups(rawConfig);
+
     if (!config?.card_type) throw new Error("Bitte oben einen Kartentyp auswählen.");
     if (!renderers[config.card_type]) throw new Error(`Unbekannter Kartentyp: ${config.card_type}`);
 

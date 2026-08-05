@@ -128,7 +128,7 @@ const STYLES = `
   .badge b, .badge small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .badge b { font-size: 11px; }
   .badge small { margin-top: 2px; font-size: 9px; color: rgba(var(--haos-text-rgb, 255,255,255), .58); }
-  .badge.is-on { box-shadow: var(--haos-entity-shadow), inset 0 0 24px color-mix(in srgb, var(--haos-status-on, #0a84ff) 28%, transparent); }
+  .badge.is-on { box-shadow: var(--haos-entity-shadow), var(--haos-entity-sheen), inset 0 0 24px color-mix(in srgb, var(--haos-status-on, #0a84ff) 28%, transparent); }
   .badge.is-on ha-icon { color: var(--haos-status-on, #0a84ff); filter: drop-shadow(0 0 5px color-mix(in srgb, var(--haos-status-on, #0a84ff) 48%, transparent)); }
   .badge.is-off ha-icon { color: var(--haos-status-off, #a8b0b8); opacity: .72; }
   .badge.is-unavailable { opacity: .68; }
@@ -251,16 +251,18 @@ const THEME_CONTROLS = [
   { group: "card", key: "cardOpacity", label: "Transparenz", hint: "Hintergrundkarte", min: 0, max: 95, step: 1, unit: "%" },
   { group: "card", key: "cardBlur", label: "Unschärfe", hint: "Hintergrundkarte", min: 0, max: 50, step: 1, unit: "px" },
   { group: "card", key: "cardSaturation", label: "Sättigung", hint: "Hintergrundkarte", min: 50, max: 240, step: 5, unit: "%" },
-  { group: "card", key: "cardRadius", label: "Rundung", hint: "Hintergrundkarte", min: 0, max: 40, step: 1, unit: "px" },
+  { group: "card", key: "cardRadius", label: "Rundung", hint: "Hintergrundkarte", min: 0, max: 48, step: 1, unit: "px" },
   { group: "card", key: "cardBorder", label: "Rahmenfarbe", hint: "Kontur", type: "color" },
   { group: "card", key: "cardBorderOpacity", label: "Rahmenstärke", hint: "Hintergrundkarte", min: 0, max: 80, step: 1, unit: "%" },
+  { group: "card", key: "cardSheen", label: "Glanz", hint: "Helle Kante oben, Schimmer über der Fläche", min: 0, max: 100, step: 1, unit: "%" },
   { group: "entity", key: "entitySurface", label: "Grundfarbe", hint: "Farbe der Kartenfläche", type: "color" },
   { group: "entity", key: "entityOpacity", label: "Transparenz", hint: "Entitätskarte", min: 0, max: 95, step: 1, unit: "%" },
   { group: "entity", key: "entityBlur", label: "Unschärfe", hint: "Entitätskarte", min: 0, max: 50, step: 1, unit: "px" },
   { group: "entity", key: "entitySaturation", label: "Sättigung", hint: "Entitätskarte", min: 50, max: 240, step: 5, unit: "%" },
-  { group: "entity", key: "entityRadius", label: "Rundung", hint: "Entitätskarte", min: 0, max: 40, step: 1, unit: "px" },
+  { group: "entity", key: "entityRadius", label: "Rundung", hint: "Entitätskarte", min: 0, max: 48, step: 1, unit: "px" },
   { group: "entity", key: "entityBorder", label: "Rahmenfarbe", hint: "Kontur", type: "color" },
   { group: "entity", key: "entityBorderOpacity", label: "Rahmenstärke", hint: "Entitätskarte", min: 0, max: 80, step: 1, unit: "%" },
+  { group: "entity", key: "entitySheen", label: "Glanz", hint: "Helle Kante oben, Schimmer über der Fläche", min: 0, max: 100, step: 1, unit: "%" },
 ];
 
 const GROUP_TITLES = { general: "Allgemein", card: "Hintergrundkarte", entity: "Entitätskarten" };

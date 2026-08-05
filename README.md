@@ -4,7 +4,7 @@ Dashboard-Grundgerüst für Home Assistant im Glassmorphism-Stil. Eine grosse
 Glasfläche mit Seitenleiste, Kopfzeile und drei frei gewichteten Rastern – in
 die jede installierte Lovelace-Karte passt.
 
-Version 0.3.0
+Version 0.4.0
 
 ---
 
@@ -23,7 +23,7 @@ Version 0.3.0
 
 5. Browser hart neu laden (Cmd+Shift+R bzw. Strg+F5)
 
-**Prüfen, ob es geladen hat:** In der Browserkonsole muss `HA-OS 0.3.0` stehen.
+**Prüfen, ob es geladen hat:** In der Browserkonsole muss `HA-OS 0.4.0` stehen.
 
 ---
 
@@ -187,6 +187,26 @@ echten Implementierung. Ob der visuelle Editor in der installierten
 Home-Assistant-Version sauber funktioniert, zeigt nur ein Blick ins Frontend.
 
 ---
+
+## Glasoptik
+
+Der Eindruck von Glas entsteht nicht durch Weichzeichnung, sondern durch drei
+Schichten, die in `shared/utils.js` zusammenkommen:
+
+1. **Schimmer** – ein diagonaler Verlauf über der Fläche (`--haos-*-gloss`)
+2. **Grundfarbe** – die eingefärbte, transparente Fläche darunter
+3. **Glanzkante** – helle Linie oben, dunkle unten, als inset-Schatten
+   (`--haos-*-sheen`)
+
+Eine gleichmäßig getrübte Fläche mit rundum gleich hellem Rahmen wirkt flach,
+egal wie stark die Weichzeichnung steht. Deshalb regelt der Schieber **Glanz**
+in den Einstellungen alle drei Anteile gemeinsam, getrennt für Hintergrund-
+und Entitätskarten.
+
+**Nach dem Update auf 0.4.0:** wer schon eigene Theme-Werte gespeichert hat,
+behält Unschärfe, Rundung und Sättigung wie bisher – nur der neue Glanz kommt
+dazu. Für die überarbeiteten Vorgaben (weniger Unschärfe, mehr Sättigung,
+größere Rundung) in den Einstellungen einmal **Zurücksetzen** drücken.
 
 ## Noch offen
 

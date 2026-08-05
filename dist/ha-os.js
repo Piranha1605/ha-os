@@ -1,4 +1,4 @@
-/* HA-OS 0.3.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.4.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -9,19 +9,21 @@ var THEME_DEFAULTS = Object.freeze({
   // Hintergrundkarte = die grosse Glasflaeche der Shell
   cardSurface: "#ffffff",
   cardOpacity: 10,
-  cardBlur: 16,
-  cardSaturation: 160,
-  cardRadius: 14,
+  cardBlur: 14,
+  cardSaturation: 180,
+  cardRadius: 24,
   cardBorder: "#ffffff",
-  cardBorderOpacity: 25,
+  cardBorderOpacity: 22,
+  cardSheen: 55,
   // Entitaetskarte = die einzelnen Karten darin
   entitySurface: "#ffffff",
   entityOpacity: 10,
-  entityBlur: 16,
-  entitySaturation: 160,
-  entityRadius: 14,
+  entityBlur: 12,
+  entitySaturation: 180,
+  entityRadius: 20,
   entityBorder: "#ffffff",
-  entityBorderOpacity: 25
+  entityBorderOpacity: 20,
+  entitySheen: 65
 });
 var clamp = (value, min, max, fallback) => {
   const number2 = Number(value);
@@ -32,6 +34,25 @@ var hexToRgb = (hex) => {
   const value = String(hex).replace("#", "");
   return [0, 2, 4].map((start) => Number.parseInt(value.slice(start, start + 2), 16)).join(", ");
 };
+var sheenShadow = (strength, light) => {
+  const s = clamp(strength, 0, 100, 0) / 100;
+  if (s === 0) return "0 0 0 0 rgba(0,0,0,0)";
+  const top = (light ? 0.85 : 0.5) * s;
+  const bottom = (light ? 0.1 : 0.3) * s;
+  const inner = (light ? 0.3 : 0.14) * s;
+  return [
+    `inset 0 1px 0 rgba(255, 255, 255, ${top.toFixed(3)})`,
+    `inset 0 -1px 0 rgba(0, 0, 0, ${bottom.toFixed(3)})`,
+    `inset 0 22px 34px -26px rgba(255, 255, 255, ${inner.toFixed(3)})`
+  ].join(", ");
+};
+var glossLayer = (strength, light) => {
+  const s = clamp(strength, 0, 100, 0) / 100;
+  if (s === 0) return "linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0))";
+  const bright = (light ? 0.55 : 0.2) * s;
+  const faint = (light ? 0.14 : 0.05) * s;
+  return `linear-gradient(148deg, rgba(255, 255, 255, ${bright.toFixed(3)}) 0%, rgba(255, 255, 255, ${faint.toFixed(3)}) 38%, rgba(255, 255, 255, 0) 62%)`;
+};
 var normalizeTheme = (settings = {}) => ({
   mode: settings.mode === "light" ? "light" : "dark",
   accent: color(settings.accent, THEME_DEFAULTS.accent),
@@ -40,16 +61,18 @@ var normalizeTheme = (settings = {}) => ({
   cardOpacity: clamp(settings.cardOpacity, 0, 95, THEME_DEFAULTS.cardOpacity),
   cardBlur: clamp(settings.cardBlur, 0, 50, THEME_DEFAULTS.cardBlur),
   cardSaturation: clamp(settings.cardSaturation, 50, 240, THEME_DEFAULTS.cardSaturation),
-  cardRadius: clamp(settings.cardRadius, 0, 40, THEME_DEFAULTS.cardRadius),
+  cardRadius: clamp(settings.cardRadius, 0, 48, THEME_DEFAULTS.cardRadius),
   cardBorder: color(settings.cardBorder, THEME_DEFAULTS.cardBorder),
   cardBorderOpacity: clamp(settings.cardBorderOpacity, 0, 80, THEME_DEFAULTS.cardBorderOpacity),
+  cardSheen: clamp(settings.cardSheen, 0, 100, THEME_DEFAULTS.cardSheen),
   entitySurface: color(settings.entitySurface, THEME_DEFAULTS.entitySurface),
   entityOpacity: clamp(settings.entityOpacity, 0, 95, THEME_DEFAULTS.entityOpacity),
   entityBlur: clamp(settings.entityBlur, 0, 50, THEME_DEFAULTS.entityBlur),
   entitySaturation: clamp(settings.entitySaturation, 50, 240, THEME_DEFAULTS.entitySaturation),
-  entityRadius: clamp(settings.entityRadius, 0, 40, THEME_DEFAULTS.entityRadius),
+  entityRadius: clamp(settings.entityRadius, 0, 48, THEME_DEFAULTS.entityRadius),
   entityBorder: color(settings.entityBorder, THEME_DEFAULTS.entityBorder),
-  entityBorderOpacity: clamp(settings.entityBorderOpacity, 0, 80, THEME_DEFAULTS.entityBorderOpacity)
+  entityBorderOpacity: clamp(settings.entityBorderOpacity, 0, 80, THEME_DEFAULTS.entityBorderOpacity),
+  entitySheen: clamp(settings.entitySheen, 0, 100, THEME_DEFAULTS.entitySheen)
 });
 var read = () => {
   try {
@@ -75,8 +98,15 @@ var apply = (settings) => {
     "--haos-font-family": "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif",
     "--haos-font-weight-normal": "450",
     "--haos-font-weight-semibold": "650",
-    "--haos-card-shadow": light ? "0 18px 48px rgba(38, 48, 58, .18), inset 0 1px 0 rgba(255, 255, 255, .55)" : "0 24px 70px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255, 255, 255, .10)",
-    "--haos-entity-shadow": light ? "0 10px 28px rgba(38, 48, 58, .14), inset 0 1px 0 rgba(255, 255, 255, .58)" : "0 12px 30px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .08)",
+    // Schlagschatten und Glanz sind bewusst getrennt: der Glanz sitzt als
+    // inset-Schatten IN der Fläche, der Schlagschatten darunter. Zusammen in
+    // einer Variablen liessen sie sich nicht einzeln regeln.
+    "--haos-card-shadow": light ? "0 18px 48px rgba(38, 48, 58, .18)" : "0 24px 70px rgba(0, 0, 0, .30)",
+    "--haos-entity-shadow": light ? "0 10px 28px rgba(38, 48, 58, .14)" : "0 12px 30px rgba(0, 0, 0, .20)",
+    "--haos-card-sheen": sheenShadow(t.cardSheen, light),
+    "--haos-entity-sheen": sheenShadow(t.entitySheen, light),
+    "--haos-card-gloss": glossLayer(t.cardSheen, light),
+    "--haos-entity-gloss": glossLayer(t.entitySheen, light),
     "--haos-user-shadow": light ? "0 6px 18px rgba(25, 34, 44, .24), inset 0 1px 0 rgba(255, 255, 255, .76)" : "0 6px 18px rgba(0, 0, 0, .38), inset 0 1px 0 rgba(255, 255, 255, .28)",
     "--haos-accent": t.accent,
     "--haos-status-on": t.accent,
@@ -146,6 +176,22 @@ var isEqualConfig = (a, b) => {
   } catch (_error) {
     return false;
   }
+};
+var LEGACY_GROUPS = ["darstellung", "aktion"];
+var flattenLegacyGroups = (config) => {
+  if (!config || typeof config !== "object") return config;
+  let touched = false;
+  const flat = { ...config };
+  LEGACY_GROUPS.forEach((group) => {
+    const nested = flat[group];
+    if (!nested || typeof nested !== "object" || Array.isArray(nested)) return;
+    Object.entries(nested).forEach(([key, value]) => {
+      if (flat[key] === void 0) flat[key] = value;
+    });
+    delete flat[group];
+    touched = true;
+  });
+  return touched ? flat : config;
 };
 var fireEvent = (node, type, detail = {}) => {
   node.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
@@ -271,20 +317,28 @@ var createCardElement = async (config) => {
   return element;
 };
 var ENTITY_SURFACE_CSS = `
-  border: 1px solid rgba(var(--haos-entity-border-rgb, 255,255,255), var(--haos-entity-border-opacity, .25));
-  border-radius: var(--haos-entity-radius, 14px);
-  background: rgba(var(--haos-entity-surface-rgb, 255,255,255), var(--haos-entity-opacity, .10));
-  box-shadow: var(--haos-entity-shadow, 0 12px 30px rgba(0,0,0,.18));
-  backdrop-filter: blur(var(--haos-entity-blur, 16px)) saturate(var(--haos-entity-saturation, 160%));
-  -webkit-backdrop-filter: blur(var(--haos-entity-blur, 16px)) saturate(var(--haos-entity-saturation, 160%));
+  border: 1px solid rgba(var(--haos-entity-border-rgb, 255,255,255), var(--haos-entity-border-opacity, .20));
+  border-radius: var(--haos-entity-radius, 20px);
+  background:
+    var(--haos-entity-gloss, linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0))),
+    rgba(var(--haos-entity-surface-rgb, 255,255,255), var(--haos-entity-opacity, .10));
+  box-shadow:
+    var(--haos-entity-shadow, 0 12px 30px rgba(0,0,0,.20)),
+    var(--haos-entity-sheen, inset 0 1px 0 rgba(255,255,255,.32));
+  backdrop-filter: blur(var(--haos-entity-blur, 12px)) saturate(var(--haos-entity-saturation, 180%));
+  -webkit-backdrop-filter: blur(var(--haos-entity-blur, 12px)) saturate(var(--haos-entity-saturation, 180%));
 `;
 var CARD_SURFACE_CSS = `
-  border: 1px solid rgba(var(--haos-card-border-rgb, 255,255,255), var(--haos-card-border-opacity, .25));
-  border-radius: var(--haos-card-radius, 14px);
-  background: rgba(var(--haos-card-surface-rgb, 255,255,255), var(--haos-card-opacity, .10));
-  box-shadow: var(--haos-card-shadow, 0 24px 70px rgba(0,0,0,.28));
-  backdrop-filter: blur(var(--haos-card-blur, 16px)) saturate(var(--haos-card-saturation, 160%));
-  -webkit-backdrop-filter: blur(var(--haos-card-blur, 16px)) saturate(var(--haos-card-saturation, 160%));
+  border: 1px solid rgba(var(--haos-card-border-rgb, 255,255,255), var(--haos-card-border-opacity, .22));
+  border-radius: var(--haos-card-radius, 24px);
+  background:
+    var(--haos-card-gloss, linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0))),
+    rgba(var(--haos-card-surface-rgb, 255,255,255), var(--haos-card-opacity, .10));
+  box-shadow:
+    var(--haos-card-shadow, 0 24px 70px rgba(0,0,0,.30)),
+    var(--haos-card-sheen, inset 0 1px 0 rgba(255,255,255,.28));
+  backdrop-filter: blur(var(--haos-card-blur, 14px)) saturate(var(--haos-card-saturation, 180%));
+  -webkit-backdrop-filter: blur(var(--haos-card-blur, 14px)) saturate(var(--haos-card-saturation, 180%));
 `;
 var registerCard = (entry) => {
   window.customCards = window.customCards || [];
@@ -492,7 +546,7 @@ var STYLES = `
   .badge b, .badge small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .badge b { font-size: 11px; }
   .badge small { margin-top: 2px; font-size: 9px; color: rgba(var(--haos-text-rgb, 255,255,255), .58); }
-  .badge.is-on { box-shadow: var(--haos-entity-shadow), inset 0 0 24px color-mix(in srgb, var(--haos-status-on, #0a84ff) 28%, transparent); }
+  .badge.is-on { box-shadow: var(--haos-entity-shadow), var(--haos-entity-sheen), inset 0 0 24px color-mix(in srgb, var(--haos-status-on, #0a84ff) 28%, transparent); }
   .badge.is-on ha-icon { color: var(--haos-status-on, #0a84ff); filter: drop-shadow(0 0 5px color-mix(in srgb, var(--haos-status-on, #0a84ff) 48%, transparent)); }
   .badge.is-off ha-icon { color: var(--haos-status-off, #a8b0b8); opacity: .72; }
   .badge.is-unavailable { opacity: .68; }
@@ -614,16 +668,18 @@ var THEME_CONTROLS = [
   { group: "card", key: "cardOpacity", label: "Transparenz", hint: "Hintergrundkarte", min: 0, max: 95, step: 1, unit: "%" },
   { group: "card", key: "cardBlur", label: "Unschärfe", hint: "Hintergrundkarte", min: 0, max: 50, step: 1, unit: "px" },
   { group: "card", key: "cardSaturation", label: "Sättigung", hint: "Hintergrundkarte", min: 50, max: 240, step: 5, unit: "%" },
-  { group: "card", key: "cardRadius", label: "Rundung", hint: "Hintergrundkarte", min: 0, max: 40, step: 1, unit: "px" },
+  { group: "card", key: "cardRadius", label: "Rundung", hint: "Hintergrundkarte", min: 0, max: 48, step: 1, unit: "px" },
   { group: "card", key: "cardBorder", label: "Rahmenfarbe", hint: "Kontur", type: "color" },
   { group: "card", key: "cardBorderOpacity", label: "Rahmenstärke", hint: "Hintergrundkarte", min: 0, max: 80, step: 1, unit: "%" },
+  { group: "card", key: "cardSheen", label: "Glanz", hint: "Helle Kante oben, Schimmer über der Fläche", min: 0, max: 100, step: 1, unit: "%" },
   { group: "entity", key: "entitySurface", label: "Grundfarbe", hint: "Farbe der Kartenfläche", type: "color" },
   { group: "entity", key: "entityOpacity", label: "Transparenz", hint: "Entitätskarte", min: 0, max: 95, step: 1, unit: "%" },
   { group: "entity", key: "entityBlur", label: "Unschärfe", hint: "Entitätskarte", min: 0, max: 50, step: 1, unit: "px" },
   { group: "entity", key: "entitySaturation", label: "Sättigung", hint: "Entitätskarte", min: 50, max: 240, step: 5, unit: "%" },
-  { group: "entity", key: "entityRadius", label: "Rundung", hint: "Entitätskarte", min: 0, max: 40, step: 1, unit: "px" },
+  { group: "entity", key: "entityRadius", label: "Rundung", hint: "Entitätskarte", min: 0, max: 48, step: 1, unit: "px" },
   { group: "entity", key: "entityBorder", label: "Rahmenfarbe", hint: "Kontur", type: "color" },
-  { group: "entity", key: "entityBorderOpacity", label: "Rahmenstärke", hint: "Entitätskarte", min: 0, max: 80, step: 1, unit: "%" }
+  { group: "entity", key: "entityBorderOpacity", label: "Rahmenstärke", hint: "Entitätskarte", min: 0, max: 80, step: 1, unit: "%" },
+  { group: "entity", key: "entitySheen", label: "Glanz", hint: "Helle Kante oben, Schimmer über der Fläche", min: 0, max: 100, step: 1, unit: "%" }
 ];
 var GROUP_TITLES = { general: "Allgemein", card: "Hintergrundkarte", entity: "Entitätskarten" };
 var el = (tag, className, text2) => {
@@ -2096,7 +2152,10 @@ var STYLES3 = `
 
   /* Aktiv = neutraler Glasrahmen + inneres Akzentleuchten, KEIN blauer Aussenrahmen */
   .card.is-on {
-    box-shadow: var(--haos-entity-shadow), inset 0 0 40px color-mix(in srgb, var(--haos-accent, #0a84ff) 20%, transparent);
+    box-shadow:
+      var(--haos-entity-shadow),
+      var(--haos-entity-sheen),
+      inset 0 0 40px color-mix(in srgb, var(--haos-accent, #0a84ff) 20%, transparent);
   }
   .card.is-unavailable { opacity: .55; }
 
@@ -2299,6 +2358,16 @@ var forecastLabel = (datetime, forecastType) => {
     }
   }
   return `${pad(when.getHours())}:${pad(when.getMinutes())}`;
+};
+var dropPastDays = (forecast, forecastType) => {
+  if (forecastType !== "daily" && forecastType !== "twice_daily") return forecast;
+  const startOfToday = /* @__PURE__ */ new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const future = forecast.filter((entry) => {
+    const when = new Date(entry?.datetime);
+    return Number.isNaN(when.getTime()) || when.getTime() >= startOfToday.getTime();
+  });
+  return future.length ? future : forecast;
 };
 var drawWeatherGraph = (ctx, items) => {
   const graph = ctx.nodes.graph;
@@ -2655,7 +2724,10 @@ var renderers = {
       const speed = state.attributes.wind_speed;
       ctx.nodes.wind.textContent = speed ? `Wind ${speed} ${state.attributes.wind_speed_unit || "km/h"}` : state.state;
       const forecast = state.attributes.forecast || ctx.nodes.forecastData || [];
-      const items = forecast.slice(0, Number(ctx.config.forecast_count) || 5);
+      const items = dropPastDays(forecast, ctx.config.forecast_type).slice(
+        0,
+        Number(ctx.config.forecast_count) || 5
+      );
       if (ctx.nodes.forecast.childElementCount !== items.length) {
         ctx.nodes.forecast.replaceChildren();
         ctx.nodes.forecastNodes = items.map(() => {
@@ -3076,7 +3148,8 @@ var HaOsCard = class extends HTMLElement {
   static getStubConfig() {
     return { type: `custom:${TAG2}`, card_type: "button", entity: "" };
   }
-  setConfig(config) {
+  setConfig(rawConfig) {
+    const config = flattenLegacyGroups(rawConfig);
     if (!config?.card_type) throw new Error("Bitte oben einen Kartentyp auswählen.");
     if (!renderers[config.card_type]) throw new Error(`Unbekannter Kartentyp: ${config.card_type}`);
     const previous = this._config;
@@ -3212,12 +3285,14 @@ var number = (name, min, max, step = 1) => ({
 var APPEARANCE = {
   name: "darstellung",
   type: "expandable",
+  flatten: true,
   iconPath: "M12,18.5A6.5,6.5 0 0,1 5.5,12A6.5,6.5 0 0,1 12,5.5A6.5,6.5 0 0,1 18.5,12A6.5,6.5 0 0,1 12,18.5Z",
   schema: [text("name"), { name: "icon", selector: { icon: {} } }]
 };
 var ACTION = {
   name: "aktion",
   type: "expandable",
+  flatten: true,
   schema: [{ name: "tap_action", selector: { ui_action: {} } }]
 };
 var SCHEMAS = {
@@ -3329,7 +3404,7 @@ var HaOsCardEditor = class extends HTMLElement {
     this._form = null;
   }
   setConfig(config) {
-    const next = { card_type: "button", ...config };
+    const next = { card_type: "button", ...flattenLegacyGroups(config) };
     if (isEqualConfig(next, this._config) && this._form) return;
     const typeChanged = next.card_type !== this._config?.card_type;
     this._config = next;
@@ -3854,7 +3929,7 @@ var HaOsGridEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG5)) customElements.define(EDITOR_TAG5, HaOsGridEditor);
 
 // src/ha-os.js
-var VERSION = "0.3.0";
+var VERSION = "0.4.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

@@ -11,7 +11,7 @@
  */
 
 import { CARD_TYPES } from "./haos-card.js";
-import { isEqualConfig } from "../shared/utils.js";
+import { isEqualConfig, flattenLegacyGroups } from "../shared/utils.js";
 
 const EDITOR_TAG = "ha-os-card-editor";
 
@@ -34,9 +34,19 @@ const number = (name, min, max, step = 1) => ({
   selector: { number: { min, max, step, mode: "box" } },
 });
 
+/**
+ * Aufklappbare Blöcke.
+ *
+ * `flatten: true` ist hier keine Feinheit, sondern notwendig. Ohne die Angabe
+ * legt `ha-form-expandable` die Felder verschachtelt unter dem Blocknamen ab –
+ * aus dem Namensfeld wurde `darstellung: { name: "…" }` statt `name: "…"`.
+ * Die Karte las `config.name`, fand nichts und zeigte weiter den langen
+ * Entitätsnamen von Home Assistant. Wer den Block anfasst, prüft das erneut.
+ */
 const APPEARANCE = {
   name: "darstellung",
   type: "expandable",
+  flatten: true,
   iconPath: "M12,18.5A6.5,6.5 0 0,1 5.5,12A6.5,6.5 0 0,1 12,5.5A6.5,6.5 0 0,1 18.5,12A6.5,6.5 0 0,1 12,18.5Z",
   schema: [text("name"), { name: "icon", selector: { icon: {} } }],
 };
@@ -44,6 +54,7 @@ const APPEARANCE = {
 const ACTION = {
   name: "aktion",
   type: "expandable",
+  flatten: true,
   schema: [{ name: "tap_action", selector: { ui_action: {} } }],
 };
 
@@ -164,7 +175,10 @@ class HaOsCardEditor extends HTMLElement {
   }
 
   setConfig(config) {
-    const next = { card_type: "button", ...config };
+    // Alte Fassung mit verschachtelten Blöcken: hochziehen, sonst stünden die
+    // Felder im Formular leer und die Werte gingen beim nächsten Speichern
+    // verloren.
+    const next = { card_type: "button", ...flattenLegacyGroups(config) };
 
     // Kommt die Änderung von uns selbst zurück, nichts anfassen.
     if (isEqualConfig(next, this._config) && this._form) return;

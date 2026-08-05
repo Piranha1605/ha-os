@@ -137,5 +137,40 @@ const ohne = build({ entity: "button.garagentor", show_toggle: false });
 check("kein Bedienelement sichtbar",
   !visible(ohne, ".press-btn") && !visible(ohne, ".switch") && !visible(ohne, ".cover-ctrl"));
 
+console.log("\n8. Eigener Name schlägt den Entitätsnamen");
+const benannt = build({ entity: "light.wohnzimmer", name: "Garage unten", icon: "mdi:garage" });
+check("Name wird angezeigt", sr(benannt).querySelector(".title").textContent === "Garage unten",
+  sr(benannt).querySelector(".title").textContent);
+check("Symbol wird übernommen", sr(benannt).querySelector(".chip ha-icon").getAttribute("icon") === "mdi:garage");
+
+// Bis 0.3.0 legte ha-form-expandable die Felder verschachtelt ab. Solche
+// Konfigurationen liegen gespeichert vor und dürfen nicht verlorengehen.
+const alt = build({
+  entity: "button.garagentor",
+  darstellung: { name: "Garage unten", icon: "mdi:garage" },
+  aktion: { tap_action: { action: "more-info" } },
+});
+check("alter verschachtelter Name wird gelesen", sr(alt).querySelector(".title").textContent === "Garage unten",
+  sr(alt).querySelector(".title").textContent);
+check("altes verschachteltes Symbol wird gelesen",
+  sr(alt).querySelector(".chip ha-icon").getAttribute("icon") === "mdi:garage");
+
+const editor = document.createElement("ha-os-card-editor");
+editor.hass = makeHass();
+editor.setConfig({
+  type: "custom:ha-os-card", card_type: "button", entity: "button.garagentor",
+  darstellung: { name: "Garage unten", icon: "mdi:garage" },
+});
+document.body.append(editor);
+const form = editor.shadowRoot.querySelector("ha-form");
+check("Editor zeigt den alten Namen flach an", form.data.name === "Garage unten", JSON.stringify(form.data));
+check("Editor hat den alten Block aufgelöst", form.data.darstellung === undefined, JSON.stringify(form.data));
+
+const appearance = form.schema.find((f) => f.name === "darstellung");
+check("Darstellungsblock schreibt jetzt flach", appearance?.flatten === true,
+  JSON.stringify({ flatten: appearance?.flatten }));
+const action = form.schema.find((f) => f.name === "aktion");
+check("Aktionsblock schreibt jetzt flach", action?.flatten === true);
+
 console.log(failures === 0 ? "\nAlle Prüfungen bestanden.\n" : `\n${failures} FEHLER.\n`);
 process.exit(failures === 0 ? 0 : 1);

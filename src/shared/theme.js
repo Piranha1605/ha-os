@@ -17,20 +17,22 @@ export const THEME_DEFAULTS = Object.freeze({
   // Hintergrundkarte = die grosse Glasflaeche der Shell
   cardSurface: "#ffffff",
   cardOpacity: 10,
-  cardBlur: 16,
-  cardSaturation: 160,
-  cardRadius: 14,
+  cardBlur: 14,
+  cardSaturation: 180,
+  cardRadius: 24,
   cardBorder: "#ffffff",
-  cardBorderOpacity: 25,
+  cardBorderOpacity: 22,
+  cardSheen: 55,
 
   // Entitaetskarte = die einzelnen Karten darin
   entitySurface: "#ffffff",
   entityOpacity: 10,
-  entityBlur: 16,
-  entitySaturation: 160,
-  entityRadius: 14,
+  entityBlur: 12,
+  entitySaturation: 180,
+  entityRadius: 20,
   entityBorder: "#ffffff",
-  entityBorderOpacity: 25,
+  entityBorderOpacity: 20,
+  entitySheen: 65,
 });
 
 const clamp = (value, min, max, fallback) => {
@@ -46,6 +48,53 @@ const hexToRgb = (hex) => {
   return [0, 2, 4].map((start) => Number.parseInt(value.slice(start, start + 2), 16)).join(", ");
 };
 
+/**
+ * Glanz als inset-Schatten.
+ *
+ * Echtes Glas ist am oberen Rand hell, weil dort das Licht ankommt, und am
+ * unteren dunkel. Ein rundum gleich heller Rahmen nimmt der Fläche genau
+ * diese Tiefe – das war der Grund, warum HA-OS flach und schwammig wirkte.
+ *
+ * Die dritte Zeile ist ein sehr weiter, schwacher innerer Schein. Er ersetzt
+ * das, was sonst mehr Weichzeichnung leisten müsste, ohne die Konturen zu
+ * verwaschen.
+ */
+const sheenShadow = (strength, light) => {
+  const s = clamp(strength, 0, 100, 0) / 100;
+  if (s === 0) return "0 0 0 0 rgba(0,0,0,0)";
+
+  const top = (light ? 0.85 : 0.5) * s;
+  const bottom = (light ? 0.1 : 0.3) * s;
+  const inner = (light ? 0.3 : 0.14) * s;
+
+  return [
+    `inset 0 1px 0 rgba(255, 255, 255, ${top.toFixed(3)})`,
+    `inset 0 -1px 0 rgba(0, 0, 0, ${bottom.toFixed(3)})`,
+    `inset 0 22px 34px -26px rgba(255, 255, 255, ${inner.toFixed(3)})`,
+  ].join(", ");
+};
+
+/**
+ * Diagonaler Schimmer als Verlaufsschicht über der Grundfarbe.
+ *
+ * Liegt im `background` vor der eingefärbten Fläche, deshalb braucht es kein
+ * Pseudo-Element – die Karten müssten dafür ihr DOM erweitern.
+ */
+const glossLayer = (strength, light) => {
+  const s = clamp(strength, 0, 100, 0) / 100;
+  if (s === 0) return "linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0))";
+
+  const bright = (light ? 0.55 : 0.2) * s;
+  const faint = (light ? 0.14 : 0.05) * s;
+
+  return (
+    `linear-gradient(148deg, ` +
+    `rgba(255, 255, 255, ${bright.toFixed(3)}) 0%, ` +
+    `rgba(255, 255, 255, ${faint.toFixed(3)}) 38%, ` +
+    `rgba(255, 255, 255, 0) 62%)`
+  );
+};
+
 export const normalizeTheme = (settings = {}) => ({
   mode: settings.mode === "light" ? "light" : "dark",
   accent: color(settings.accent, THEME_DEFAULTS.accent),
@@ -55,17 +104,19 @@ export const normalizeTheme = (settings = {}) => ({
   cardOpacity: clamp(settings.cardOpacity, 0, 95, THEME_DEFAULTS.cardOpacity),
   cardBlur: clamp(settings.cardBlur, 0, 50, THEME_DEFAULTS.cardBlur),
   cardSaturation: clamp(settings.cardSaturation, 50, 240, THEME_DEFAULTS.cardSaturation),
-  cardRadius: clamp(settings.cardRadius, 0, 40, THEME_DEFAULTS.cardRadius),
+  cardRadius: clamp(settings.cardRadius, 0, 48, THEME_DEFAULTS.cardRadius),
   cardBorder: color(settings.cardBorder, THEME_DEFAULTS.cardBorder),
   cardBorderOpacity: clamp(settings.cardBorderOpacity, 0, 80, THEME_DEFAULTS.cardBorderOpacity),
+  cardSheen: clamp(settings.cardSheen, 0, 100, THEME_DEFAULTS.cardSheen),
 
   entitySurface: color(settings.entitySurface, THEME_DEFAULTS.entitySurface),
   entityOpacity: clamp(settings.entityOpacity, 0, 95, THEME_DEFAULTS.entityOpacity),
   entityBlur: clamp(settings.entityBlur, 0, 50, THEME_DEFAULTS.entityBlur),
   entitySaturation: clamp(settings.entitySaturation, 50, 240, THEME_DEFAULTS.entitySaturation),
-  entityRadius: clamp(settings.entityRadius, 0, 40, THEME_DEFAULTS.entityRadius),
+  entityRadius: clamp(settings.entityRadius, 0, 48, THEME_DEFAULTS.entityRadius),
   entityBorder: color(settings.entityBorder, THEME_DEFAULTS.entityBorder),
   entityBorderOpacity: clamp(settings.entityBorderOpacity, 0, 80, THEME_DEFAULTS.entityBorderOpacity),
+  entitySheen: clamp(settings.entitySheen, 0, 100, THEME_DEFAULTS.entitySheen),
 });
 
 const read = () => {
@@ -106,12 +157,20 @@ const apply = (settings) => {
     "--haos-font-weight-normal": "450",
     "--haos-font-weight-semibold": "650",
 
+    // Schlagschatten und Glanz sind bewusst getrennt: der Glanz sitzt als
+    // inset-Schatten IN der Fläche, der Schlagschatten darunter. Zusammen in
+    // einer Variablen liessen sie sich nicht einzeln regeln.
     "--haos-card-shadow": light
-      ? "0 18px 48px rgba(38, 48, 58, .18), inset 0 1px 0 rgba(255, 255, 255, .55)"
-      : "0 24px 70px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255, 255, 255, .10)",
+      ? "0 18px 48px rgba(38, 48, 58, .18)"
+      : "0 24px 70px rgba(0, 0, 0, .30)",
     "--haos-entity-shadow": light
-      ? "0 10px 28px rgba(38, 48, 58, .14), inset 0 1px 0 rgba(255, 255, 255, .58)"
-      : "0 12px 30px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .08)",
+      ? "0 10px 28px rgba(38, 48, 58, .14)"
+      : "0 12px 30px rgba(0, 0, 0, .20)",
+
+    "--haos-card-sheen": sheenShadow(t.cardSheen, light),
+    "--haos-entity-sheen": sheenShadow(t.entitySheen, light),
+    "--haos-card-gloss": glossLayer(t.cardSheen, light),
+    "--haos-entity-gloss": glossLayer(t.entitySheen, light),
     "--haos-user-shadow": light
       ? "0 6px 18px rgba(25, 34, 44, .24), inset 0 1px 0 rgba(255, 255, 255, .76)"
       : "0 6px 18px rgba(0, 0, 0, .38), inset 0 1px 0 rgba(255, 255, 255, .28)",
