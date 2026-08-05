@@ -1,0 +1,3122 @@
+/* HA-OS 0.2.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+
+// src/shared/theme.js
+var STORAGE_KEY = "ha-os-theme-v1";
+var THEME_DEFAULTS = Object.freeze({
+  mode: "dark",
+  accent: "#0a84ff",
+  margin: 25,
+  // Hintergrundkarte = die grosse Glasflaeche der Shell
+  cardSurface: "#ffffff",
+  cardOpacity: 10,
+  cardBlur: 16,
+  cardSaturation: 160,
+  cardRadius: 14,
+  cardBorder: "#ffffff",
+  cardBorderOpacity: 25,
+  // Entitaetskarte = die einzelnen Karten darin
+  entitySurface: "#ffffff",
+  entityOpacity: 10,
+  entityBlur: 16,
+  entitySaturation: 160,
+  entityRadius: 14,
+  entityBorder: "#ffffff",
+  entityBorderOpacity: 25
+});
+var clamp = (value, min, max, fallback) => {
+  const number2 = Number(value);
+  return Number.isFinite(number2) ? Math.min(max, Math.max(min, number2)) : fallback;
+};
+var color = (value, fallback) => /^#[0-9a-f]{6}$/i.test(String(value || "")) ? String(value).toLowerCase() : fallback;
+var hexToRgb = (hex) => {
+  const value = String(hex).replace("#", "");
+  return [0, 2, 4].map((start) => Number.parseInt(value.slice(start, start + 2), 16)).join(", ");
+};
+var normalizeTheme = (settings = {}) => ({
+  mode: settings.mode === "light" ? "light" : "dark",
+  accent: color(settings.accent, THEME_DEFAULTS.accent),
+  margin: clamp(settings.margin, 0, 60, THEME_DEFAULTS.margin),
+  cardSurface: color(settings.cardSurface, THEME_DEFAULTS.cardSurface),
+  cardOpacity: clamp(settings.cardOpacity, 0, 95, THEME_DEFAULTS.cardOpacity),
+  cardBlur: clamp(settings.cardBlur, 0, 50, THEME_DEFAULTS.cardBlur),
+  cardSaturation: clamp(settings.cardSaturation, 50, 240, THEME_DEFAULTS.cardSaturation),
+  cardRadius: clamp(settings.cardRadius, 0, 40, THEME_DEFAULTS.cardRadius),
+  cardBorder: color(settings.cardBorder, THEME_DEFAULTS.cardBorder),
+  cardBorderOpacity: clamp(settings.cardBorderOpacity, 0, 80, THEME_DEFAULTS.cardBorderOpacity),
+  entitySurface: color(settings.entitySurface, THEME_DEFAULTS.entitySurface),
+  entityOpacity: clamp(settings.entityOpacity, 0, 95, THEME_DEFAULTS.entityOpacity),
+  entityBlur: clamp(settings.entityBlur, 0, 50, THEME_DEFAULTS.entityBlur),
+  entitySaturation: clamp(settings.entitySaturation, 50, 240, THEME_DEFAULTS.entitySaturation),
+  entityRadius: clamp(settings.entityRadius, 0, 40, THEME_DEFAULTS.entityRadius),
+  entityBorder: color(settings.entityBorder, THEME_DEFAULTS.entityBorder),
+  entityBorderOpacity: clamp(settings.entityBorderOpacity, 0, 80, THEME_DEFAULTS.entityBorderOpacity)
+});
+var read = () => {
+  try {
+    const stored = globalThis.localStorage?.getItem(STORAGE_KEY);
+    return normalizeTheme(stored ? JSON.parse(stored) : THEME_DEFAULTS);
+  } catch (_error) {
+    return normalizeTheme(THEME_DEFAULTS);
+  }
+};
+var apply = (settings) => {
+  const t = normalizeTheme(settings);
+  if (typeof document === "undefined") return t;
+  const light = t.mode === "light";
+  const cardOpacity = light ? Math.max(t.cardOpacity, 26) : t.cardOpacity;
+  const entityOpacity = light ? Math.max(t.entityOpacity, 20) : t.entityOpacity;
+  const cardBorderOpacity = light ? Math.max(t.cardBorderOpacity, 46) : t.cardBorderOpacity;
+  const entityBorderOpacity = light ? Math.max(t.entityBorderOpacity, 38) : t.entityBorderOpacity;
+  const values = {
+    "--haos-color-scheme": t.mode,
+    "--haos-text": light ? "#18212a" : "#ffffff",
+    "--haos-text-rgb": light ? "24, 33, 42" : "255, 255, 255",
+    "--haos-text-inverse": light ? "#ffffff" : "#18212a",
+    "--haos-font-family": "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif",
+    "--haos-font-weight-normal": "450",
+    "--haos-font-weight-semibold": "650",
+    "--haos-card-shadow": light ? "0 18px 48px rgba(38, 48, 58, .18), inset 0 1px 0 rgba(255, 255, 255, .55)" : "0 24px 70px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255, 255, 255, .10)",
+    "--haos-entity-shadow": light ? "0 10px 28px rgba(38, 48, 58, .14), inset 0 1px 0 rgba(255, 255, 255, .58)" : "0 12px 30px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .08)",
+    "--haos-user-shadow": light ? "0 6px 18px rgba(25, 34, 44, .24), inset 0 1px 0 rgba(255, 255, 255, .76)" : "0 6px 18px rgba(0, 0, 0, .38), inset 0 1px 0 rgba(255, 255, 255, .28)",
+    "--haos-accent": t.accent,
+    "--haos-status-on": t.accent,
+    "--haos-status-off": light ? "#66717c" : "#a8b0b8",
+    "--haos-status-unavailable": light ? "#c2413b" : "#ff6961",
+    "--haos-status-home": light ? "#168a4a" : "#32d583",
+    "--haos-status-away": light ? "#a06a10" : "#f7b955",
+    "--haos-margin": `${t.margin}px`,
+    "--haos-card-surface-rgb": hexToRgb(t.cardSurface),
+    "--haos-card-opacity": String(cardOpacity / 100),
+    "--haos-card-blur": `${t.cardBlur}px`,
+    "--haos-card-saturation": `${t.cardSaturation}%`,
+    "--haos-card-radius": `${t.cardRadius}px`,
+    "--haos-card-border-rgb": hexToRgb(t.cardBorder),
+    "--haos-card-border-opacity": String(cardBorderOpacity / 100),
+    "--haos-entity-surface-rgb": hexToRgb(t.entitySurface),
+    "--haos-entity-opacity": String(entityOpacity / 100),
+    "--haos-entity-blur": `${t.entityBlur}px`,
+    "--haos-entity-saturation": `${t.entitySaturation}%`,
+    "--haos-entity-radius": `${t.entityRadius}px`,
+    "--haos-entity-border-rgb": hexToRgb(t.entityBorder),
+    "--haos-entity-border-opacity": String(entityBorderOpacity / 100)
+  };
+  const root = document.documentElement;
+  root.dataset.haosTheme = t.mode;
+  Object.entries(values).forEach(([key, value]) => root.style.setProperty(key, value));
+  return t;
+};
+var active = apply(read());
+var HaOsTheme = {
+  defaults: THEME_DEFAULTS,
+  get: () => ({ ...active }),
+  save(changes = {}) {
+    active = apply({ ...active, ...changes });
+    try {
+      globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(active));
+    } catch (_error) {
+    }
+    window.dispatchEvent(new CustomEvent("haos-theme-changed", { detail: { ...active } }));
+    return { ...active };
+  },
+  toggleMode() {
+    return HaOsTheme.save({ mode: active.mode === "light" ? "dark" : "light" });
+  },
+  reset() {
+    active = apply(THEME_DEFAULTS);
+    try {
+      globalThis.localStorage?.removeItem(STORAGE_KEY);
+    } catch (_error) {
+    }
+    window.dispatchEvent(new CustomEvent("haos-theme-changed", { detail: { ...active } }));
+    return { ...active };
+  }
+};
+window.HaOsTheme = HaOsTheme;
+
+// src/shared/utils.js
+var clampNumber = (value, min, max, fallback) => {
+  const number2 = Number(value);
+  return Number.isFinite(number2) ? Math.min(max, Math.max(min, number2)) : fallback;
+};
+var deepClone = (value) => typeof structuredClone === "function" ? structuredClone(value) : JSON.parse(JSON.stringify(value));
+var isEqualConfig = (a, b) => {
+  if (a === b) return true;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch (_error) {
+    return false;
+  }
+};
+var fireEvent = (node, type, detail = {}) => {
+  node.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
+};
+var showMoreInfo = (node, entityId) => {
+  if (entityId) fireEvent(node, "hass-more-info", { entityId });
+};
+var navigate = (path) => {
+  const value = String(path || "").trim();
+  if (!value) return;
+  if (/^https?:\/\//i.test(value)) {
+    window.open(value, "_blank", "noopener");
+    return;
+  }
+  history.pushState(null, "", value.startsWith("/") ? value : `/${value}`);
+  window.dispatchEvent(new CustomEvent("location-changed"));
+};
+var DOMAIN_ICONS = {
+  light: "mdi:lightbulb",
+  switch: "mdi:power",
+  climate: "mdi:thermostat",
+  weather: "mdi:weather-partly-cloudy",
+  lock: "mdi:lock",
+  cover: "mdi:window-shutter",
+  fan: "mdi:fan",
+  person: "mdi:account",
+  device_tracker: "mdi:account",
+  sensor: "mdi:gauge",
+  binary_sensor: "mdi:checkbox-marked-circle-outline",
+  media_player: "mdi:speaker",
+  calendar: "mdi:calendar",
+  select: "mdi:form-dropdown",
+  input_select: "mdi:form-dropdown",
+  input_boolean: "mdi:toggle-switch-outline",
+  scene: "mdi:palette",
+  script: "mdi:script-text",
+  automation: "mdi:robot",
+  vacuum: "mdi:robot-vacuum",
+  lawn_mower: "mdi:robot-mower",
+  number: "mdi:ray-vertex",
+  input_number: "mdi:ray-vertex"
+};
+var domainOf = (entityId) => String(entityId || "").split(".")[0];
+var domainIcon = (entityId, state) => {
+  if (state?.attributes?.icon) return state.attributes.icon;
+  return DOMAIN_ICONS[domainOf(entityId)] || "mdi:circle-outline";
+};
+var friendlyName = (entityId, state) => state?.attributes?.friendly_name || String(entityId || "").split(".").slice(1).join(".") || entityId || "";
+var ON_STATES = /* @__PURE__ */ new Set([
+  "on",
+  "open",
+  "opening",
+  "home",
+  "playing",
+  "heat",
+  "cool",
+  "heat_cool",
+  "fan_only",
+  "dry",
+  "auto",
+  "cleaning",
+  "mowing",
+  "unlocked",
+  "active"
+]);
+var isUnavailable = (state) => !state || ["unavailable", "unknown"].includes(state.state);
+var isActive = (state) => !isUnavailable(state) && ON_STATES.has(state.state);
+var statusClass = (state) => {
+  if (isUnavailable(state)) return "is-unavailable";
+  return isActive(state) ? "is-on" : "is-off";
+};
+var formatState = (hass, entityId) => {
+  const state = hass?.states?.[entityId];
+  if (!state) return "Nicht verfügbar";
+  if (hass.formatEntityState) {
+    try {
+      return hass.formatEntityState(state);
+    } catch (_error) {
+    }
+  }
+  const unit = state.attributes?.unit_of_measurement;
+  return unit ? `${state.state} ${unit}` : state.state;
+};
+var handleAction = (node, hass, config = {}, entityId) => {
+  const action = config.action || "more-info";
+  const target = config.entity || entityId;
+  switch (action) {
+    case "none":
+      return;
+    case "toggle":
+      if (target) hass?.callService?.("homeassistant", "toggle", { entity_id: target });
+      return;
+    case "navigate":
+      navigate(config.navigation_path);
+      return;
+    case "url":
+      navigate(config.url_path);
+      return;
+    case "call-service":
+    case "perform-action": {
+      const service = config.service || config.perform_action;
+      if (!service || !service.includes(".")) return;
+      const [domain, name] = service.split(".");
+      hass?.callService?.(domain, name, config.data || config.service_data || {}, config.target);
+      return;
+    }
+    case "more-info":
+    default:
+      showMoreInfo(node, target);
+  }
+};
+var helpersPromise;
+var cardHelpers = () => {
+  if (!helpersPromise) helpersPromise = window.loadCardHelpers?.() ?? Promise.resolve(null);
+  return helpersPromise;
+};
+var createCardElement = async (config) => {
+  const helpers = await cardHelpers();
+  if (helpers?.createCardElement) return helpers.createCardElement(config);
+  const tag = String(config?.type || "").replace(/^custom:/, "");
+  const element = document.createElement(tag || "hui-error-card");
+  element.setConfig?.(config);
+  return element;
+};
+var ENTITY_SURFACE_CSS = `
+  border: 1px solid rgba(var(--haos-entity-border-rgb, 255,255,255), var(--haos-entity-border-opacity, .25));
+  border-radius: var(--haos-entity-radius, 14px);
+  background: rgba(var(--haos-entity-surface-rgb, 255,255,255), var(--haos-entity-opacity, .10));
+  box-shadow: var(--haos-entity-shadow, 0 12px 30px rgba(0,0,0,.18));
+  backdrop-filter: blur(var(--haos-entity-blur, 16px)) saturate(var(--haos-entity-saturation, 160%));
+  -webkit-backdrop-filter: blur(var(--haos-entity-blur, 16px)) saturate(var(--haos-entity-saturation, 160%));
+`;
+var CARD_SURFACE_CSS = `
+  border: 1px solid rgba(var(--haos-card-border-rgb, 255,255,255), var(--haos-card-border-opacity, .25));
+  border-radius: var(--haos-card-radius, 14px);
+  background: rgba(var(--haos-card-surface-rgb, 255,255,255), var(--haos-card-opacity, .10));
+  box-shadow: var(--haos-card-shadow, 0 24px 70px rgba(0,0,0,.28));
+  backdrop-filter: blur(var(--haos-card-blur, 16px)) saturate(var(--haos-card-saturation, 160%));
+  -webkit-backdrop-filter: blur(var(--haos-card-blur, 16px)) saturate(var(--haos-card-saturation, 160%));
+`;
+var registerCard = (entry) => {
+  window.customCards = window.customCards || [];
+  if (!window.customCards.some((card) => card.type === entry.type)) window.customCards.push(entry);
+};
+
+// src/shared/config.js
+var SETTINGS_PAGE_ID = "__haos_settings";
+var DEFAULT_GRID_WIDTHS = [1, 1.55, 1.05];
+var SHELL_DEFAULTS = Object.freeze({
+  gap: 16,
+  row_height: 125,
+  users: [],
+  fullscreen_entity: "",
+  show_settings_button: true,
+  show_theme_button: true,
+  quick_actions: [],
+  pages: []
+});
+var DIACRITICS = new RegExp("[\\u0300-\\u036f]", "g");
+var UMLAUTS = { "ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss" };
+var slugify = (value, fallback = "seite") => String(value || "").toLowerCase().replace(/[äöüß]/g, (char) => UMLAUTS[char]).normalize("NFD").replace(DIACRITICS, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || fallback;
+var uniqueId = (candidate, used, fallback) => {
+  const base = slugify(candidate, fallback);
+  let id = base;
+  let suffix = 2;
+  while (used.has(id)) id = `${base}-${suffix++}`;
+  used.add(id);
+  return id;
+};
+var normalizeAction = (action, fallbackAction = "more-info") => {
+  if (!action || typeof action !== "object") return { action: fallbackAction };
+  return { ...action, action: action.action || fallbackAction };
+};
+var normalizeBadge = (source, index, used) => {
+  const raw = typeof source === "string" ? { entity: source } : source || {};
+  const kind = raw.kind === "link" ? "link" : "entity";
+  return {
+    id: uniqueId(raw.id || `badge-${index + 1}`, used, `badge-${index + 1}`),
+    kind,
+    entity: kind === "entity" ? raw.entity || "" : "",
+    name: raw.name || "",
+    icon: raw.icon || "",
+    url: kind === "link" ? raw.url || "" : "",
+    show_state: raw.show_state !== false,
+    tap_action: normalizeAction(raw.tap_action, kind === "link" ? "url" : "toggle")
+  };
+};
+var normalizeQuickAction = (source, index, used) => {
+  const raw = source || {};
+  return {
+    id: uniqueId(raw.id || `action-${index + 1}`, used, `action-${index + 1}`),
+    icon: raw.icon || "mdi:star-outline",
+    name: raw.name || "",
+    entity: raw.entity || "",
+    tap_action: normalizeAction(raw.tap_action, raw.entity ? "toggle" : "none")
+  };
+};
+var normalizeCard = (card) => {
+  const config = card && typeof card === "object" ? { ...card } : { type: "" };
+  config.haos_weight = clampNumber(config.haos_weight, 0.5, 6, 1);
+  return config;
+};
+var normalizeGrid = (grid) => ({
+  name: grid?.name || "",
+  cards: Array.isArray(grid?.cards) ? grid.cards.map(normalizeCard) : []
+});
+var createEmptyGrids = () => [0, 1, 2].map((index) => ({ name: `Grid ${index + 1}`, cards: [] }));
+var normalizeGrids = (grids) => Array.from({ length: 3 }, (_, index) => normalizeGrid(grids?.[index] ?? { name: `Grid ${index + 1}` }));
+var normalizePage = (page, index, used) => {
+  const raw = page || {};
+  const isFirst = index === 0;
+  const kind = raw.kind === "iframe" ? "iframe" : "page";
+  const badgeIds = /* @__PURE__ */ new Set();
+  return {
+    id: isFirst ? "home" : uniqueId(raw.id || raw.name || `seite-${index + 1}`, used, `seite-${index + 1}`),
+    name: raw.name || (isFirst ? "Home" : `Seite ${index + 1}`),
+    icon: raw.icon || (isFirst ? "mdi:home" : "mdi:circle-outline"),
+    kind,
+    url: kind === "iframe" ? raw.url || "" : "",
+    hide_ha_chrome: kind === "iframe" && Boolean(raw.hide_ha_chrome),
+    badges: (Array.isArray(raw.badges) ? raw.badges : []).map(
+      (badge, badgeIndex) => normalizeBadge(badge, badgeIndex, badgeIds)
+    ),
+    grid_widths: Array.from(
+      { length: 3 },
+      (_, widthIndex) => clampNumber(raw.grid_widths?.[widthIndex], 0.3, 4, DEFAULT_GRID_WIDTHS[widthIndex])
+    ),
+    grids: normalizeGrids(raw.grids)
+  };
+};
+var normalizeShellConfig = (config = {}) => {
+  const usedPageIds = /* @__PURE__ */ new Set(["home", SETTINGS_PAGE_ID]);
+  const usedActionIds = /* @__PURE__ */ new Set();
+  const sourcePages = Array.isArray(config.pages) && config.pages.length ? config.pages : [{ id: "home", name: "Home" }];
+  return {
+    type: config.type,
+    gap: clampNumber(config.gap, 0, 48, SHELL_DEFAULTS.gap),
+    row_height: clampNumber(config.row_height, 60, 320, SHELL_DEFAULTS.row_height),
+    users: (Array.isArray(config.users) ? config.users : []).map((entry) => typeof entry === "string" ? entry : entry?.entity).filter(Boolean),
+    fullscreen_entity: config.fullscreen_entity || "",
+    show_settings_button: config.show_settings_button !== false,
+    show_theme_button: config.show_theme_button !== false,
+    quick_actions: (Array.isArray(config.quick_actions) ? config.quick_actions : []).map(
+      (action, index) => normalizeQuickAction(action, index, usedActionIds)
+    ),
+    pages: sourcePages.map((page, index) => normalizePage(page, index, usedPageIds))
+  };
+};
+var stripHaOsKeys = (cardConfig) => {
+  const clean = { ...cardConfig };
+  delete clean.haos_weight;
+  return clean;
+};
+
+// src/cards/shell-card.js
+var TAG = "ha-os-shell";
+var EDITOR_TAG = "ha-os-shell-editor";
+var TOPBAR_HEIGHT = 62;
+var STYLES = `
+  :host {
+    display: block;
+    margin: var(--haos-margin, 25px);
+    width: calc(100% - 2 * var(--haos-margin, 25px));
+  }
+  * { box-sizing: border-box; }
+  button { font: inherit; color: inherit; }
+
+  .shell {
+    min-height: var(--haos-shell-height, 480px);
+    padding: var(--haos-shell-gap, 16px);
+    display: grid;
+    gap: var(--haos-shell-gap, 16px);
+    grid-template-columns: 72px minmax(0, 1fr);
+    grid-template-rows: ${TOPBAR_HEIGHT}px minmax(0, 1fr);
+    grid-template-areas: "sidebar topbar" "sidebar content";
+    color: var(--haos-text, #fff);
+    font-family: var(--haos-font-family);
+    font-weight: var(--haos-font-weight-normal, 450);
+    border-radius: calc(var(--haos-card-radius, 14px) + 8px);
+    overflow: hidden;
+    ${CARD_SURFACE_CSS}
+  }
+
+  /* ---------- Seitenleiste ---------- */
+  .sidebar { grid-area: sidebar; min-width: 0; min-height: 0; ${ENTITY_SURFACE_CSS} }
+  .sidebar nav { height: 100%; padding: 7px 6px; display: flex; flex-direction: column; align-items: center; }
+  .side-top { width: 100%; flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 7px; overflow-y: auto; scrollbar-width: none; }
+  .side-top::-webkit-scrollbar { display: none; }
+  .side-bottom { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 7px; }
+  .side-divider { width: 28px; height: 1px; margin: 3px 0; background: rgba(var(--haos-text-rgb, 255,255,255), .18); }
+
+  .icon-button {
+    position: relative; width: 44px; height: 44px; flex: 0 0 44px;
+    border: 1px solid transparent; border-radius: 14px;
+    display: grid; place-items: center;
+    color: rgba(var(--haos-text-rgb, 255,255,255), .68);
+    background: transparent; cursor: pointer;
+    transition: transform .16s ease, color .16s ease, background .16s ease, box-shadow .16s ease;
+  }
+  .icon-button:hover { color: var(--haos-text, #fff); background: rgba(var(--haos-text-rgb, 255,255,255), .09); transform: translateY(-1px); }
+  .icon-button:active { transform: scale(.96); }
+  .icon-button:disabled { opacity: .34; cursor: default; transform: none; }
+  .icon-button ha-icon { --mdc-icon-size: 20px; }
+  .icon-button.active {
+    color: var(--haos-text, #fff);
+    border-color: rgba(var(--haos-card-border-rgb, 255,255,255), calc(var(--haos-card-border-opacity, .25) + .20));
+    background: linear-gradient(145deg, rgba(var(--haos-card-border-rgb, 255,255,255), .18), rgba(var(--haos-card-surface-rgb, 255,255,255), .07));
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.38),
+      inset 0 -10px 22px color-mix(in srgb, var(--haos-accent, #0a84ff) 18%, transparent),
+      0 8px 22px rgba(0,0,0,.16),
+      0 0 14px color-mix(in srgb, var(--haos-accent, #0a84ff) 18%, transparent);
+  }
+  .icon-button.active ha-icon { filter: drop-shadow(0 0 5px color-mix(in srgb, var(--haos-accent, #0a84ff) 55%, transparent)); }
+
+  /* ---------- Kopfzeile ---------- */
+  .topbar {
+    grid-area: topbar; min-width: 0; height: ${TOPBAR_HEIGHT}px;
+    padding: 7px 12px; display: flex; align-items: center; gap: 12px;
+    ${ENTITY_SURFACE_CSS}
+  }
+  .tabs { min-width: 0; flex: 1; display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    flex: 0 0 auto; height: 40px; padding: 0 14px; border: 1px solid transparent; border-radius: 12px;
+    background: transparent; cursor: pointer; white-space: nowrap;
+    color: rgba(var(--haos-text-rgb, 255,255,255), .52);
+    font-size: 17px; font-weight: var(--haos-font-weight-normal, 450);
+    transition: color .16s ease, background .16s ease;
+  }
+  .tab:hover { color: rgba(var(--haos-text-rgb, 255,255,255), .82); background: rgba(var(--haos-text-rgb, 255,255,255), .06); }
+  .tab.active { color: var(--haos-text, #fff); font-weight: var(--haos-font-weight-semibold, 650); }
+
+  .badges { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; }
+  .badge {
+    height: 44px; max-width: 210px; flex: 0 0 auto; padding: 5px 12px 5px 9px;
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    ${ENTITY_SURFACE_CSS}
+  }
+  .badge.icon-only { width: 44px; padding: 0; justify-content: center; }
+  .badge:hover { background: rgba(var(--haos-entity-surface-rgb, 255,255,255), calc(var(--haos-entity-opacity, .10) + .08)); }
+  .badge ha-icon { --mdc-icon-size: 19px; }
+  .badge .badge-text { min-width: 0; display: grid; text-align: left; }
+  .badge b, .badge small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge b { font-size: 11px; }
+  .badge small { margin-top: 2px; font-size: 9px; color: rgba(var(--haos-text-rgb, 255,255,255), .58); }
+  .badge.is-on { box-shadow: var(--haos-entity-shadow), inset 0 0 24px color-mix(in srgb, var(--haos-status-on, #0a84ff) 28%, transparent); }
+  .badge.is-on ha-icon { color: var(--haos-status-on, #0a84ff); filter: drop-shadow(0 0 5px color-mix(in srgb, var(--haos-status-on, #0a84ff) 48%, transparent)); }
+  .badge.is-off ha-icon { color: var(--haos-status-off, #a8b0b8); opacity: .72; }
+  .badge.is-unavailable { opacity: .68; }
+  .badge.is-unavailable ha-icon { color: var(--haos-status-unavailable, #ff6961); }
+
+  .users { flex: 0 0 auto; display: flex; align-items: center; padding-left: 4px; }
+  .user {
+    position: relative; width: 42px; height: 42px; margin-left: -10px; padding: 3px;
+    border: 1px solid rgba(var(--haos-card-border-rgb, 255,255,255), calc(var(--haos-card-border-opacity, .25) + .18));
+    border-radius: 50%; overflow: hidden; display: grid; place-items: center; cursor: pointer;
+    color: var(--haos-text, #fff);
+    background: rgba(var(--haos-card-surface-rgb, 255,255,255), calc(var(--haos-card-opacity, .10) + .14));
+    box-shadow: var(--haos-user-shadow);
+    backdrop-filter: blur(var(--haos-card-blur, 16px)) saturate(var(--haos-card-saturation, 160%));
+    font-size: 11px; font-weight: 800;
+  }
+  .user:first-child { margin-left: 0; }
+  .user img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+  .user .initials { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; background: rgba(var(--haos-entity-surface-rgb, 255,255,255), var(--haos-entity-opacity, .10)); }
+  .user.is-home { box-shadow: var(--haos-user-shadow), inset 0 0 0 2px color-mix(in srgb, var(--haos-status-home, #32d583) 72%, transparent), 0 0 12px color-mix(in srgb, var(--haos-status-home, #32d583) 24%, transparent); }
+  .user.is-away { opacity: .68; box-shadow: var(--haos-user-shadow), inset 0 0 0 2px color-mix(in srgb, var(--haos-status-away, #f7b955) 58%, transparent); }
+  .user.is-unavailable { opacity: .42; filter: saturate(.25); box-shadow: var(--haos-user-shadow), inset 0 0 0 2px color-mix(in srgb, var(--haos-status-unavailable, #ff6961) 62%, transparent); }
+
+  /* ---------- Inhalt ---------- */
+  .content { grid-area: content; min-width: 0; min-height: 0; display: grid; }
+  .page { grid-area: 1 / 1; min-width: 0; min-height: 0; display: grid; gap: var(--haos-shell-gap, 16px); grid-template-columns: var(--haos-grid-template, 1fr 1.55fr 1.05fr); }
+  .page[hidden] { display: none; }
+  .grid-column { min-width: 0; min-height: 0; display: grid; gap: var(--haos-shell-gap, 16px); align-content: start; }
+  .slot { min-width: 0; min-height: 0; height: var(--slot-height, 125px); }
+  .slot > * { display: block; height: 100%; }
+
+  .grid-empty {
+    min-height: 90px; display: grid; place-content: center; gap: 8px; text-align: center;
+    border: 1px dashed rgba(var(--haos-text-rgb, 255,255,255), .22);
+    border-radius: var(--haos-entity-radius, 14px);
+    background: rgba(var(--haos-text-rgb, 255,255,255), .035);
+    color: rgba(var(--haos-text-rgb, 255,255,255), .5); font-size: 12px;
+  }
+  .grid-empty ha-icon { margin: auto; --mdc-icon-size: 20px; }
+
+  /* ---------- iFrame-Seite ---------- */
+  .frame-page { grid-column: 1 / -1; min-width: 0; min-height: 0; overflow: hidden; ${ENTITY_SURFACE_CSS} }
+  .frame-page iframe { width: 100%; height: 100%; min-height: 60vh; border: 0; display: block; background: #fff; }
+  .frame-empty { display: grid; place-content: center; gap: 8px; text-align: center; padding: 40px; color: rgba(var(--haos-text-rgb, 255,255,255), .68); }
+  .frame-empty ha-icon { margin: auto; --mdc-icon-size: 30px; }
+
+  /* ---------- Einstellungsseite ---------- */
+  .settings { grid-column: 1 / -1; min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; ${ENTITY_SURFACE_CSS} }
+  .settings > header, .settings > footer { padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+  .settings > header { border-bottom: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .10); }
+  .settings > footer { border-top: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .10); }
+  .settings .eyebrow { color: var(--haos-accent, #0a84ff); font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+  .settings h2 { margin: 3px 0 0; font-size: 23px; }
+  .settings-body { min-height: 0; padding: 16px 20px; display: grid; align-content: start; gap: 14px; overflow-y: auto; overscroll-behavior: contain; }
+
+  .group { border: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .12); border-radius: 15px; overflow: hidden; background: rgba(var(--haos-entity-surface-rgb, 255,255,255), var(--haos-entity-opacity, .10)); }
+  .group > button { width: 100%; min-height: 52px; padding: 12px 14px; border: 0; background: transparent; display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; text-align: left; }
+  .group > button:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .06); }
+  .group h3 { margin: 0; font-size: 13px; }
+  .group-body { padding: 0 14px 14px; border-top: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .08); }
+  .group-body[hidden] { display: none; }
+
+  .control { min-height: 58px; padding: 9px 4px; display: grid; grid-template-columns: minmax(140px, 1fr) 60px minmax(140px, 1.2fr); align-items: center; gap: 12px; border-top: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .08); }
+  .group-body > .control:first-child { border-top: 0; }
+  .control.color { grid-template-columns: 1fr 58px; }
+  .control b { display: block; font-size: 12px; }
+  .control small { display: block; margin-top: 3px; font-size: 9px; color: rgba(var(--haos-text-rgb, 255,255,255), .53); }
+  .control output { text-align: right; font-size: 11px; font-weight: 750; color: rgba(var(--haos-text-rgb, 255,255,255), .82); }
+  .control input[type="range"] { width: 100%; accent-color: var(--haos-accent, #0a84ff); }
+  .control input[type="color"] {
+    appearance: none; -webkit-appearance: none; width: 44px; height: 44px; justify-self: end; padding: 5px;
+    border: 1px solid rgba(var(--haos-card-border-rgb, 255,255,255), calc(var(--haos-card-border-opacity, .25) + .18));
+    border-radius: 50%; overflow: hidden; cursor: pointer;
+    background: linear-gradient(145deg, rgba(var(--haos-card-border-rgb, 255,255,255), .20), rgba(var(--haos-card-surface-rgb, 255,255,255), .07));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.42), 0 7px 18px rgba(0,0,0,.15);
+  }
+  .control input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  .control input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 50%; }
+
+  .settings footer button {
+    min-height: 42px; padding: 0 16px; display: flex; align-items: center; gap: 7px; cursor: pointer;
+    border: 1px solid rgba(var(--haos-card-border-rgb, 255,255,255), calc(var(--haos-card-border-opacity, .25) + .14));
+    border-radius: 14px;
+    background: linear-gradient(145deg, rgba(var(--haos-card-border-rgb, 255,255,255), .16), rgba(var(--haos-card-surface-rgb, 255,255,255), .06));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.34), 0 7px 18px rgba(0,0,0,.13);
+  }
+  .settings footer .primary {
+    border-color: color-mix(in srgb, var(--haos-accent, #0a84ff) 34%, rgba(var(--haos-card-border-rgb, 255,255,255), .35));
+    background: linear-gradient(145deg, color-mix(in srgb, var(--haos-accent, #0a84ff) 24%, rgba(var(--haos-card-border-rgb, 255,255,255), .13)), color-mix(in srgb, var(--haos-accent, #0a84ff) 12%, rgba(var(--haos-card-surface-rgb, 255,255,255), .05)));
+    font-weight: 750;
+  }
+  .settings footer ha-icon { --mdc-icon-size: 17px; }
+
+  button:focus-visible { outline: 2px solid color-mix(in srgb, var(--haos-accent, #0a84ff) 70%, #fff); outline-offset: 3px; }
+
+  /* ---------- Responsiv ---------- */
+  @media (max-width: 1050px) {
+    .page { grid-template-columns: 1fr 1fr; }
+    .grid-column:nth-child(3) { grid-column: 1 / -1; }
+  }
+  @media (max-width: 720px) {
+    :host { margin: 8px; width: calc(100% - 16px); }
+    .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; grid-template-areas: "topbar" "sidebar" "content"; }
+    .sidebar nav { flex-direction: row; padding: 5px 7px; }
+    .side-top { flex-direction: row; overflow-x: auto; overflow-y: hidden; }
+    .side-bottom { width: auto; flex-direction: row; }
+    .side-divider { width: 1px; height: 28px; margin: 0 3px; }
+    .icon-button { width: 38px; height: 38px; flex-basis: 38px; border-radius: 11px; }
+    .page { grid-template-columns: minmax(0, 1fr); }
+    .grid-column:nth-child(3) { grid-column: auto; }
+    .badge .badge-text { display: none; }
+    .badge { width: 42px; padding: 0; justify-content: center; }
+  }
+`;
+var THEME_CONTROLS = [
+  { group: "general", key: "accent", label: "Akzentfarbe", hint: "Aktive Elemente", type: "color" },
+  { group: "general", key: "margin", label: "Außenabstand", hint: "Abstand um die Shell", min: 0, max: 60, step: 1, unit: "px" },
+  { group: "card", key: "cardSurface", label: "Grundfarbe", hint: "Farbe der Glasfläche", type: "color" },
+  { group: "card", key: "cardOpacity", label: "Transparenz", hint: "Hintergrundkarte", min: 0, max: 95, step: 1, unit: "%" },
+  { group: "card", key: "cardBlur", label: "Unschärfe", hint: "Hintergrundkarte", min: 0, max: 50, step: 1, unit: "px" },
+  { group: "card", key: "cardSaturation", label: "Sättigung", hint: "Hintergrundkarte", min: 50, max: 240, step: 5, unit: "%" },
+  { group: "card", key: "cardRadius", label: "Rundung", hint: "Hintergrundkarte", min: 0, max: 40, step: 1, unit: "px" },
+  { group: "card", key: "cardBorder", label: "Rahmenfarbe", hint: "Kontur", type: "color" },
+  { group: "card", key: "cardBorderOpacity", label: "Rahmenstärke", hint: "Hintergrundkarte", min: 0, max: 80, step: 1, unit: "%" },
+  { group: "entity", key: "entitySurface", label: "Grundfarbe", hint: "Farbe der Kartenfläche", type: "color" },
+  { group: "entity", key: "entityOpacity", label: "Transparenz", hint: "Entitätskarte", min: 0, max: 95, step: 1, unit: "%" },
+  { group: "entity", key: "entityBlur", label: "Unschärfe", hint: "Entitätskarte", min: 0, max: 50, step: 1, unit: "px" },
+  { group: "entity", key: "entitySaturation", label: "Sättigung", hint: "Entitätskarte", min: 50, max: 240, step: 5, unit: "%" },
+  { group: "entity", key: "entityRadius", label: "Rundung", hint: "Entitätskarte", min: 0, max: 40, step: 1, unit: "px" },
+  { group: "entity", key: "entityBorder", label: "Rahmenfarbe", hint: "Kontur", type: "color" },
+  { group: "entity", key: "entityBorderOpacity", label: "Rahmenstärke", hint: "Entitätskarte", min: 0, max: 80, step: 1, unit: "%" }
+];
+var GROUP_TITLES = { general: "Allgemein", card: "Hintergrundkarte", entity: "Entitätskarten" };
+var el = (tag, className, text2) => {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text2 !== void 0) node.textContent = text2;
+  return node;
+};
+var iconEl = (icon3) => {
+  const node = document.createElement("ha-icon");
+  node.setAttribute("icon", icon3);
+  return node;
+};
+var HaOsShell = class extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = null;
+    this._hass = null;
+    this._built = false;
+    this._activePageId = "home";
+    this._returnPageId = "home";
+    this._fullscreenOptimistic = void 0;
+    this._openGroups = /* @__PURE__ */ new Set(["general"]);
+    this._pages = /* @__PURE__ */ new Map();
+    this._badges = /* @__PURE__ */ new Map();
+    this._users = /* @__PURE__ */ new Map();
+    this._tabs = /* @__PURE__ */ new Map();
+    this._frameObservers = /* @__PURE__ */ new Set();
+    this._onThemeChanged = () => {
+      this._syncMetrics();
+      if (this._activePageId === SETTINGS_PAGE_ID) this._syncSettingsValues();
+    };
+    this._onKeyDown = (event) => {
+      if (event.key === "Escape" && this._activePageId === SETTINGS_PAGE_ID) this._closeSettings();
+    };
+  }
+  // ---------------------------------------------------------------- Lovelace
+  static getConfigElement() {
+    return document.createElement(EDITOR_TAG);
+  }
+  static getStubConfig() {
+    return {
+      type: `custom:${TAG}`,
+      gap: 16,
+      row_height: 125,
+      pages: [{ id: "home", name: "Home", icon: "mdi:home", grid_widths: DEFAULT_GRID_WIDTHS, grids: createEmptyGrids() }]
+    };
+  }
+  connectedCallback() {
+    window.addEventListener("haos-theme-changed", this._onThemeChanged);
+    window.addEventListener("keydown", this._onKeyDown);
+  }
+  disconnectedCallback() {
+    window.removeEventListener("haos-theme-changed", this._onThemeChanged);
+    window.removeEventListener("keydown", this._onKeyDown);
+    this._disconnectFrameObservers();
+  }
+  setConfig(config) {
+    const next = normalizeShellConfig(config);
+    const previous = this._config;
+    this._config = next;
+    if (!this._built) this._build();
+    if (!next.pages.some((page) => page.id === this._activePageId) && this._activePageId !== SETTINGS_PAGE_ID) {
+      this._activePageId = next.pages[0]?.id || "home";
+    }
+    this._syncSidebar();
+    this._syncTabs();
+    this._dropRemovedPages(previous);
+    this._syncActivePage();
+    this._syncMetrics();
+    this._updateStates();
+  }
+  set hass(hass) {
+    const first = !this._hass;
+    this._hass = hass;
+    if (!this._built) return;
+    if (first || this._watchedChanged(hass)) this._updateStates();
+    this._pages.forEach((page) => {
+      page.entries.forEach((entry) => {
+        if (entry.element) entry.element.hass = hass;
+      });
+    });
+  }
+  get hass() {
+    return this._hass;
+  }
+  /** Entitäten, die in Seitenleiste, Badges und Benutzerleiste vorkommen. */
+  _watchedEntities() {
+    const users = this._config.users.length ? this._config.users : Object.keys(this._hass?.states || {}).filter((id) => id.startsWith("person."));
+    const badges = (this._activePage()?.badges || []).filter((badge) => badge.entity).map((badge) => badge.entity);
+    const actions = this._config.quick_actions.filter((action) => action.entity).map((action) => action.entity);
+    const fullscreen = this._config.fullscreen_entity ? [this._config.fullscreen_entity] : [];
+    return [...users, ...badges, ...actions, ...fullscreen];
+  }
+  _watchedChanged(hass) {
+    const watched = this._watchedEntities();
+    const previous = this._lastStates;
+    const current = new Map(watched.map((id) => [id, hass?.states?.[id]]));
+    this._lastStates = current;
+    if (!previous || previous.size !== current.size) return true;
+    for (const [id, state] of current) {
+      if (previous.get(id) !== state) return true;
+    }
+    return false;
+  }
+  /** Höhe in HA-Section-Rasterzeilen, damit die Shell mit den Karten wächst. */
+  getCardSize() {
+    return Math.max(4, Math.ceil(this._measureHeight() / 60));
+  }
+  getGridOptions() {
+    return { rows: this.getCardSize(), columns: "full", min_rows: 6, min_columns: 6 };
+  }
+  getLayoutOptions() {
+    return { grid_rows: this.getCardSize(), grid_columns: "full" };
+  }
+  // ---------------------------------------------------------------- Aufbau
+  _build() {
+    const style = document.createElement("style");
+    style.textContent = STYLES;
+    this._shell = el("section", "shell");
+    this._sidebar = el("aside", "sidebar");
+    this._sidebarNav = el("nav");
+    this._sidebarNav.setAttribute("aria-label", "Seitenleiste");
+    this._sideTop = el("div", "side-top");
+    this._sideBottom = el("div", "side-bottom");
+    this._sidebarNav.append(this._sideTop, this._sideBottom);
+    this._sidebar.append(this._sidebarNav);
+    this._topbar = el("header", "topbar");
+    this._tabList = el("div", "tabs");
+    this._tabList.setAttribute("role", "tablist");
+    this._badgeList = el("div", "badges");
+    this._userList = el("div", "users");
+    this._userList.setAttribute("aria-label", "Personen");
+    this._topbar.append(this._tabList, this._badgeList, this._userList);
+    this._content = el("main", "content");
+    this._shell.append(this._sidebar, this._topbar, this._content);
+    this.shadowRoot.append(style, this._shell);
+    this._built = true;
+  }
+  // ---------------------------------------------------------------- Seitenleiste
+  _syncSidebar() {
+    const config = this._config;
+    this._sideTop.replaceChildren();
+    this._quickActions = /* @__PURE__ */ new Map();
+    config.quick_actions.forEach((action) => {
+      const button = el("button", "icon-button");
+      button.title = action.name || action.entity || "Aktion";
+      button.append(iconEl(action.icon));
+      button.addEventListener("click", () => handleAction(this, this._hass, action.tap_action, action.entity));
+      this._quickActions.set(action.id, { root: button, action });
+      this._sideTop.append(button);
+    });
+    this._sideBottom.replaceChildren();
+    if (config.quick_actions.length) this._sideBottom.append(el("div", "side-divider"));
+    if (config.show_settings_button) {
+      this._settingsButton = el("button", "icon-button");
+      this._settingsButton.title = "Systemeinstellungen";
+      this._settingsButton.append(iconEl("mdi:cog-outline"));
+      this._settingsButton.addEventListener("click", () => this._toggleSettings());
+      this._sideBottom.append(this._settingsButton);
+    } else {
+      this._settingsButton = null;
+    }
+    if (config.fullscreen_entity) {
+      this._fullscreenButton = el("button", "icon-button");
+      this._fullscreenButton.append(iconEl("mdi:fullscreen"));
+      this._fullscreenButton.addEventListener("click", () => this._toggleFullscreen());
+      this._sideBottom.append(this._fullscreenButton);
+    } else {
+      this._fullscreenButton = null;
+    }
+    if (config.show_theme_button) {
+      this._themeButton = el("button", "icon-button");
+      this._themeButton.append(iconEl("mdi:white-balance-sunny"));
+      this._themeButton.addEventListener("click", () => HaOsTheme.toggleMode());
+      this._sideBottom.append(this._themeButton);
+    } else {
+      this._themeButton = null;
+    }
+  }
+  // ---------------------------------------------------------------- Tabs
+  _syncTabs() {
+    this._tabList.replaceChildren();
+    this._tabs.clear();
+    this._config.pages.forEach((page) => {
+      const tab = el("button", "tab", page.name);
+      tab.setAttribute("role", "tab");
+      tab.addEventListener("click", () => this._selectPage(page.id));
+      this._tabs.set(page.id, tab);
+      this._tabList.append(tab);
+    });
+  }
+  // ---------------------------------------------------------------- Seiten
+  _dropRemovedPages(previousConfig) {
+    if (!previousConfig) return;
+    const validIds = /* @__PURE__ */ new Set([...this._config.pages.map((page) => page.id), SETTINGS_PAGE_ID]);
+    [...this._pages.keys()].forEach((pageId) => {
+      if (validIds.has(pageId)) return;
+      this._pages.get(pageId)?.root.remove();
+      this._pages.delete(pageId);
+    });
+  }
+  _selectPage(pageId) {
+    if (pageId === this._activePageId) return;
+    if (pageId !== SETTINGS_PAGE_ID && !this._config.pages.some((page) => page.id === pageId)) return;
+    this._activePageId = pageId;
+    this._syncActivePage();
+    this._syncMetrics();
+    this._updateStates();
+  }
+  _syncActivePage() {
+    const activeId = this._activePageId;
+    if (activeId === SETTINGS_PAGE_ID) this._ensureSettingsPage();
+    else this._ensurePage(this._config.pages.find((page) => page.id === activeId));
+    this._pages.forEach((entry, pageId) => {
+      entry.root.hidden = pageId !== activeId;
+    });
+    this._tabs.forEach((tab, pageId) => tab.classList.toggle("active", pageId === activeId));
+    this._settingsButton?.classList.toggle("active", activeId === SETTINGS_PAGE_ID);
+    this._syncBadges();
+  }
+  _ensurePage(page) {
+    if (!page) return;
+    let entry = this._pages.get(page.id);
+    if (!entry) {
+      const root = el("div", "page");
+      root.dataset.pageId = page.id;
+      entry = { root, columns: [], entries: [], kind: null };
+      this._pages.set(page.id, entry);
+      this._content.append(root);
+    }
+    if (page.kind === "iframe") {
+      this._buildFramePage(entry, page);
+      return;
+    }
+    if (entry.kind !== "page") {
+      entry.root.replaceChildren();
+      entry.columns = [];
+      entry.entries = [];
+      entry.kind = "page";
+    }
+    if (!entry.columns.length) {
+      entry.columns = [0, 1, 2].map(() => {
+        const column = el("section", "grid-column");
+        entry.root.append(column);
+        return column;
+      });
+    }
+    entry.root.style.setProperty(
+      "--haos-grid-template",
+      page.grid_widths.map((width) => `minmax(0, ${width}fr)`).join(" ")
+    );
+    this._syncPageCards(entry, page);
+  }
+  /**
+   * Gleicht die Kinderkarten einer Seite ab.
+   *
+   * Karten mit unveränderter Konfiguration werden WIEDERVERWENDET. Nur wirklich
+   * geänderte oder neue Karten werden erzeugt. Dadurch verliert eine Änderung an
+   * Karte 3 nicht den Zustand von Karte 1 und 2.
+   */
+  _syncPageCards(entry, page) {
+    const wanted = [];
+    page.grids.forEach((grid, columnIndex) => {
+      grid.cards.forEach((cardConfig, cardIndex) => {
+        wanted.push({ columnIndex, cardIndex, config: cardConfig });
+      });
+    });
+    const previous = entry.entries;
+    const next = [];
+    wanted.forEach((item) => {
+      const key = `${item.columnIndex}:${item.cardIndex}`;
+      const existing = previous.find((candidate) => candidate.key === key);
+      const cleanConfig = stripHaOsKeys(item.config);
+      if (existing && isEqualConfig(existing.cleanConfig, cleanConfig)) {
+        existing.wrapper.style.setProperty("--slot-height", `${this._slotHeight(item.config)}px`);
+        next.push(existing);
+        return;
+      }
+      if (existing) {
+        existing.wrapper.remove();
+      }
+      const wrapper = el("div", "slot");
+      wrapper.style.setProperty("--slot-height", `${this._slotHeight(item.config)}px`);
+      const record = { key, config: item.config, cleanConfig, wrapper, element: null };
+      next.push(record);
+      createCardElement(cleanConfig).then((element) => {
+        if (!entry.entries.includes(record)) return;
+        record.element = element;
+        if (this._hass) element.hass = this._hass;
+        wrapper.replaceChildren(element);
+      }).catch((error) => {
+        wrapper.replaceChildren(el("div", "grid-empty", `Karte konnte nicht geladen werden: ${error?.message || error}`));
+      });
+    });
+    previous.forEach((record) => {
+      if (!next.includes(record)) record.wrapper.remove();
+    });
+    entry.entries = next;
+    entry.columns.forEach((column, columnIndex) => {
+      const slots = wanted.map((item, position) => ({ item, record: next[position] })).filter(({ item }) => item.columnIndex === columnIndex).map(({ record }) => record.wrapper);
+      if (!slots.length) {
+        const placeholder = el("div", "grid-empty");
+        placeholder.append(iconEl("mdi:plus"), el("span", null, "Noch keine Karte"));
+        column.replaceChildren(placeholder);
+        return;
+      }
+      column.replaceChildren(...slots);
+    });
+  }
+  _slotHeight(cardConfig) {
+    return Math.round((Number(cardConfig.haos_weight) || 1) * this._config.row_height);
+  }
+  // ---------------------------------------------------------------- iFrame
+  _buildFramePage(entry, page) {
+    entry.root.replaceChildren();
+    entry.columns = [];
+    entry.entries = [];
+    entry.kind = "iframe";
+    const container = el("section", "frame-page");
+    if (!page.url) {
+      const empty = el("div", "frame-empty");
+      empty.append(
+        iconEl("mdi:web-off"),
+        el("strong", null, "Noch keine Adresse eingetragen"),
+        el("span", null, "Die URL wird im Editor unter „Seiten“ konfiguriert.")
+      );
+      container.append(empty);
+      entry.root.append(container);
+      return;
+    }
+    const frame = document.createElement("iframe");
+    frame.src = /^https?:\/\//i.test(page.url) || page.url.startsWith("/") ? page.url : `https://${page.url}`;
+    frame.title = page.name;
+    frame.setAttribute("loading", "eager");
+    frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+    container.append(frame);
+    entry.root.append(container);
+    if (page.hide_ha_chrome && this._isInternalUrl(frame.src)) {
+      frame.addEventListener("load", () => this._applyKiosk(frame));
+    }
+  }
+  _isInternalUrl(url) {
+    try {
+      return new URL(url, window.location.href).origin === window.location.origin;
+    } catch (_error) {
+      return false;
+    }
+  }
+  _disconnectFrameObservers() {
+    this._frameObservers.forEach((observer) => observer.disconnect());
+    this._frameObservers.clear();
+  }
+  /** Blendet Kopfzeile und Seitenleiste in einem HA-internen iFrame aus. */
+  _applyKiosk(frame) {
+    let doc;
+    try {
+      doc = frame.contentDocument;
+    } catch (_error) {
+      return;
+    }
+    if (!doc?.documentElement || typeof MutationObserver === "undefined") return;
+    const css = `
+      :host { --app-drawer-width: 0px !important; --ha-sidebar-width: 0px !important; --header-height: 0px !important; }
+      ha-sidebar, app-header, ha-menu-button, [slot="app-header"] { display: none !important; }
+      #main, #content, main, .mdc-drawer-app-content { margin-left: 0 !important; padding-top: 0 !important; }
+    `;
+    const seen = /* @__PURE__ */ new WeakSet();
+    const refresh = (root) => {
+      if (!root?.querySelectorAll) return;
+      if (!root.querySelector?.("style[data-haos-kiosk]")) {
+        const style = doc.createElement("style");
+        style.dataset.haosKiosk = "true";
+        style.textContent = css;
+        (root === doc ? doc.head || doc.documentElement : root).append?.(style);
+      }
+      root.querySelectorAll("ha-sidebar, app-header, ha-menu-button").forEach(
+        (node) => node.style.setProperty("display", "none", "important")
+      );
+      root.querySelectorAll("*").forEach((node) => node.shadowRoot && observe(node.shadowRoot));
+    };
+    const observe = (root) => {
+      if (seen.has(root)) return;
+      seen.add(root);
+      refresh(root);
+      const observer = new MutationObserver(() => refresh(root));
+      observer.observe(root, { childList: true, subtree: true });
+      this._frameObservers.add(observer);
+    };
+    doc.documentElement.dataset.haosKiosk = "true";
+    observe(doc);
+  }
+  // ---------------------------------------------------------------- Zustände
+  /** Aktualisiert NUR Text, Klassen und Attribute. Erzeugt keine Karten neu. */
+  _updateStates() {
+    if (!this._built || !this._config) return;
+    this._updateBadgeStates();
+    this._updateUsers();
+    this._updateFullscreenButton();
+    this._updateThemeButton();
+    this._updateQuickActions();
+  }
+  _activePage() {
+    return this._config.pages.find((page) => page.id === this._activePageId);
+  }
+  _syncBadges() {
+    const page = this._activePage();
+    const badges = page?.badges || [];
+    this._badgeList.replaceChildren();
+    this._badges.clear();
+    badges.forEach((badge) => {
+      const root = el("button", "badge");
+      const icon3 = iconEl(badge.icon || "mdi:circle-outline");
+      root.append(icon3);
+      let name = null;
+      let state = null;
+      if (badge.show_state || badge.name) {
+        const text2 = el("div", "badge-text");
+        name = el("b");
+        text2.append(name);
+        if (badge.show_state) {
+          state = el("small");
+          text2.append(state);
+        }
+        root.append(text2);
+      } else {
+        root.classList.add("icon-only");
+      }
+      root.addEventListener("click", () => handleAction(this, this._hass, badge.tap_action, badge.entity));
+      this._badges.set(badge.id, { root, icon: icon3, name, state, badge });
+      this._badgeList.append(root);
+    });
+    this._updateBadgeStates();
+  }
+  _updateBadgeStates() {
+    this._badges.forEach(({ root, icon: icon3, name, state, badge }) => {
+      if (badge.kind === "link") {
+        root.classList.remove("is-on", "is-off", "is-unavailable");
+        if (name) name.textContent = badge.name || "Link";
+        if (state) state.textContent = "Öffnen";
+        root.title = badge.name || badge.url || "Link";
+        return;
+      }
+      const entityState = this._hass?.states?.[badge.entity];
+      const label = badge.name || friendlyName(badge.entity, entityState);
+      root.classList.remove("is-on", "is-off", "is-unavailable");
+      root.classList.add(statusClass(entityState));
+      icon3.setAttribute("icon", badge.icon || domainIcon(badge.entity, entityState));
+      if (name) name.textContent = label;
+      if (state) state.textContent = formatState(this._hass, badge.entity);
+      root.title = label;
+    });
+  }
+  _updateQuickActions() {
+    this._quickActions?.forEach(({ root, action }) => {
+      if (!action.entity) return;
+      const state = this._hass?.states?.[action.entity];
+      root.classList.toggle("active", statusClass(state) === "is-on");
+    });
+  }
+  _updateUsers() {
+    const ids = this._config.users.length ? this._config.users : Object.keys(this._hass?.states || {}).filter((id) => id.startsWith("person."));
+    const currentIds = [...this._users.keys()];
+    if (currentIds.join("|") !== ids.join("|")) {
+      this._userList.replaceChildren();
+      this._users.clear();
+      ids.forEach((id) => {
+        const root = el("button", "user");
+        root.addEventListener("click", () => showMoreInfo(this, id));
+        this._users.set(id, { root, picture: null });
+        this._userList.append(root);
+      });
+    }
+    this._users.forEach((record, id) => {
+      const state = this._hass?.states?.[id];
+      const name = friendlyName(id, state);
+      const picture = state?.attributes?.entity_picture || "";
+      const status = isUnavailable(state) ? "unavailable" : state.state === "home" ? "home" : "away";
+      record.root.classList.remove("is-home", "is-away", "is-unavailable");
+      record.root.classList.add(`is-${status}`);
+      record.root.title = `${name} · ${{ home: "Zuhause", away: "Abwesend", unavailable: "Nicht erreichbar" }[status]}`;
+      if (picture !== record.picture) {
+        record.picture = picture;
+        if (picture) {
+          const img = document.createElement("img");
+          img.src = picture;
+          img.alt = "";
+          record.root.replaceChildren(img);
+        } else {
+          const initials = String(name).split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("");
+          record.root.replaceChildren(el("span", "initials", initials.toUpperCase() || "?"));
+        }
+      } else if (!picture) {
+        const initials = String(name).split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("");
+        const span = record.root.querySelector(".initials");
+        if (span) span.textContent = initials.toUpperCase() || "?";
+      }
+    });
+  }
+  _updateFullscreenButton() {
+    if (!this._fullscreenButton) return;
+    const state = this._hass?.states?.[this._config.fullscreen_entity];
+    if (this._fullscreenOptimistic !== void 0 && state?.state === (this._fullscreenOptimistic ? "on" : "off")) {
+      this._fullscreenOptimistic = void 0;
+    }
+    const active2 = this._fullscreenOptimistic ?? state?.state === "on";
+    this._fullscreenButton.disabled = !state;
+    this._fullscreenButton.classList.toggle("active", Boolean(active2));
+    this._fullscreenButton.title = active2 ? "Vollbild beenden" : "Vollbild aktivieren";
+    this._fullscreenButton.querySelector("ha-icon")?.setAttribute("icon", active2 ? "mdi:fullscreen-exit" : "mdi:fullscreen");
+  }
+  _updateThemeButton() {
+    if (!this._themeButton) return;
+    const dark = HaOsTheme.get().mode === "dark";
+    this._themeButton.title = dark ? "Helles Design aktivieren" : "Dunkles Design aktivieren";
+    this._themeButton.querySelector("ha-icon")?.setAttribute("icon", dark ? "mdi:white-balance-sunny" : "mdi:weather-night");
+  }
+  _toggleFullscreen() {
+    const entityId = this._config.fullscreen_entity;
+    const state = this._hass?.states?.[entityId];
+    if (!state) return;
+    this._fullscreenOptimistic = !(this._fullscreenOptimistic ?? state.state === "on");
+    this._updateFullscreenButton();
+    Promise.resolve(this._hass.callService("input_boolean", "toggle", { entity_id: entityId })).catch(() => {
+      this._fullscreenOptimistic = void 0;
+      this._updateFullscreenButton();
+    });
+  }
+  // ---------------------------------------------------------------- Maße
+  _measureHeight() {
+    if (!this._config) return 480;
+    if (this._activePageId === SETTINGS_PAGE_ID) return Math.max(720, Math.round((window.innerHeight || 900) - 150));
+    const page = this._activePage();
+    if (!page) return 480;
+    if (page.kind === "iframe") return Math.max(720, Math.round((window.innerHeight || 900) - 150));
+    const gap = this._config.gap;
+    const columnHeights = page.grids.map((grid) => {
+      if (!grid.cards.length) return 0;
+      const cards = grid.cards.reduce((sum, card) => sum + this._slotHeight(card), 0);
+      return cards + (grid.cards.length - 1) * gap;
+    });
+    const content = Math.max(360, ...columnHeights);
+    return TOPBAR_HEIGHT + gap * 3 + content;
+  }
+  _syncMetrics() {
+    if (!this._built || !this._config) return;
+    const height = this._measureHeight();
+    this._shell.style.setProperty("--haos-shell-height", `${height}px`);
+    this._shell.style.setProperty("--haos-shell-gap", `${this._config.gap}px`);
+    this.dispatchEvent(new CustomEvent("card-size-changed", { bubbles: true, composed: true }));
+  }
+  // ---------------------------------------------------------------- Einstellungen
+  _toggleSettings() {
+    if (this._activePageId === SETTINGS_PAGE_ID) this._closeSettings();
+    else this._openSettings();
+  }
+  _openSettings() {
+    this._returnPageId = this._activePageId;
+    this._selectPage(SETTINGS_PAGE_ID);
+  }
+  _closeSettings() {
+    const target = this._config.pages.some((page) => page.id === this._returnPageId) ? this._returnPageId : "home";
+    this._selectPage(target);
+  }
+  _ensureSettingsPage() {
+    if (this._pages.has(SETTINGS_PAGE_ID)) {
+      this._syncSettingsValues();
+      return;
+    }
+    const root = el("div", "page");
+    root.dataset.pageId = SETTINGS_PAGE_ID;
+    const section = el("section", "settings");
+    const header = document.createElement("header");
+    const titleBox = el("div");
+    titleBox.append(el("span", "eyebrow", "HA-OS"), el("h2", null, "Systemeinstellungen"));
+    const backButton = el("button", "icon-button");
+    backButton.append(iconEl("mdi:arrow-left"));
+    backButton.title = "Zurück";
+    backButton.addEventListener("click", () => this._closeSettings());
+    header.append(titleBox, backButton);
+    const body = el("div", "settings-body");
+    this._settingsInputs = /* @__PURE__ */ new Map();
+    ["general", "card", "entity"].forEach((groupId) => {
+      const group = el("section", "group");
+      const toggle = document.createElement("button");
+      toggle.append(el("h3", null, GROUP_TITLES[groupId]), iconEl("mdi:chevron-down"));
+      const groupBody = el("div", "group-body");
+      groupBody.hidden = !this._openGroups.has(groupId);
+      toggle.addEventListener("click", () => {
+        const open = this._openGroups.has(groupId);
+        if (open) this._openGroups.delete(groupId);
+        else this._openGroups.add(groupId);
+        groupBody.hidden = open;
+        toggle.querySelector("ha-icon")?.setAttribute("icon", open ? "mdi:chevron-down" : "mdi:chevron-up");
+      });
+      toggle.querySelector("ha-icon")?.setAttribute("icon", groupBody.hidden ? "mdi:chevron-down" : "mdi:chevron-up");
+      THEME_CONTROLS.filter((control) => control.group === groupId).forEach((control) => {
+        groupBody.append(this._buildThemeControl(control));
+      });
+      group.append(toggle, groupBody);
+      body.append(group);
+    });
+    const footer = document.createElement("footer");
+    const resetButton = document.createElement("button");
+    resetButton.append(iconEl("mdi:restore"), el("span", null, "Standard"));
+    resetButton.addEventListener("click", () => {
+      HaOsTheme.reset();
+      this._syncSettingsValues();
+    });
+    const doneButton = el("button", "primary", "Fertig");
+    doneButton.addEventListener("click", () => this._closeSettings());
+    footer.append(resetButton, doneButton);
+    section.append(header, body, footer);
+    root.append(section);
+    this._pages.set(SETTINGS_PAGE_ID, { root, columns: [], entries: [], kind: "settings" });
+    this._content.append(root);
+    this._syncSettingsValues();
+  }
+  _buildThemeControl(control) {
+    const label = document.createElement("label");
+    label.className = control.type === "color" ? "control color" : "control";
+    const text2 = el("span");
+    text2.append(el("b", null, control.label), el("small", null, control.hint));
+    label.append(text2);
+    const input = document.createElement("input");
+    input.type = control.type === "color" ? "color" : "range";
+    if (control.type !== "color") {
+      const output = document.createElement("output");
+      label.append(output);
+      input.min = control.min;
+      input.max = control.max;
+      input.step = control.step;
+      this._settingsInputs.set(control.key, { input, output, control });
+    } else {
+      this._settingsInputs.set(control.key, { input, output: null, control });
+    }
+    input.addEventListener("input", () => {
+      const value = control.type === "color" ? input.value : Number(input.value);
+      HaOsTheme.save({ [control.key]: value });
+      const record = this._settingsInputs.get(control.key);
+      if (record?.output) record.output.textContent = `${value}${control.unit || ""}`;
+    });
+    label.append(input);
+    return label;
+  }
+  _syncSettingsValues() {
+    if (!this._settingsInputs) return;
+    const theme = HaOsTheme.get();
+    this._settingsInputs.forEach(({ input, output, control }, key) => {
+      const value = theme[key];
+      if (value === void 0) return;
+      input.value = value;
+      if (output) output.textContent = `${value}${control.unit || ""}`;
+    });
+  }
+};
+if (!customElements.get(TAG)) customElements.define(TAG, HaOsShell);
+registerCard({
+  type: TAG,
+  name: "HA-OS Shell",
+  description: "Grundgerüst mit Glasfläche, Seitenleiste, Kopfzeile und drei Rastern.",
+  preview: false,
+  documentationURL: "https://github.com/"
+});
+
+// src/cards/shell-editor.js
+var EDITOR_TAG2 = "ha-os-shell-editor";
+var LABELS = {
+  gap: "Abstand zwischen Karten",
+  row_height: "Kartenhöhe in px",
+  users: "Benutzer in der Kopfzeile",
+  fullscreen_entity: "Vollbild-Schalter",
+  show_settings_button: "Einstellungsknopf anzeigen",
+  show_theme_button: "Hell/Dunkel-Knopf anzeigen",
+  name: "Name",
+  icon: "Symbol",
+  kind: "Seitentyp",
+  url: "Adresse",
+  hide_ha_chrome: "HA-Kopfzeile im Rahmen ausblenden",
+  entity: "Entität",
+  show_state: "Zustand anzeigen",
+  tap_action: "Tippen"
+};
+var HELPERS = {
+  gap: "Gilt gleichmäßig waagerecht und senkrecht.",
+  row_height: "Grundhöhe einer Karte mit Höhenfaktor 1.",
+  fullscreen_entity: "Ein input_boolean, das den Vollbildmodus schaltet. Leer lassen, um den Knopf auszublenden.",
+  users: "Leer lassen, um automatisch alle person-Entitäten anzuzeigen."
+};
+var GENERAL_SCHEMA = [
+  { name: "gap", selector: { number: { min: 0, max: 48, step: 1, mode: "slider" } } },
+  { name: "row_height", selector: { number: { min: 60, max: 320, step: 5, mode: "slider" } } },
+  { name: "users", selector: { entity: { domain: ["person", "device_tracker"], multiple: true } } },
+  { name: "fullscreen_entity", selector: { entity: { domain: ["input_boolean"] } } },
+  { name: "show_settings_button", selector: { boolean: {} } },
+  { name: "show_theme_button", selector: { boolean: {} } }
+];
+var PAGE_SCHEMA = [
+  { name: "name", required: true, selector: { text: {} } },
+  { name: "icon", selector: { icon: {} } },
+  {
+    name: "kind",
+    selector: {
+      select: {
+        mode: "dropdown",
+        options: [
+          { value: "page", label: "Interne Seite mit Rastern" },
+          { value: "iframe", label: "Externe Seite / iFrame" }
+        ]
+      }
+    }
+  }
+];
+var IFRAME_SCHEMA = [
+  { name: "url", selector: { text: {} } },
+  { name: "hide_ha_chrome", selector: { boolean: {} } }
+];
+var BADGE_SCHEMA = [
+  { name: "entity", selector: { entity: {} } },
+  { name: "name", selector: { text: {} } },
+  { name: "icon", selector: { icon: {} } },
+  { name: "show_state", selector: { boolean: {} } },
+  { name: "tap_action", selector: { ui_action: {} } }
+];
+var QUICK_ACTION_SCHEMA = [
+  { name: "icon", selector: { icon: {} } },
+  { name: "name", selector: { text: {} } },
+  { name: "entity", selector: { entity: {} } },
+  { name: "tap_action", selector: { ui_action: {} } }
+];
+var STYLES2 = `
+  :host { display: block; }
+  * { box-sizing: border-box; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--divider-color, rgba(127,127,127,.3)); }
+  .tab {
+    padding: 10px 14px; border: 0; background: none; cursor: pointer; font: inherit;
+    color: var(--secondary-text-color); border-bottom: 2px solid transparent;
+  }
+  .tab.active { color: var(--primary-color); border-bottom-color: var(--primary-color); font-weight: 600; }
+
+  .panel { display: grid; gap: 12px; }
+  .panel[hidden] { display: none; }
+
+  .block { border: 1px solid var(--divider-color, rgba(127,127,127,.3)); border-radius: 10px; overflow: hidden; }
+  .block > header {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    background: var(--secondary-background-color, rgba(127,127,127,.08));
+  }
+  .block > header .label { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .block > header .sub { font-size: 11px; font-weight: 400; color: var(--secondary-text-color); }
+  .block > .body { padding: 10px; }
+  .block > .body[hidden] { display: none; }
+
+  .mini { width: 32px; height: 32px; flex: 0 0 32px; border: 0; border-radius: 8px; background: none; cursor: pointer; color: var(--secondary-text-color); display: grid; place-items: center; }
+  .mini:hover { background: rgba(127,127,127,.16); color: var(--primary-text-color); }
+  .mini:disabled { opacity: .3; cursor: default; }
+  .mini ha-icon { --mdc-icon-size: 18px; }
+  .mini.danger:hover { color: var(--error-color, #db4437); }
+
+  .add-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .add {
+    padding: 9px 14px; border: 1px dashed var(--divider-color, rgba(127,127,127,.4)); border-radius: 10px;
+    background: none; cursor: pointer; font: inherit; color: var(--primary-color); display: flex; align-items: center; gap: 6px;
+  }
+  .add:hover { background: rgba(127,127,127,.08); }
+  .add ha-icon { --mdc-icon-size: 18px; }
+
+  .grid-head { display: flex; align-items: center; gap: 8px; margin: 4px 0 2px; font-size: 13px; font-weight: 600; }
+  .grid-head .weight { flex: 1; font-weight: 400; color: var(--secondary-text-color); font-size: 11px; }
+
+  .hint { margin: 0; font-size: 12px; line-height: 1.45; color: var(--secondary-text-color); }
+  .empty { padding: 14px; text-align: center; font-size: 12px; color: var(--secondary-text-color); }
+
+  select.plain, input.plain {
+    width: 100%; padding: 9px 10px; font: inherit; color: var(--primary-text-color);
+    background: var(--secondary-background-color, rgba(127,127,127,.08));
+    border: 1px solid var(--divider-color, rgba(127,127,127,.3)); border-radius: 8px;
+  }
+  .field { display: grid; gap: 5px; margin-bottom: 10px; }
+  .field > label { font-size: 12px; color: var(--secondary-text-color); }
+  .widths { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+`;
+var el2 = (tag, className, text2) => {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text2 !== void 0) node.textContent = text2;
+  return node;
+};
+var icon = (name) => {
+  const node = document.createElement("ha-icon");
+  node.setAttribute("icon", name);
+  return node;
+};
+var miniButton = (iconName, title, handler, className = "mini") => {
+  const button = el2("button", className);
+  button.title = title;
+  button.append(icon(iconName));
+  button.addEventListener("click", handler);
+  return button;
+};
+var HaOsShellEditor = class extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = null;
+    this._hass = null;
+    this._built = false;
+    this._tab = "general";
+    this._editingPageIndex = 0;
+    this._open = /* @__PURE__ */ new Set();
+    this._forms = /* @__PURE__ */ new Map();
+  }
+  setConfig(config) {
+    const next = normalizeShellConfig(config);
+    const structureChanged = this._structureSignature(next) !== this._structureSignature(this._config);
+    this._config = next;
+    if (!this._built) {
+      this._build();
+      return;
+    }
+    if (structureChanged) this._renderPanels();
+    else this._refreshForms();
+  }
+  set hass(hass) {
+    this._hass = hass;
+    this._forms.forEach((form) => {
+      form.hass = hass;
+    });
+  }
+  get hass() {
+    return this._hass;
+  }
+  /** Ändert sich diese Signatur, muss das DOM neu aufgebaut werden. */
+  _structureSignature(config) {
+    if (!config) return "";
+    return JSON.stringify(
+      config.pages.map((page) => ({
+        id: page.id,
+        kind: page.kind,
+        badges: page.badges.length,
+        cards: page.grids.map((grid) => grid.cards.map((card) => card.type))
+      }))
+    ) + `|${config.quick_actions.length}|${this._tab}|${this._editingPageIndex}`;
+  }
+  _emit() {
+    this.dispatchEvent(
+      new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true })
+    );
+  }
+  /** Nimmt eine Änderung vor und meldet sie. `structural` erzwingt Neuaufbau. */
+  _mutate(mutator, structural = false) {
+    const draft = deepClone(this._config);
+    mutator(draft);
+    this._config = normalizeShellConfig(draft);
+    this._emit();
+    if (structural) this._renderPanels();
+  }
+  // ---------------------------------------------------------------- Aufbau
+  _build() {
+    const style = document.createElement("style");
+    style.textContent = STYLES2;
+    this._tabBar = el2("div", "tabs");
+    [
+      ["general", "Allgemein"],
+      ["pages", "Seiten"],
+      ["cards", "Karten"]
+    ].forEach(([id, label]) => {
+      const tab = el2("button", "tab", label);
+      tab.addEventListener("click", () => {
+        this._tab = id;
+        this._renderPanels();
+      });
+      this._tabBar.append(tab);
+    });
+    this._panel = el2("div", "panel");
+    this.shadowRoot.replaceChildren(style, this._tabBar, this._panel);
+    this._built = true;
+    this._renderPanels();
+  }
+  _renderPanels() {
+    [...this._tabBar.children].forEach((tab, index) => {
+      tab.classList.toggle("active", ["general", "pages", "cards"][index] === this._tab);
+    });
+    this._forms.clear();
+    this._panel.replaceChildren();
+    if (this._tab === "general") this._renderGeneral();
+    else if (this._tab === "pages") this._renderPages();
+    else this._renderCards();
+  }
+  _refreshForms() {
+    this._forms.forEach((form, key) => {
+      const data = this._formData(key);
+      if (data && !isEqualConfig(form.data, data)) form.data = data;
+    });
+  }
+  /** Liefert die aktuellen Daten für ein gecachtes Formular. */
+  _formData(key) {
+    const [kind, a, b] = key.split(":");
+    if (kind === "general") return this._config;
+    if (kind === "page") return this._config.pages[Number(a)];
+    if (kind === "iframe") return this._config.pages[Number(a)];
+    if (kind === "badge") return this._config.pages[Number(a)].badges[Number(b)];
+    if (kind === "action") return this._config.quick_actions[Number(a)];
+    return null;
+  }
+  _form(key, schema, data, onChange) {
+    const form = document.createElement("ha-form");
+    form.hass = this._hass;
+    form.data = data;
+    form.schema = schema;
+    form.computeLabel = (field) => LABELS[field.name] || field.name;
+    form.computeHelper = (field) => HELPERS[field.name] || "";
+    form.addEventListener("value-changed", (event) => {
+      event.stopPropagation();
+      onChange(event.detail.value);
+    });
+    this._forms.set(key, form);
+    return form;
+  }
+  _block(labelText, subText, bodyBuilder, openKey, headerExtras = []) {
+    const block = el2("div", "block");
+    const header = document.createElement("header");
+    const label = el2("div", "label", labelText);
+    if (subText) {
+      const sub = el2("div", "sub", subText);
+      const wrap = el2("div");
+      wrap.style.cssText = "flex:1;min-width:0";
+      wrap.append(label, sub);
+      header.append(wrap);
+    } else {
+      header.append(label);
+    }
+    const body = el2("div", "body");
+    body.hidden = !this._open.has(openKey);
+    const toggle = miniButton(body.hidden ? "mdi:chevron-down" : "mdi:chevron-up", "Aufklappen", () => {
+      const open = this._open.has(openKey);
+      if (open) this._open.delete(openKey);
+      else this._open.add(openKey);
+      body.hidden = open;
+      toggle.querySelector("ha-icon")?.setAttribute("icon", open ? "mdi:chevron-down" : "mdi:chevron-up");
+    });
+    header.append(...headerExtras, toggle);
+    block.append(header, body);
+    if (!body.hidden || true) body.append(bodyBuilder());
+    return block;
+  }
+  // ---------------------------------------------------------------- Allgemein
+  _renderGeneral() {
+    this._panel.append(
+      this._form("general", GENERAL_SCHEMA, this._config, (value) => {
+        this._config = normalizeShellConfig({ ...this._config, ...value });
+        this._emit();
+      })
+    );
+    const actions = el2("div", "panel");
+    actions.append(el2("p", "hint", "Schnellaktionen erscheinen als Symbole oben in der Seitenleiste."));
+    this._config.quick_actions.forEach((action, index) => {
+      const extras = [
+        miniButton("mdi:arrow-up", "Nach oben", () => this._moveQuickAction(index, -1)),
+        miniButton("mdi:arrow-down", "Nach unten", () => this._moveQuickAction(index, 1)),
+        miniButton("mdi:delete-outline", "Entfernen", () => this._mutate((draft) => draft.quick_actions.splice(index, 1), true), "mini danger")
+      ];
+      actions.append(
+        this._block(
+          action.name || action.entity || `Aktion ${index + 1}`,
+          action.icon,
+          () => this._form(
+            `action:${index}`,
+            QUICK_ACTION_SCHEMA,
+            action,
+            (value) => this._mutate((draft) => Object.assign(draft.quick_actions[index], value))
+          ),
+          `action-${index}`,
+          extras
+        )
+      );
+    });
+    const add = el2("button", "add");
+    add.append(icon("mdi:plus"), el2("span", null, "Schnellaktion hinzufügen"));
+    add.addEventListener(
+      "click",
+      () => this._mutate((draft) => draft.quick_actions.push({ icon: "mdi:star-outline" }), true)
+    );
+    const addRow = el2("div", "add-row");
+    addRow.append(add);
+    actions.append(addRow);
+    this._panel.append(actions);
+  }
+  _moveQuickAction(index, delta) {
+    const target = index + delta;
+    if (target < 0 || target >= this._config.quick_actions.length) return;
+    this._mutate((draft) => {
+      const [item] = draft.quick_actions.splice(index, 1);
+      draft.quick_actions.splice(target, 0, item);
+    }, true);
+  }
+  // ---------------------------------------------------------------- Seiten
+  _renderPages() {
+    this._panel.append(
+      el2("p", "hint", "Die erste Seite ist immer Home. Jede weitere Seite erhält automatisch einen Reiter in der Kopfzeile und drei leere Raster.")
+    );
+    this._config.pages.forEach((page, index) => {
+      const extras = [];
+      if (index > 0) {
+        extras.push(
+          miniButton("mdi:arrow-up", "Nach oben", () => this._movePage(index, -1)),
+          miniButton("mdi:arrow-down", "Nach unten", () => this._movePage(index, 1)),
+          miniButton("mdi:delete-outline", "Seite entfernen", () => this._mutate((draft) => draft.pages.splice(index, 1), true), "mini danger")
+        );
+      }
+      this._panel.append(
+        this._block(
+          page.name,
+          index === 0 ? "Startseite" : page.kind === "iframe" ? "Externe Seite" : "Interne Seite",
+          () => this._pageBody(page, index),
+          `page-${index}`,
+          extras
+        )
+      );
+    });
+    const add = el2("button", "add");
+    add.append(icon("mdi:plus"), el2("span", null, "Seite hinzufügen"));
+    add.addEventListener(
+      "click",
+      () => this._mutate((draft) => {
+        draft.pages.push({
+          name: `Seite ${draft.pages.length + 1}`,
+          icon: "mdi:circle-outline",
+          kind: "page",
+          grid_widths: [...DEFAULT_GRID_WIDTHS],
+          grids: createEmptyGrids()
+        });
+      }, true)
+    );
+    const addRow = el2("div", "add-row");
+    addRow.append(add);
+    this._panel.append(addRow);
+  }
+  _movePage(index, delta) {
+    const target = index + delta;
+    if (target < 1 || target >= this._config.pages.length) return;
+    this._mutate((draft) => {
+      const [item] = draft.pages.splice(index, 1);
+      draft.pages.splice(target, 0, item);
+    }, true);
+  }
+  _pageBody(page, index) {
+    const wrap = el2("div");
+    wrap.append(
+      this._form(
+        `page:${index}`,
+        PAGE_SCHEMA,
+        page,
+        (value) => this._mutate((draft) => Object.assign(draft.pages[index], value), value.kind !== page.kind)
+      )
+    );
+    if (page.kind === "iframe") {
+      wrap.append(
+        this._form(
+          `iframe:${index}`,
+          IFRAME_SCHEMA,
+          page,
+          (value) => this._mutate((draft) => Object.assign(draft.pages[index], value))
+        )
+      );
+    } else {
+      const widths = el2("div", "field");
+      widths.append(el2("label", null, "Spaltenbreiten (Verhältnis der drei Raster)"));
+      const row = el2("div", "widths");
+      page.grid_widths.forEach((width, columnIndex) => {
+        const input = el2("input", "plain");
+        input.type = "number";
+        input.min = "0.3";
+        input.max = "4";
+        input.step = "0.05";
+        input.value = width;
+        input.addEventListener(
+          "change",
+          () => this._mutate((draft) => {
+            draft.pages[index].grid_widths[columnIndex] = Number(input.value);
+          })
+        );
+        row.append(input);
+      });
+      widths.append(row);
+      wrap.append(widths);
+    }
+    wrap.append(el2("p", "hint", "Badges stehen oben in der Kopfzeile dieser Seite."));
+    page.badges.forEach((badge, badgeIndex) => {
+      const extras = [
+        miniButton("mdi:delete-outline", "Badge entfernen", () => this._mutate((draft) => draft.pages[index].badges.splice(badgeIndex, 1), true), "mini danger")
+      ];
+      wrap.append(
+        this._block(
+          badge.name || badge.entity || `Badge ${badgeIndex + 1}`,
+          "",
+          () => this._form(
+            `badge:${index}:${badgeIndex}`,
+            BADGE_SCHEMA,
+            badge,
+            (value) => this._mutate((draft) => Object.assign(draft.pages[index].badges[badgeIndex], value))
+          ),
+          `badge-${index}-${badgeIndex}`,
+          extras
+        )
+      );
+    });
+    const addBadge = el2("button", "add");
+    addBadge.append(icon("mdi:plus"), el2("span", null, "Badge hinzufügen"));
+    addBadge.addEventListener(
+      "click",
+      () => this._mutate((draft) => draft.pages[index].badges.push({ entity: "", tap_action: { action: "toggle" } }), true)
+    );
+    const addRow = el2("div", "add-row");
+    addRow.append(addBadge);
+    wrap.append(addRow);
+    return wrap;
+  }
+  // ---------------------------------------------------------------- Karten
+  _renderCards() {
+    const pageIndex = Math.min(this._editingPageIndex, this._config.pages.length - 1);
+    const page = this._config.pages[pageIndex];
+    const picker = el2("div", "field");
+    picker.append(el2("label", null, "Seite"));
+    const select = el2("select", "plain");
+    this._config.pages.forEach((entry, index) => {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = entry.name;
+      if (index === pageIndex) option.selected = true;
+      select.append(option);
+    });
+    select.addEventListener("change", () => {
+      this._editingPageIndex = Number(select.value);
+      this._renderPanels();
+    });
+    picker.append(select);
+    this._panel.append(picker);
+    if (page.kind === "iframe") {
+      this._panel.append(el2("div", "empty", "Externe Seiten haben keine Raster."));
+      return;
+    }
+    page.grids.forEach((grid, columnIndex) => {
+      const head = el2("div", "grid-head");
+      head.append(
+        el2("span", null, `Raster ${columnIndex + 1}`),
+        el2("span", "weight", `Breite ${page.grid_widths[columnIndex]}`)
+      );
+      this._panel.append(head);
+      if (!grid.cards.length) {
+        this._panel.append(el2("div", "empty", "Noch keine Karte in diesem Raster."));
+      }
+      grid.cards.forEach((card, cardIndex) => {
+        const extras = [
+          miniButton("mdi:arrow-up", "Nach oben", () => this._moveCard(pageIndex, columnIndex, cardIndex, -1)),
+          miniButton("mdi:arrow-down", "Nach unten", () => this._moveCard(pageIndex, columnIndex, cardIndex, 1)),
+          miniButton(
+            "mdi:delete-outline",
+            "Karte entfernen",
+            () => this._mutate((draft) => draft.pages[pageIndex].grids[columnIndex].cards.splice(cardIndex, 1), true),
+            "mini danger"
+          )
+        ];
+        this._panel.append(
+          this._block(
+            this._cardLabel(card),
+            card.type,
+            () => this._cardBody(pageIndex, columnIndex, cardIndex, card),
+            `card-${pageIndex}-${columnIndex}-${cardIndex}`,
+            extras
+          )
+        );
+      });
+      const addRow = el2("div", "add-row");
+      const addOwn = el2("button", "add");
+      addOwn.append(icon("mdi:plus"), el2("span", null, "HA-OS Karte"));
+      addOwn.addEventListener(
+        "click",
+        () => this._mutate((draft) => {
+          draft.pages[pageIndex].grids[columnIndex].cards.push({
+            type: "custom:ha-os-card",
+            card_type: "button",
+            haos_weight: 1
+          });
+        }, true)
+      );
+      const addOther = el2("button", "add");
+      addOther.append(icon("mdi:code-braces"), el2("span", null, "Andere Karte (YAML)"));
+      addOther.addEventListener(
+        "click",
+        () => this._mutate((draft) => {
+          draft.pages[pageIndex].grids[columnIndex].cards.push({ type: "entities", entities: [], haos_weight: 1 });
+        }, true)
+      );
+      addRow.append(addOwn, addOther);
+      this._panel.append(addRow);
+    });
+  }
+  _cardLabel(card) {
+    if (card.type === "custom:ha-os-card") return `HA-OS · ${card.card_type || "unbestimmt"}`;
+    return card.type || "Karte";
+  }
+  _moveCard(pageIndex, columnIndex, cardIndex, delta) {
+    const cards = this._config.pages[pageIndex].grids[columnIndex].cards;
+    const target = cardIndex + delta;
+    if (target < 0 || target >= cards.length) return;
+    this._mutate((draft) => {
+      const list = draft.pages[pageIndex].grids[columnIndex].cards;
+      const [item] = list.splice(cardIndex, 1);
+      list.splice(target, 0, item);
+    }, true);
+  }
+  _cardBody(pageIndex, columnIndex, cardIndex, card) {
+    const wrap = el2("div");
+    const write = (value) => this._mutate((draft) => {
+      draft.pages[pageIndex].grids[columnIndex].cards[cardIndex] = value;
+    });
+    if (card.type === "custom:ha-os-card") {
+      const editor = document.createElement("ha-os-card-editor");
+      editor.hass = this._hass;
+      editor.setConfig(card);
+      editor.addEventListener("config-changed", (event) => {
+        event.stopPropagation();
+        write({ ...event.detail.config, type: "custom:ha-os-card" });
+      });
+      wrap.append(editor);
+      return wrap;
+    }
+    wrap.append(
+      el2("p", "hint", "Konfiguration dieser Karte als YAML – genau wie im normalen Home-Assistant-Karteneditor.")
+    );
+    const yamlEditor = document.createElement("ha-yaml-editor");
+    if (typeof yamlEditor.setConfig === "function" || "defaultValue" in yamlEditor || customElements.get("ha-yaml-editor")) {
+      yamlEditor.defaultValue = card;
+      yamlEditor.addEventListener("value-changed", (event) => {
+        event.stopPropagation();
+        if (event.detail.isValid === false) return;
+        write({ ...event.detail.value, haos_weight: card.haos_weight });
+      });
+      wrap.append(yamlEditor);
+    } else {
+      const area = document.createElement("textarea");
+      area.className = "plain";
+      area.rows = 10;
+      area.value = JSON.stringify(card, null, 2);
+      area.addEventListener("change", () => {
+        try {
+          write({ ...JSON.parse(area.value), haos_weight: card.haos_weight });
+        } catch (_error) {
+        }
+      });
+      wrap.append(area);
+    }
+    const weight = el2("div", "field");
+    weight.append(el2("label", null, "Höhenfaktor (1 = Standardhöhe)"));
+    const input = el2("input", "plain");
+    input.type = "number";
+    input.min = "0.5";
+    input.max = "6";
+    input.step = "0.25";
+    input.value = card.haos_weight ?? 1;
+    input.addEventListener("change", () => write({ ...card, haos_weight: Number(input.value) }));
+    weight.append(input);
+    wrap.append(weight);
+    return wrap;
+  }
+};
+if (!customElements.get(EDITOR_TAG2)) customElements.define(EDITOR_TAG2, HaOsShellEditor);
+
+// src/cards/haos-card.js
+var TAG2 = "ha-os-card";
+var EDITOR_TAG3 = "ha-os-card-editor";
+var CARD_TYPES = [
+  { value: "button", label: "Button / Kachel", icon: "mdi:gesture-tap-button" },
+  { value: "slider", label: "Slider", icon: "mdi:tune-vertical" },
+  { value: "thermostat", label: "Thermostat", icon: "mdi:thermostat" },
+  { value: "weather", label: "Wetter", icon: "mdi:weather-partly-cloudy" },
+  { value: "energy", label: "Energie", icon: "mdi:lightning-bolt" },
+  { value: "media", label: "Media Player", icon: "mdi:speaker" },
+  { value: "members", label: "Mitglieder", icon: "mdi:account-group" },
+  { value: "calendar", label: "Kalender", icon: "mdi:calendar" },
+  { value: "select", label: "Auswahl", icon: "mdi:form-dropdown" },
+  { value: "clock", label: "Uhr", icon: "mdi:clock-outline" }
+];
+var el3 = (tag, className, text2) => {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text2 !== void 0) node.textContent = text2;
+  return node;
+};
+var icon2 = (name) => {
+  const node = document.createElement("ha-icon");
+  node.setAttribute("icon", name);
+  return node;
+};
+var STYLES3 = `
+  :host { display: block; height: 100%; }
+  * { box-sizing: border-box; }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+
+  .card {
+    height: 100%; padding: 16px; overflow: hidden;
+    display: flex; flex-direction: column; gap: 10px;
+    color: var(--haos-text, #fff);
+    font-family: var(--haos-font-family);
+    font-weight: var(--haos-font-weight-normal, 450);
+    ${ENTITY_SURFACE_CSS}
+  }
+  .card.interactive { cursor: pointer; transition: transform .16s ease, box-shadow .16s ease; }
+  .card.interactive:hover { transform: translateY(-1px); }
+
+  /* Aktiv = neutraler Glasrahmen + inneres Akzentleuchten, KEIN blauer Aussenrahmen */
+  .card.is-on {
+    box-shadow: var(--haos-entity-shadow), inset 0 0 40px color-mix(in srgb, var(--haos-accent, #0a84ff) 20%, transparent);
+  }
+  .card.is-unavailable { opacity: .55; }
+
+  .row { display: flex; align-items: center; gap: 10px; }
+  .spacer { flex: 1; }
+  .title { font-size: 15px; font-weight: var(--haos-font-weight-semibold, 650); }
+  .subtitle { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
+  .muted { color: rgba(var(--haos-text-rgb, 255,255,255), .55); font-size: 11px; }
+
+  .chip {
+    width: 38px; height: 38px; flex: 0 0 38px; border-radius: 12px;
+    display: grid; place-items: center;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .08);
+  }
+  .chip ha-icon { --mdc-icon-size: 20px; }
+  .is-on .chip ha-icon { color: var(--haos-accent, #0a84ff); filter: drop-shadow(0 0 6px color-mix(in srgb, var(--haos-accent, #0a84ff) 55%, transparent)); }
+  .is-off .chip ha-icon { color: var(--haos-status-off, #a8b0b8); }
+  .is-unavailable .chip ha-icon { color: var(--haos-status-unavailable, #ff6961); }
+
+  /* --- Schalter --- */
+  .switch {
+    width: 46px; height: 27px; flex: 0 0 46px; border-radius: 999px; position: relative;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .18); transition: background .18s ease;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 21px; height: 21px; border-radius: 50%;
+    background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.3); transition: transform .18s ease;
+  }
+  .is-on .switch { background: var(--haos-accent, #0a84ff); }
+  .is-on .switch::after { transform: translateX(19px); }
+
+  /* --- Slider --- */
+  .slider-track { position: relative; height: 40px; border-radius: 14px; overflow: hidden; background: rgba(var(--haos-text-rgb, 255,255,255), .10); }
+  .slider-fill { position: absolute; inset: 0 auto 0 0; width: 0%; background: color-mix(in srgb, var(--haos-accent, #0a84ff) 55%, transparent); transition: width .12s ease; }
+  .slider-track input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
+  .slider-value { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 12px; font-size: 12px; font-weight: 650; pointer-events: none; }
+
+  /* --- Thermostat --- */
+  .dial-wrap { flex: 1; min-height: 0; display: grid; place-items: center; }
+  .dial { position: relative; width: 100%; max-width: 220px; aspect-ratio: 1; }
+  .dial svg { width: 100%; height: 100%; transform: rotate(135deg); }
+  .dial .track { fill: none; stroke: rgba(var(--haos-text-rgb, 255,255,255), .14); stroke-linecap: round; }
+  .dial .value { fill: none; stroke: var(--haos-accent, #0a84ff); stroke-linecap: round; transition: stroke-dashoffset .25s ease; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--haos-accent, #0a84ff) 60%, transparent)); }
+  .dial-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+  .dial-temp { font-size: 34px; font-weight: 700; letter-spacing: -.02em; }
+  .dial-label { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
+  .stepper { display: flex; justify-content: center; gap: 14px; }
+  .stepper button { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(var(--haos-text-rgb, 255,255,255), .09); }
+  .stepper button:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .16); }
+  .modes { display: flex; justify-content: space-around; gap: 6px; }
+  .mode { display: grid; justify-items: center; gap: 5px; font-size: 10px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
+  .mode .dot { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(var(--haos-text-rgb, 255,255,255), .09); }
+  .mode.active { color: var(--haos-text, #fff); }
+  .mode.active .dot { background: #fff; color: #18212a; }
+
+  /* --- Wetter --- */
+  .weather-head { display: flex; align-items: flex-start; gap: 10px; }
+  .weather-now { font-size: 40px; font-weight: 300; letter-spacing: -.03em; line-height: 1; }
+  .weather-now sup { font-size: 18px; vertical-align: super; }
+  .weather-bottom { margin-top: auto; display: grid; gap: 2px; }
+
+  /* Verlaufskurve: gleiche Spalteneinteilung wie die Vorhersagezeile darunter,
+     damit jeder Kurvenpunkt über seinem Wert sitzt. */
+  .weather-graph { height: 54px; }
+  .weather-graph.is-hidden { display: none; }
+  .weather-graph svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .weather-graph .area { stroke: none; fill: url(#haos-weather-fade); }
+  .weather-graph .line {
+    fill: none; stroke: var(--haos-accent, #0a84ff); stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke;
+    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--haos-accent, #0a84ff) 55%, transparent));
+  }
+
+  .forecast { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
+  .forecast-item { display: grid; justify-items: center; gap: 4px; font-size: 10px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
+  .forecast-item b { font-size: 13px; color: var(--haos-text, #fff); font-weight: 600; }
+  .forecast-item ha-icon { --mdc-icon-size: 17px; }
+
+  /* --- Balkendiagramm (Energie) --- */
+  .bars { flex: 1; min-height: 60px; display: flex; align-items: flex-end; gap: 6px; }
+  .bar-col { flex: 1; display: grid; grid-template-rows: 1fr auto; gap: 6px; height: 100%; }
+  .bar { align-self: end; width: 100%; border-radius: 6px 6px 3px 3px; background: rgba(var(--haos-text-rgb, 255,255,255), .22); min-height: 3px; transition: height .3s ease; }
+  .bar.peak { background: var(--haos-accent, #0a84ff); }
+  .bar-label { text-align: center; font-size: 9px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
+
+  /* --- Media --- */
+  .media-head { display: flex; gap: 12px; align-items: center; }
+  .media-art { width: 52px; height: 52px; flex: 0 0 52px; border-radius: 10px; overflow: hidden; background: rgba(var(--haos-text-rgb, 255,255,255), .1); display: grid; place-items: center; }
+  .media-art img { width: 100%; height: 100%; object-fit: cover; }
+  .progress { height: 3px; border-radius: 2px; background: rgba(var(--haos-text-rgb, 255,255,255), .18); overflow: hidden; }
+  .progress span { display: block; height: 100%; width: 0%; background: var(--haos-accent, #0a84ff); transition: width .5s linear; }
+  .media-times { display: flex; justify-content: space-between; font-size: 9px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
+  .media-controls { display: flex; align-items: center; justify-content: space-between; }
+  .media-controls button { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: rgba(var(--haos-text-rgb, 255,255,255), .75); }
+  .media-controls button:hover { color: var(--haos-text, #fff); background: rgba(var(--haos-text-rgb, 255,255,255), .1); }
+  .media-controls .play { width: 44px; height: 44px; background: #fff; color: #18212a; }
+  .media-controls .play:hover { background: #fff; }
+
+  /* --- Mitglieder --- */
+  .members { display: flex; align-items: center; }
+  .member { width: 40px; height: 40px; margin-left: -10px; border-radius: 50%; overflow: hidden; border: 2px solid rgba(var(--haos-card-surface-rgb, 255,255,255), .35); display: grid; place-items: center; background: rgba(var(--haos-text-rgb, 255,255,255), .12); font-size: 11px; font-weight: 800; }
+  .member:first-child { margin-left: 0; }
+  .member img { width: 100%; height: 100%; object-fit: cover; }
+  .member.is-home { border-color: color-mix(in srgb, var(--haos-status-home, #32d583) 80%, transparent); }
+  .member.is-away { opacity: .7; border-color: color-mix(in srgb, var(--haos-status-away, #f7b955) 70%, transparent); }
+  .member.is-unavailable { opacity: .45; filter: saturate(.3); }
+
+  /* --- Kalender --- */
+  .events { flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 7px; scrollbar-width: thin; }
+  .event { display: grid; grid-template-columns: 42px 1fr; gap: 9px; align-items: center; }
+  .event .when { font-size: 9px; text-align: center; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
+  .event .when b { display: block; font-size: 14px; color: var(--haos-text, #fff); }
+  .event .what { min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* --- Auswahl --- */
+  .options { display: flex; flex-wrap: wrap; gap: 6px; }
+  .option { padding: 7px 13px; border-radius: 10px; font-size: 12px; background: rgba(var(--haos-text-rgb, 255,255,255), .09); }
+  .option.active { background: var(--haos-accent, #0a84ff); color: #fff; }
+  select.dropdown { width: 100%; padding: 10px 12px; border-radius: 12px; font: inherit; color: var(--haos-text, #fff); background: rgba(var(--haos-text-rgb, 255,255,255), .09); border: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .14); }
+  select.dropdown option { color: #18212a; }
+
+  /* --- Uhr --- */
+  .clock { flex: 1; display: grid; place-content: center; text-align: center; }
+  .clock-time { font-size: 44px; font-weight: 300; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .clock-date { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
+
+  .error { display: grid; place-content: center; height: 100%; text-align: center; gap: 6px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
+`;
+var pad = (value) => String(value).padStart(2, "0");
+var formatDuration = (seconds) => {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+  const total = Math.floor(seconds);
+  return `${Math.floor(total / 60)}:${pad(total % 60)}`;
+};
+var numeric = (value) => value === null || value === void 0 || value === "" ? NaN : Number(value);
+var drawWeatherGraph = (ctx, items) => {
+  const graph = ctx.nodes.graph;
+  if (!graph) return;
+  const values = (items || []).map((entry) => numeric(entry?.temperature));
+  const usable = ctx.config.show_graph !== false && values.length >= 2 && values.every(Number.isFinite);
+  graph.classList.toggle("is-hidden", !usable);
+  if (!usable) return;
+  const count = values.length;
+  const low = Math.min(...values);
+  const high = Math.max(...values);
+  const span = high - low || 1;
+  const top = 6;
+  const base = 34;
+  const points = values.map((value, index) => ({
+    x: (index + 0.5) / count * 100,
+    y: base - (value - low) / span * (base - top)
+  }));
+  const round = (value) => Math.round(value * 100) / 100;
+  let path = `M ${round(points[0].x)} ${round(points[0].y)}`;
+  for (let index = 0; index < count - 1; index += 1) {
+    const start = points[index];
+    const end = points[index + 1];
+    const before = points[index - 1] || start;
+    const after = points[index + 2] || end;
+    const lower = Math.min(start.y, end.y);
+    const upper = Math.max(start.y, end.y);
+    const clamp2 = (value) => Math.min(upper, Math.max(lower, value));
+    const c1x = start.x + (end.x - before.x) / 6;
+    const c1y = clamp2(start.y + (end.y - before.y) / 6);
+    const c2x = end.x - (after.x - start.x) / 6;
+    const c2y = clamp2(end.y - (after.y - start.y) / 6);
+    path += ` C ${round(c1x)} ${round(c1y)} ${round(c2x)} ${round(c2y)} ${round(end.x)} ${round(end.y)}`;
+  }
+  ctx.nodes.graphLine.setAttribute("d", path);
+  ctx.nodes.graphArea.setAttribute(
+    "d",
+    `${path} L ${round(points[count - 1].x)} 40 L ${round(points[0].x)} 40 Z`
+  );
+};
+var renderers = {
+  // ------------------------------------------------------------- Button
+  button: {
+    build(ctx) {
+      const root = el3("div");
+      const row = el3("div", "row");
+      ctx.nodes.chip = el3("div", "chip");
+      ctx.nodes.chipIcon = icon2("mdi:circle-outline");
+      ctx.nodes.chip.append(ctx.nodes.chipIcon);
+      const text2 = el3("div");
+      ctx.nodes.title = el3("div", "title");
+      ctx.nodes.subtitle = el3("div", "subtitle");
+      text2.append(ctx.nodes.title, ctx.nodes.subtitle);
+      row.append(ctx.nodes.chip, text2, el3("div", "spacer"));
+      if (ctx.config.show_toggle !== false) {
+        ctx.nodes.toggle = el3("div", "switch");
+        row.append(ctx.nodes.toggle);
+      }
+      root.append(row);
+      ctx.card.classList.add("interactive");
+      ctx.card.addEventListener(
+        "click",
+        () => handleAction(ctx.host, ctx.hass, ctx.config.tap_action || { action: "toggle" }, ctx.config.entity)
+      );
+      return root;
+    },
+    update(ctx) {
+      const state = ctx.hass?.states?.[ctx.config.entity];
+      ctx.nodes.chipIcon.setAttribute("icon", ctx.config.icon || domainIcon(ctx.config.entity, state));
+      ctx.nodes.title.textContent = ctx.config.name || friendlyName(ctx.config.entity, state);
+      ctx.nodes.subtitle.textContent = ctx.config.show_state === false ? "" : formatState(ctx.hass, ctx.config.entity);
+    }
+  },
+  // ------------------------------------------------------------- Slider
+  slider: {
+    build(ctx) {
+      const root = el3("div");
+      const head = el3("div", "row");
+      ctx.nodes.chip = el3("div", "chip");
+      ctx.nodes.chipIcon = icon2("mdi:brightness-6");
+      ctx.nodes.chip.append(ctx.nodes.chipIcon);
+      ctx.nodes.title = el3("div", "title");
+      head.append(ctx.nodes.chip, ctx.nodes.title);
+      const track = el3("div", "slider-track");
+      ctx.nodes.fill = el3("div", "slider-fill");
+      ctx.nodes.output = el3("div", "slider-value");
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = 0;
+      input.max = 100;
+      input.step = 1;
+      ctx.nodes.input = input;
+      input.addEventListener("pointerdown", () => {
+        ctx.nodes.dragging = true;
+      });
+      const release = () => {
+        ctx.nodes.dragging = false;
+      };
+      input.addEventListener("pointerup", release);
+      input.addEventListener("pointercancel", release);
+      input.addEventListener("input", () => {
+        ctx.nodes.fill.style.width = `${input.value}%`;
+        ctx.nodes.output.textContent = `${input.value}%`;
+      });
+      input.addEventListener("change", () => {
+        release();
+        renderers.slider.commit(ctx, Number(input.value));
+      });
+      track.append(ctx.nodes.fill, ctx.nodes.output, input);
+      root.append(head, track);
+      return root;
+    },
+    read(ctx) {
+      const entityId = ctx.config.entity || "";
+      const state = ctx.hass?.states?.[entityId];
+      if (!state) return 0;
+      const domain = entityId.split(".")[0];
+      if (domain === "light") return Math.round((state.attributes.brightness || 0) / 255 * 100);
+      if (domain === "cover") return Number(state.attributes.current_position ?? 0);
+      if (domain === "fan") return Number(state.attributes.percentage ?? 0);
+      if (domain === "media_player") return Math.round((state.attributes.volume_level || 0) * 100);
+      return clampNumber(state.state, 0, 100, 0);
+    },
+    commit(ctx, value) {
+      const entityId = ctx.config.entity || "";
+      const domain = entityId.split(".")[0];
+      const hass = ctx.hass;
+      if (!hass || !entityId) return;
+      if (domain === "light") {
+        hass.callService("light", "turn_on", { entity_id: entityId, brightness_pct: value });
+      } else if (domain === "cover") {
+        hass.callService("cover", "set_cover_position", { entity_id: entityId, position: value });
+      } else if (domain === "fan") {
+        hass.callService("fan", "set_percentage", { entity_id: entityId, percentage: value });
+      } else if (domain === "media_player") {
+        hass.callService("media_player", "volume_set", { entity_id: entityId, volume_level: value / 100 });
+      } else if (domain === "number" || domain === "input_number") {
+        hass.callService(domain, "set_value", { entity_id: entityId, value });
+      }
+    },
+    update(ctx) {
+      const state = ctx.hass?.states?.[ctx.config.entity];
+      ctx.nodes.chipIcon.setAttribute("icon", ctx.config.icon || domainIcon(ctx.config.entity, state));
+      ctx.nodes.title.textContent = ctx.config.name || friendlyName(ctx.config.entity, state);
+      if (ctx.nodes.dragging) return;
+      const value = renderers.slider.read(ctx);
+      ctx.nodes.input.value = value;
+      ctx.nodes.fill.style.width = `${value}%`;
+      ctx.nodes.output.textContent = `${value}%`;
+    }
+  },
+  // ------------------------------------------------------------- Thermostat
+  thermostat: {
+    build(ctx) {
+      const root = el3("div");
+      root.style.cssText = "display:flex;flex-direction:column;gap:10px;flex:1;min-height:0";
+      const head = el3("div", "row");
+      const text2 = el3("div");
+      ctx.nodes.title = el3("div", "title");
+      ctx.nodes.subtitle = el3("div", "subtitle");
+      text2.append(ctx.nodes.title, ctx.nodes.subtitle);
+      ctx.nodes.toggle = el3("div", "switch");
+      head.append(text2, el3("div", "spacer"), ctx.nodes.toggle);
+      ctx.nodes.toggle.addEventListener("click", (event) => {
+        event.stopPropagation();
+        ctx.hass?.callService("climate", "toggle", { entity_id: ctx.config.entity });
+      });
+      const wrap = el3("div", "dial-wrap");
+      const dial = el3("div", "dial");
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 100 100");
+      const circumference = 2 * Math.PI * 42;
+      const arc = circumference * 0.75;
+      const track = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      track.setAttribute("class", "track");
+      track.setAttribute("cx", "50");
+      track.setAttribute("cy", "50");
+      track.setAttribute("r", "42");
+      track.setAttribute("stroke-width", "7");
+      track.setAttribute("stroke-dasharray", `${arc} ${circumference}`);
+      const value = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      value.setAttribute("class", "value");
+      value.setAttribute("cx", "50");
+      value.setAttribute("cy", "50");
+      value.setAttribute("r", "42");
+      value.setAttribute("stroke-width", "7");
+      value.setAttribute("stroke-dasharray", `${arc} ${circumference}`);
+      value.setAttribute("stroke-dashoffset", String(arc));
+      ctx.nodes.arcLength = arc;
+      ctx.nodes.arc = value;
+      svg.append(track, value);
+      const center = el3("div", "dial-center");
+      ctx.nodes.temp = el3("div", "dial-temp", "--");
+      ctx.nodes.tempLabel = el3("div", "dial-label", "Temperatur");
+      center.append(ctx.nodes.temp, ctx.nodes.tempLabel);
+      dial.append(svg, center);
+      wrap.append(dial);
+      const stepper = el3("div", "stepper");
+      const down = document.createElement("button");
+      down.append(icon2("mdi:minus"));
+      const up = document.createElement("button");
+      up.append(icon2("mdi:plus"));
+      down.addEventListener("click", () => renderers.thermostat.step(ctx, -0.5));
+      up.addEventListener("click", () => renderers.thermostat.step(ctx, 0.5));
+      stepper.append(down, up);
+      ctx.nodes.modes = el3("div", "modes");
+      root.append(head, wrap, stepper, ctx.nodes.modes);
+      return root;
+    },
+    step(ctx, delta) {
+      const state = ctx.hass?.states?.[ctx.config.entity];
+      if (!state) return;
+      const current = Number(state.attributes.temperature);
+      if (!Number.isFinite(current)) return;
+      const step = Number(state.attributes.target_temp_step) || Math.abs(delta);
+      const next = Math.round((current + Math.sign(delta) * step) * 10) / 10;
+      ctx.hass.callService("climate", "set_temperature", { entity_id: ctx.config.entity, temperature: next });
+    },
+    update(ctx) {
+      const state = ctx.hass?.states?.[ctx.config.entity];
+      ctx.nodes.title.textContent = ctx.config.name || friendlyName(ctx.config.entity, state);
+      ctx.nodes.subtitle.textContent = state?.attributes?.friendly_name || "";
+      const target = Number(state?.attributes?.temperature);
+      const current = Number(state?.attributes?.current_temperature);
+      const min = Number(state?.attributes?.min_temp ?? 7);
+      const max = Number(state?.attributes?.max_temp ?? 35);
+      const shown = Number.isFinite(target) ? target : current;
+      ctx.nodes.temp.textContent = Number.isFinite(shown) ? `${shown}°` : "--";
+      ctx.nodes.tempLabel.textContent = Number.isFinite(current) ? `Aktuell ${current}°` : "Temperatur";
+      const ratio = Number.isFinite(shown) && max > min ? clampNumber((shown - min) / (max - min), 0, 1, 0) : 0;
+      ctx.nodes.arc.setAttribute("stroke-dashoffset", String(ctx.nodes.arcLength * (1 - ratio)));
+      const modes = state?.attributes?.hvac_modes || [];
+      const labels = { off: "Aus", heat: "Heizen", cool: "Kühlen", auto: "Auto", dry: "Trocken", fan_only: "Lüfter", heat_cool: "Auto" };
+      const icons = { off: "mdi:power", heat: "mdi:fire", cool: "mdi:snowflake", auto: "mdi:autorenew", dry: "mdi:water-percent", fan_only: "mdi:fan", heat_cool: "mdi:sun-snowflake" };
+      if (ctx.nodes.modeKey !== modes.join("|")) {
+        ctx.nodes.modeKey = modes.join("|");
+        ctx.nodes.modes.replaceChildren();
+        ctx.nodes.modeButtons = /* @__PURE__ */ new Map();
+        modes.forEach((mode) => {
+          const button = el3("button", "mode");
+          const dot = el3("span", "dot");
+          dot.append(icon2(icons[mode] || "mdi:circle-outline"));
+          button.append(dot, el3("span", null, labels[mode] || mode));
+          button.addEventListener(
+            "click",
+            () => ctx.hass.callService("climate", "set_hvac_mode", { entity_id: ctx.config.entity, hvac_mode: mode })
+          );
+          ctx.nodes.modeButtons.set(mode, button);
+          ctx.nodes.modes.append(button);
+        });
+      }
+      ctx.nodes.modeButtons?.forEach((button, mode) => button.classList.toggle("active", state?.state === mode));
+    }
+  },
+  // ------------------------------------------------------------- Wetter
+  weather: {
+    build(ctx) {
+      const root = el3("div");
+      root.style.cssText = "display:flex;flex-direction:column;gap:10px;flex:1;min-height:0";
+      const head = el3("div", "weather-head");
+      ctx.nodes.now = el3("div", "weather-now");
+      const meta = el3("div");
+      ctx.nodes.condition = el3("div", "title");
+      ctx.nodes.wind = el3("div", "subtitle");
+      meta.append(ctx.nodes.condition, ctx.nodes.wind);
+      head.append(ctx.nodes.now, meta);
+      const SVG_NS = "http://www.w3.org/2000/svg";
+      ctx.nodes.graph = el3("div", "weather-graph");
+      const graphSvg = document.createElementNS(SVG_NS, "svg");
+      graphSvg.setAttribute("viewBox", "0 0 100 40");
+      graphSvg.setAttribute("preserveAspectRatio", "none");
+      const defs = document.createElementNS(SVG_NS, "defs");
+      const fade = document.createElementNS(SVG_NS, "linearGradient");
+      fade.setAttribute("id", "haos-weather-fade");
+      fade.setAttribute("x1", "0");
+      fade.setAttribute("y1", "0");
+      fade.setAttribute("x2", "0");
+      fade.setAttribute("y2", "1");
+      [
+        ["0%", "currentColor", ".38"],
+        ["100%", "currentColor", "0"]
+      ].forEach(([offset, color2, opacity]) => {
+        const stop = document.createElementNS(SVG_NS, "stop");
+        stop.setAttribute("offset", offset);
+        stop.setAttribute("stop-color", color2);
+        stop.setAttribute("stop-opacity", opacity);
+        fade.append(stop);
+      });
+      defs.append(fade);
+      ctx.nodes.graphArea = document.createElementNS(SVG_NS, "path");
+      ctx.nodes.graphArea.setAttribute("class", "area");
+      ctx.nodes.graphArea.setAttribute("d", "");
+      ctx.nodes.graphLine = document.createElementNS(SVG_NS, "path");
+      ctx.nodes.graphLine.setAttribute("class", "line");
+      ctx.nodes.graphLine.setAttribute("d", "");
+      graphSvg.append(defs, ctx.nodes.graphArea, ctx.nodes.graphLine);
+      ctx.nodes.graph.append(graphSvg);
+      ctx.nodes.graph.style.color = "var(--haos-accent, #0a84ff)";
+      ctx.nodes.forecast = el3("div", "forecast");
+      const bottom = el3("div", "weather-bottom");
+      bottom.append(ctx.nodes.graph, ctx.nodes.forecast);
+      root.append(head, bottom);
+      return root;
+    },
+    update(ctx) {
+      const state = ctx.hass?.states?.[ctx.config.entity];
+      if (!state) return;
+      const temp = Math.round(numeric(state.attributes.temperature));
+      ctx.nodes.now.textContent = Number.isFinite(temp) ? `${temp}°` : "--";
+      ctx.nodes.condition.textContent = ctx.config.name || friendlyName(ctx.config.entity, state);
+      const speed = state.attributes.wind_speed;
+      ctx.nodes.wind.textContent = speed ? `Wind ${speed} ${state.attributes.wind_speed_unit || "km/h"}` : state.state;
+      const forecast = state.attributes.forecast || ctx.nodes.forecastData || [];
+      const items = forecast.slice(0, Number(ctx.config.forecast_count) || 5);
+      if (ctx.nodes.forecast.childElementCount !== items.length) {
+        ctx.nodes.forecast.replaceChildren();
+        ctx.nodes.forecastNodes = items.map(() => {
+          const node = el3("div", "forecast-item");
+          const value = el3("b");
+          const symbol = icon2("mdi:weather-cloudy");
+          const label = el3("span");
+          node.append(value, symbol, label);
+          ctx.nodes.forecast.append(node);
+          return { value, symbol, label };
+        });
+      }
+      const conditionIcons = {
+        sunny: "mdi:weather-sunny",
+        clear: "mdi:weather-sunny",
+        "clear-night": "mdi:weather-night",
+        cloudy: "mdi:weather-cloudy",
+        partlycloudy: "mdi:weather-partly-cloudy",
+        rainy: "mdi:weather-rainy",
+        pouring: "mdi:weather-pouring",
+        snowy: "mdi:weather-snowy",
+        fog: "mdi:weather-fog",
+        windy: "mdi:weather-windy",
+        lightning: "mdi:weather-lightning",
+        hail: "mdi:weather-hail"
+      };
+      items.forEach((entry, index) => {
+        const node = ctx.nodes.forecastNodes?.[index];
+        if (!node) return;
+        const value = Math.round(numeric(entry?.temperature));
+        node.value.textContent = Number.isFinite(value) ? `${value}°` : "--";
+        node.symbol.setAttribute("icon", conditionIcons[entry.condition] || "mdi:weather-cloudy");
+        const when = new Date(entry.datetime);
+        node.label.textContent = Number.isNaN(when.getTime()) ? "" : `${pad(when.getHours())}:${pad(when.getMinutes())}`;
+      });
+      drawWeatherGraph(ctx, items);
+    },
+    /** Holt die Vorhersage einmalig per WebSocket-Abo (HA 2024.x+). */
+    async connect(ctx) {
+      if (!ctx.hass?.connection || !ctx.config.entity || ctx.nodes.forecastUnsub) return;
+      try {
+        ctx.nodes.forecastUnsub = await ctx.hass.connection.subscribeMessage(
+          (message) => {
+            ctx.nodes.forecastData = message.forecast || [];
+            renderers.weather.update(ctx);
+          },
+          { type: "weather/subscribe_forecast", entity_id: ctx.config.entity, forecast_type: ctx.config.forecast_type || "hourly" }
+        );
+      } catch (_error) {
+      }
+    },
+    disconnect(ctx) {
+      ctx.nodes.forecastUnsub?.();
+      ctx.nodes.forecastUnsub = null;
+    }
+  },
+  // ------------------------------------------------------------- Energie
+  energy: {
+    build(ctx) {
+      const root = el3("div");
+      root.style.cssText = "display:flex;flex-direction:column;gap:10px;flex:1;min-height:0";
+      const head = el3("div", "row");
+      ctx.nodes.title = el3("div", "title");
+      ctx.nodes.total = el3("div", "muted");
+      head.append(ctx.nodes.title, el3("div", "spacer"), ctx.nodes.total);
+      ctx.nodes.bars = el3("div", "bars");
+      root.append(head, ctx.nodes.bars);
+      return root;
+    },
+    update(ctx) {
+      const state = ctx.hass?.states?.[ctx.config.entity];
+      ctx.nodes.title.textContent = ctx.config.name || friendlyName(ctx.config.entity, state);
+      const unit = state?.attributes?.unit_of_measurement || "";
+      ctx.nodes.total.textContent = state ? `${state.state} ${unit}` : "";
+      const values = ctx.nodes.history || [];
+      if (!values.length) return;
+      const max = Math.max(...values.map((entry) => entry.value), 1);
+      if (ctx.nodes.bars.childElementCount !== values.length) {
+        ctx.nodes.bars.replaceChildren();
+        ctx.nodes.barNodes = values.map(() => {
+          const column = el3("div", "bar-col");
+          const bar = el3("div", "bar");
+          const label = el3("div", "bar-label");
+          column.append(bar, label);
+          ctx.nodes.bars.append(column);
+          return { bar, label };
+        });
+      }
+      const peak = values.reduce((best, entry, index) => entry.value > values[best].value ? index : best, 0);
+      values.forEach((entry, index) => {
+        const node = ctx.nodes.barNodes?.[index];
+        if (!node) return;
+        node.bar.style.height = `${Math.max(3, entry.value / max * 100)}%`;
+        node.bar.classList.toggle("peak", index === peak);
+        node.label.textContent = entry.label;
+      });
+    },
+    async connect(ctx) {
+      if (!ctx.hass || !ctx.config.entity || ctx.nodes.historyLoaded) return;
+      ctx.nodes.historyLoaded = true;
+      const days = Number(ctx.config.days) || 7;
+      const end = /* @__PURE__ */ new Date();
+      const start = new Date(end);
+      start.setDate(start.getDate() - (days - 1));
+      start.setHours(0, 0, 0, 0);
+      try {
+        const path = `history/period/${encodeURIComponent(start.toISOString())}?filter_entity_id=${encodeURIComponent(ctx.config.entity)}&end_time=${encodeURIComponent(end.toISOString())}&minimal_response&no_attributes`;
+        const result = await ctx.hass.callApi("GET", path);
+        const series = result?.[0] || [];
+        const buckets = /* @__PURE__ */ new Map();
+        series.forEach((point) => {
+          const value = Number(point.state);
+          if (!Number.isFinite(value)) return;
+          const when = new Date(point.last_changed || point.last_updated);
+          const key = when.toISOString().slice(0, 10);
+          buckets.set(key, Math.max(buckets.get(key) ?? 0, value));
+        });
+        const weekdays = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+        ctx.nodes.history = [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-days).map(([key, value]) => ({ value, label: weekdays[new Date(key).getDay()] }));
+        renderers.energy.update(ctx);
+      } catch (_error) {
+        ctx.nodes.historyLoaded = false;
+      }
+    }
+  },
+  // ------------------------------------------------------------- Media
+  media: {
+    build(ctx) {
+      const root = el3("div");
+      root.style.cssText = "display:flex;flex-direction:column;gap:9px;flex:1;min-height:0;justify-content:center";
+      const head = el3("div", "media-head");
+      ctx.nodes.art = el3("div", "media-art");
+      ctx.nodes.artIcon = icon2("mdi:music");
+      ctx.nodes.art.append(ctx.nodes.artIcon);
+      const meta = el3("div");
+      meta.style.minWidth = "0";
+      ctx.nodes.track = el3("div", "title");
+      ctx.nodes.artist = el3("div", "subtitle");
+      meta.append(ctx.nodes.track, ctx.nodes.artist);
+      head.append(ctx.nodes.art, meta);
+      ctx.nodes.progress = el3("div", "progress");
+      ctx.nodes.progressBar = el3("span");
+      ctx.nodes.progress.append(ctx.nodes.progressBar);
+      const times = el3("div", "media-times");
+      ctx.nodes.elapsed = el3("span", null, "0:00");
+      ctx.nodes.duration = el3("span", null, "0:00");
+      times.append(ctx.nodes.elapsed, ctx.nodes.duration);
+      const controls = el3("div", "media-controls");
+      const make = (name, service, className) => {
+        const button = el3("button", className);
+        button.append(icon2(name));
+        button.addEventListener(
+          "click",
+          () => ctx.hass?.callService("media_player", service, { entity_id: ctx.config.entity })
+        );
+        return button;
+      };
+      ctx.nodes.play = make("mdi:pause", "media_play_pause", "play");
+      controls.append(
+        make("mdi:shuffle-variant", "shuffle_set", ""),
+        make("mdi:skip-previous", "media_previous_track", ""),
+        ctx.nodes.play,
+        make("mdi:skip-next", "media_next_track", ""),
+        make("mdi:repeat", "repeat_set", "")
+      );
+      root.append(head, ctx.nodes.progress, times, controls);
+      return root;
+    },
+    update(ctx) {
+      const state = ctx.hass?.states?.[ctx.config.entity];
+      const attributes = state?.attributes || {};
+      ctx.nodes.track.textContent = attributes.media_title || ctx.config.name || friendlyName(ctx.config.entity, state);
+      ctx.nodes.artist.textContent = attributes.media_artist || attributes.media_series_title || state?.state || "";
+      const picture = attributes.entity_picture || "";
+      if (picture !== ctx.nodes.artUrl) {
+        ctx.nodes.artUrl = picture;
+        if (picture) {
+          const img = document.createElement("img");
+          img.src = picture;
+          img.alt = "";
+          ctx.nodes.art.replaceChildren(img);
+        } else {
+          ctx.nodes.art.replaceChildren(ctx.nodes.artIcon);
+        }
+      }
+      const duration = Number(attributes.media_duration) || 0;
+      let position = Number(attributes.media_position) || 0;
+      if (attributes.media_position_updated_at && state?.state === "playing") {
+        position += (Date.now() - new Date(attributes.media_position_updated_at).getTime()) / 1e3;
+      }
+      const ratio = duration > 0 ? clampNumber(position / duration, 0, 1, 0) : 0;
+      ctx.nodes.progressBar.style.width = `${ratio * 100}%`;
+      ctx.nodes.elapsed.textContent = formatDuration(position);
+      ctx.nodes.duration.textContent = formatDuration(duration);
+      ctx.nodes.play.querySelector("ha-icon")?.setAttribute("icon", state?.state === "playing" ? "mdi:pause" : "mdi:play");
+    }
+  },
+  // ------------------------------------------------------------- Mitglieder
+  members: {
+    build(ctx) {
+      const root = el3("div");
+      const head = el3("div", "row");
+      ctx.nodes.title = el3("div", "title");
+      head.append(ctx.nodes.title, el3("div", "spacer"));
+      ctx.nodes.list = el3("div", "members");
+      root.append(head, ctx.nodes.list);
+      return root;
+    },
+    update(ctx) {
+      ctx.nodes.title.textContent = ctx.config.name || "Mitglieder";
+      const ids = ctx.config.entities?.length ? ctx.config.entities : Object.keys(ctx.hass?.states || {}).filter((id) => id.startsWith("person."));
+      if (ctx.nodes.memberKey !== ids.join("|")) {
+        ctx.nodes.memberKey = ids.join("|");
+        ctx.nodes.list.replaceChildren();
+        ctx.nodes.memberNodes = /* @__PURE__ */ new Map();
+        ids.forEach((id) => {
+          const node = el3("button", "member");
+          node.addEventListener("click", () => showMoreInfo(ctx.host, id));
+          ctx.nodes.memberNodes.set(id, { node, picture: null });
+          ctx.nodes.list.append(node);
+        });
+      }
+      ctx.nodes.memberNodes?.forEach((record, id) => {
+        const state = ctx.hass?.states?.[id];
+        const name = friendlyName(id, state);
+        const status = isUnavailable(state) ? "unavailable" : state.state === "home" ? "home" : "away";
+        record.node.classList.remove("is-home", "is-away", "is-unavailable");
+        record.node.classList.add(`is-${status}`);
+        record.node.title = name;
+        const picture = state?.attributes?.entity_picture || "";
+        if (picture !== record.picture) {
+          record.picture = picture;
+          if (picture) {
+            const img = document.createElement("img");
+            img.src = picture;
+            img.alt = "";
+            record.node.replaceChildren(img);
+          } else {
+            record.node.textContent = (name[0] || "?").toUpperCase();
+          }
+        }
+      });
+    }
+  },
+  // ------------------------------------------------------------- Kalender
+  calendar: {
+    build(ctx) {
+      const root = el3("div");
+      root.style.cssText = "display:flex;flex-direction:column;gap:10px;flex:1;min-height:0";
+      ctx.nodes.title = el3("div", "title");
+      ctx.nodes.events = el3("div", "events");
+      root.append(ctx.nodes.title, ctx.nodes.events);
+      return root;
+    },
+    update(ctx) {
+      ctx.nodes.title.textContent = ctx.config.name || "Kalender";
+      const events = ctx.nodes.events_data || [];
+      if (!events.length) {
+        ctx.nodes.events.replaceChildren(el3("div", "muted", "Keine Termine"));
+        return;
+      }
+      const months = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+      ctx.nodes.events.replaceChildren(
+        ...events.slice(0, Number(ctx.config.max_events) || 6).map((event) => {
+          const row = el3("div", "event");
+          const when = el3("div", "when");
+          const date = new Date(event.start?.dateTime || event.start?.date || event.start);
+          when.append(el3("b", null, String(date.getDate())), el3("span", null, months[date.getMonth()] || ""));
+          row.append(when, el3("div", "what", event.summary || "Termin"));
+          return row;
+        })
+      );
+    },
+    async connect(ctx) {
+      const entities = ctx.config.entities?.length ? ctx.config.entities : [ctx.config.entity].filter(Boolean);
+      if (!ctx.hass || !entities.length || ctx.nodes.eventsLoaded) return;
+      ctx.nodes.eventsLoaded = true;
+      const days = Number(ctx.config.days) || 7;
+      const start = /* @__PURE__ */ new Date();
+      const end = new Date(start.getTime() + days * 864e5);
+      try {
+        const lists = await Promise.all(
+          entities.map(
+            (entityId) => ctx.hass.callApi(
+              "GET",
+              `calendars/${encodeURIComponent(entityId)}?start=${encodeURIComponent(
+                start.toISOString()
+              )}&end=${encodeURIComponent(end.toISOString())}`
+            ).catch(() => [])
+          )
+        );
+        ctx.nodes.events_data = lists.flat().sort(
+          (a, b) => String(a.start?.dateTime || a.start?.date || "").localeCompare(String(b.start?.dateTime || b.start?.date || ""))
+        );
+        renderers.calendar.update(ctx);
+      } catch (_error) {
+        ctx.nodes.eventsLoaded = false;
+      }
+    }
+  },
+  // ------------------------------------------------------------- Auswahl
+  select: {
+    build(ctx) {
+      const root = el3("div");
+      root.style.cssText = "display:flex;flex-direction:column;gap:10px";
+      ctx.nodes.title = el3("div", "title");
+      ctx.nodes.body = el3("div");
+      root.append(ctx.nodes.title, ctx.nodes.body);
+      return root;
+    },
+    update(ctx) {
+      const entityId = ctx.config.entity;
+      const state = ctx.hass?.states?.[entityId];
+      ctx.nodes.title.textContent = ctx.config.name || friendlyName(entityId, state);
+      const options = state?.attributes?.options || [];
+      const domain = String(entityId || "").split(".")[0];
+      const mode = ctx.config.display === "buttons" ? "buttons" : "dropdown";
+      const key = `${mode}|${options.join("|")}`;
+      if (ctx.nodes.selectKey !== key) {
+        ctx.nodes.selectKey = key;
+        ctx.nodes.body.replaceChildren();
+        if (mode === "dropdown") {
+          const select = document.createElement("select");
+          select.className = "dropdown";
+          options.forEach((option) => {
+            const node = document.createElement("option");
+            node.value = option;
+            node.textContent = option;
+            select.append(node);
+          });
+          select.addEventListener(
+            "change",
+            () => ctx.hass?.callService(domain, "select_option", { entity_id: entityId, option: select.value })
+          );
+          ctx.nodes.select = select;
+          ctx.nodes.optionButtons = null;
+          ctx.nodes.body.append(select);
+        } else {
+          const list = el3("div", "options");
+          ctx.nodes.optionButtons = /* @__PURE__ */ new Map();
+          options.forEach((option) => {
+            const button = el3("button", "option", option);
+            button.addEventListener(
+              "click",
+              () => ctx.hass?.callService(domain, "select_option", { entity_id: entityId, option })
+            );
+            ctx.nodes.optionButtons.set(option, button);
+            list.append(button);
+          });
+          ctx.nodes.select = null;
+          ctx.nodes.body.append(list);
+        }
+      }
+      if (ctx.nodes.select && ctx.nodes.select.value !== state?.state) ctx.nodes.select.value = state?.state ?? "";
+      ctx.nodes.optionButtons?.forEach((button, option) => button.classList.toggle("active", option === state?.state));
+    }
+  },
+  // ------------------------------------------------------------- Uhr
+  clock: {
+    build(ctx) {
+      const root = el3("div", "clock");
+      ctx.nodes.time = el3("div", "clock-time", "--:--");
+      ctx.nodes.date = el3("div", "clock-date");
+      root.append(ctx.nodes.time, ctx.nodes.date);
+      ctx.nodes.tick = () => {
+        const now = /* @__PURE__ */ new Date();
+        const options = {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: ctx.config.hour_format === "12"
+        };
+        if (ctx.config.show_seconds) options.second = "2-digit";
+        if (ctx.config.time_zone) options.timeZone = ctx.config.time_zone;
+        try {
+          ctx.nodes.time.textContent = now.toLocaleTimeString("de-DE", options);
+          ctx.nodes.date.textContent = ctx.config.show_date === false ? "" : now.toLocaleDateString("de-DE", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            timeZone: ctx.config.time_zone || void 0
+          });
+        } catch (_error) {
+          ctx.nodes.time.textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+          ctx.nodes.date.textContent = "";
+        }
+      };
+      renderers.clock.reconnect(ctx);
+      return root;
+    },
+    update(ctx) {
+      const wanted = ctx.config.show_seconds ? 1e3 : 15e3;
+      if (ctx.nodes.interval !== wanted) renderers.clock.reconnect(ctx);
+    },
+    reconnect(ctx) {
+      if (!ctx.nodes.tick) return;
+      clearInterval(ctx.nodes.timer);
+      ctx.nodes.interval = ctx.config.show_seconds ? 1e3 : 15e3;
+      ctx.nodes.tick();
+      ctx.nodes.timer = setInterval(ctx.nodes.tick, ctx.nodes.interval);
+    },
+    disconnect(ctx) {
+      clearInterval(ctx.nodes.timer);
+      ctx.nodes.timer = null;
+    }
+  }
+};
+var HaOsCard = class extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = null;
+    this._hass = null;
+    this._ctx = null;
+    this._connected = false;
+  }
+  static getConfigElement() {
+    return document.createElement(EDITOR_TAG3);
+  }
+  static getStubConfig() {
+    return { type: `custom:${TAG2}`, card_type: "button", entity: "" };
+  }
+  setConfig(config) {
+    if (!config?.card_type) throw new Error("Bitte oben einen Kartentyp auswählen.");
+    if (!renderers[config.card_type]) throw new Error(`Unbekannter Kartentyp: ${config.card_type}`);
+    const previous = this._config;
+    this._config = config;
+    const typeChanged = previous?.card_type !== config.card_type;
+    if (typeChanged || !this._ctx) {
+      this._build();
+      return;
+    }
+    this._ctx.config = config;
+    const sourceChanged = previous?.entity !== config.entity || String(previous?.entities || "") !== String(config.entities || "") || previous?.days !== config.days;
+    if (sourceChanged) {
+      renderers[config.card_type].disconnect?.(this._ctx);
+      ["forecastData", "forecastUnsub", "history", "historyLoaded", "events_data", "eventsLoaded"].forEach(
+        (key) => delete this._ctx.nodes[key]
+      );
+      this._ctx.connected = false;
+    }
+    this._safeUpdate();
+    if (sourceChanged && this._hass) {
+      this._ctx.connected = true;
+      renderers[config.card_type].connect?.(this._ctx);
+    }
+  }
+  set hass(hass) {
+    const first = !this._hass;
+    this._hass = hass;
+    if (!this._ctx) return;
+    this._ctx.hass = hass;
+    if (first || this._watchedChanged(hass)) this._safeUpdate();
+    if (!this._ctx.connected) {
+      this._ctx.connected = true;
+      renderers[this._config.card_type].connect?.(this._ctx);
+    }
+  }
+  get hass() {
+    return this._hass;
+  }
+  /** Entitäten, auf die diese Karte tatsächlich reagieren muss. */
+  _watchedEntities() {
+    const config = this._config || {};
+    const ids = [config.entity, ...config.entities || []].filter(Boolean);
+    if (config.card_type === "members" && !config.entities?.length) {
+      return Object.keys(this._hass?.states || {}).filter((id) => id.startsWith("person."));
+    }
+    return ids;
+  }
+  _watchedChanged(hass) {
+    const watched = this._watchedEntities();
+    if (!watched.length) return false;
+    const previous = this._lastStates;
+    const current = new Map(watched.map((id) => [id, hass?.states?.[id]]));
+    this._lastStates = current;
+    if (!previous || previous.size !== current.size) return true;
+    for (const [id, state] of current) {
+      if (previous.get(id) !== state) return true;
+    }
+    return false;
+  }
+  connectedCallback() {
+    this._connected = true;
+    if (this._ctx) renderers[this._config?.card_type]?.reconnect?.(this._ctx);
+  }
+  disconnectedCallback() {
+    this._connected = false;
+    if (this._ctx) renderers[this._config?.card_type]?.disconnect?.(this._ctx);
+  }
+  getCardSize() {
+    return 3;
+  }
+  _build() {
+    if (this._ctx) renderers[this._ctx.type]?.disconnect?.(this._ctx);
+    const style = document.createElement("style");
+    style.textContent = STYLES3;
+    const card = el3("div", "card");
+    this._ctx = {
+      host: this,
+      card,
+      config: this._config,
+      hass: this._hass,
+      nodes: {},
+      type: this._config.card_type,
+      connected: false
+    };
+    try {
+      card.append(renderers[this._config.card_type].build(this._ctx));
+    } catch (error) {
+      card.replaceChildren(el3("div", "error", `Fehler beim Aufbau: ${error.message}`));
+    }
+    this.shadowRoot.replaceChildren(style, card);
+    this._safeUpdate();
+  }
+  _safeUpdate() {
+    if (!this._ctx || !this._hass) return;
+    try {
+      renderers[this._config.card_type].update(this._ctx);
+    } catch (error) {
+      console.error(`[${TAG2}] Update fehlgeschlagen`, error);
+      return;
+    }
+    const state = this._hass.states?.[this._config.entity];
+    this._ctx.card.classList.remove("is-on", "is-off", "is-unavailable");
+    if (this._config.entity) this._ctx.card.classList.add(statusClass(state));
+  }
+};
+if (!customElements.get(TAG2)) customElements.define(TAG2, HaOsCard);
+registerCard({
+  type: TAG2,
+  name: "HA-OS Karte",
+  description: "Eine Karte für alle Typen – Button, Slider, Thermostat, Wetter, Energie, Medien und mehr.",
+  preview: false
+});
+
+// src/cards/haos-card-editor.js
+var EDITOR_TAG4 = "ha-os-card-editor";
+var TYPE_FIELD = {
+  name: "card_type",
+  required: true,
+  selector: { select: { mode: "dropdown", options: CARD_TYPES.map(({ value, label }) => ({ value, label })) } }
+};
+var entityField = (domains, multiple = false) => ({
+  name: multiple ? "entities" : "entity",
+  required: !multiple,
+  selector: { entity: domains ? { domain: domains, multiple } : { multiple } }
+});
+var text = (name) => ({ name, selector: { text: {} } });
+var bool = (name) => ({ name, selector: { boolean: {} } });
+var number = (name, min, max, step = 1) => ({
+  name,
+  selector: { number: { min, max, step, mode: "box" } }
+});
+var APPEARANCE = {
+  name: "darstellung",
+  type: "expandable",
+  iconPath: "M12,18.5A6.5,6.5 0 0,1 5.5,12A6.5,6.5 0 0,1 12,5.5A6.5,6.5 0 0,1 18.5,12A6.5,6.5 0 0,1 12,18.5Z",
+  schema: [text("name"), { name: "icon", selector: { icon: {} } }]
+};
+var ACTION = {
+  name: "aktion",
+  type: "expandable",
+  schema: [{ name: "tap_action", selector: { ui_action: {} } }]
+};
+var SCHEMAS = {
+  button: [entityField(), APPEARANCE, { name: "show_state", selector: { boolean: {} } }, { name: "show_toggle", selector: { boolean: {} } }, ACTION],
+  slider: [entityField(["light", "cover", "fan", "media_player", "number", "input_number"]), APPEARANCE],
+  thermostat: [entityField(["climate"]), APPEARANCE],
+  weather: [
+    entityField(["weather"]),
+    APPEARANCE,
+    {
+      name: "forecast_type",
+      selector: {
+        select: {
+          mode: "dropdown",
+          options: [
+            { value: "hourly", label: "Stündlich" },
+            { value: "daily", label: "Täglich" }
+          ]
+        }
+      }
+    },
+    number("forecast_count", 2, 10),
+    bool("show_graph")
+  ],
+  energy: [entityField(["sensor"]), APPEARANCE, number("days", 2, 31)],
+  media: [entityField(["media_player"]), APPEARANCE],
+  members: [entityField(["person", "device_tracker"], true), text("name")],
+  calendar: [entityField(["calendar"], true), text("name"), number("days", 1, 31), number("max_events", 1, 20)],
+  select: [
+    entityField(["select", "input_select"]),
+    APPEARANCE,
+    {
+      name: "display",
+      selector: {
+        select: {
+          mode: "dropdown",
+          options: [
+            { value: "dropdown", label: "Aufklappmenü" },
+            { value: "buttons", label: "Optionsknöpfe" }
+          ]
+        }
+      }
+    }
+  ],
+  clock: [
+    text("name"),
+    {
+      name: "hour_format",
+      selector: {
+        select: {
+          mode: "dropdown",
+          options: [
+            { value: "24", label: "24 Stunden" },
+            { value: "12", label: "12 Stunden" }
+          ]
+        }
+      }
+    },
+    bool("show_seconds"),
+    bool("show_date"),
+    text("time_zone")
+  ]
+};
+var LABELS2 = {
+  card_type: "Kartentyp",
+  entity: "Entität",
+  entities: "Entitäten",
+  name: "Name",
+  icon: "Symbol",
+  show_state: "Zustand anzeigen",
+  show_toggle: "Schalter anzeigen",
+  tap_action: "Tippen",
+  darstellung: "Darstellung",
+  aktion: "Aktion",
+  forecast_type: "Vorhersage",
+  forecast_count: "Anzahl Vorhersagen",
+  show_graph: "Verlaufskurve anzeigen",
+  days: "Zeitraum in Tagen",
+  max_events: "Maximale Termine",
+  display: "Anzeigeart",
+  hour_format: "Stundenformat",
+  show_seconds: "Sekunden anzeigen",
+  show_date: "Datum anzeigen",
+  time_zone: "Zeitzone",
+  haos_weight: "Höhenfaktor"
+};
+var HELPERS2 = {
+  haos_weight: "1 entspricht der Standard-Kartenhöhe der Shell. 2 ist doppelt so hoch.",
+  time_zone: "Leer lassen für die Zeitzone des Browsers, z. B. Europe/Berlin.",
+  days: "Zeitraum, der geladen wird.",
+  show_graph: "Temperaturverlauf über der Vorhersagezeile. Standardmäßig an."
+};
+var HaOsCardEditor = class extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = {};
+    this._hass = null;
+    this._form = null;
+  }
+  setConfig(config) {
+    const next = { card_type: "button", ...config };
+    if (isEqualConfig(next, this._config) && this._form) return;
+    const typeChanged = next.card_type !== this._config?.card_type;
+    this._config = next;
+    if (!this._form) {
+      this._build();
+      return;
+    }
+    if (typeChanged) this._form.schema = this._schema();
+    this._form.data = this._config;
+  }
+  set hass(hass) {
+    this._hass = hass;
+    if (this._form) this._form.hass = hass;
+  }
+  get hass() {
+    return this._hass;
+  }
+  _schema() {
+    return [TYPE_FIELD, ...SCHEMAS[this._config.card_type] || [], { name: "haos_weight", selector: { number: { min: 0.5, max: 6, step: 0.25, mode: "box" } } }];
+  }
+  _build() {
+    const style = document.createElement("style");
+    style.textContent = `
+      :host { display: block; }
+      .hint { margin: 0 0 12px; font-size: 12px; line-height: 1.45; color: var(--secondary-text-color); }
+    `;
+    const hint = document.createElement("p");
+    hint.className = "hint";
+    hint.textContent = "Zuerst den Kartentyp wählen – darunter erscheinen nur die passenden Felder.";
+    const form = document.createElement("ha-form");
+    form.hass = this._hass;
+    form.data = this._config;
+    form.schema = this._schema();
+    form.computeLabel = (field) => LABELS2[field.name] || field.name;
+    form.computeHelper = (field) => HELPERS2[field.name] || "";
+    form.addEventListener("value-changed", (event) => {
+      event.stopPropagation();
+      const value = { ...event.detail.value };
+      if (value.card_type !== this._config.card_type) {
+        const keep = /* @__PURE__ */ new Set(["type", "card_type", "haos_weight"]);
+        Object.keys(value).forEach((key) => {
+          if (!keep.has(key)) delete value[key];
+        });
+      }
+      Object.keys(value).forEach((key) => {
+        if (value[key] === "" || value[key] === void 0) delete value[key];
+      });
+      this._config = value;
+      this._form.schema = this._schema();
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: value }, bubbles: true, composed: true }));
+    });
+    this._form = form;
+    this.shadowRoot.replaceChildren(style, hint, form);
+  }
+};
+if (!customElements.get(EDITOR_TAG4)) customElements.define(EDITOR_TAG4, HaOsCardEditor);
+
+// src/ha-os.js
+var VERSION = "0.2.0";
+console.info(
+  `%c HA-OS %c ${VERSION} `,
+  "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",
+  "background:#18212a;color:#fff;border-radius:0 3px 3px 0;padding:2px 6px"
+);
+export {
+  CARD_TYPES,
+  VERSION
+};

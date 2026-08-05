@@ -1,0 +1,1233 @@
+/**
+ * HA-OS – generische Karte (Bubble-Card-Prinzip)
+ *
+ * EINE Karte für alle Darstellungen. Der Typ wird oben im Editor gewählt,
+ * darunter erscheinen nur die Felder des gewählten Typs.
+ *
+ * Aufbaulogik: jeder Renderer hat `build()` (einmalig, erzeugt DOM) und
+ * `update()` (bei jeder hass-Änderung, ändert nur Text/Klassen/Styles).
+ * Kein Renderer darf im Update-Pfad innerHTML setzen.
+ */
+
+import {
+  ENTITY_SURFACE_CSS,
+  clampNumber,
+  domainIcon,
+  formatState,
+  friendlyName,
+  handleAction,
+  isActive,
+  isUnavailable,
+  registerCard,
+  showMoreInfo,
+  statusClass,
+} from "../shared/utils.js";
+
+const TAG = "ha-os-card";
+const EDITOR_TAG = "ha-os-card-editor";
+
+export const CARD_TYPES = [
+  { value: "button", label: "Button / Kachel", icon: "mdi:gesture-tap-button" },
+  { value: "slider", label: "Slider", icon: "mdi:tune-vertical" },
+  { value: "thermostat", label: "Thermostat", icon: "mdi:thermostat" },
+  { value: "weather", label: "Wetter", icon: "mdi:weather-partly-cloudy" },
+  { value: "energy", label: "Energie", icon: "mdi:lightning-bolt" },
+  { value: "media", label: "Media Player", icon: "mdi:speaker" },
+  { value: "members", label: "Mitglieder", icon: "mdi:account-group" },
+  { value: "calendar", label: "Kalender", icon: "mdi:calendar" },
+  { value: "select", label: "Auswahl", icon: "mdi:form-dropdown" },
+  { value: "clock", label: "Uhr", icon: "mdi:clock-outline" },
+];
+
+const el = (tag, className, text) => {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+
+const icon = (name) => {
+  const node = document.createElement("ha-icon");
+  node.setAttribute("icon", name);
+  return node;
+};
+
+const STYLES = `
+  :host { display: block; height: 100%; }
+  * { box-sizing: border-box; }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+
+  .card {
+    height: 100%; padding: 16px; overflow: hidden;
+    display: flex; flex-direction: column; gap: 10px;
+    color: var(--haos-text, #fff);
+    font-family: var(--haos-font-family);
+    font-weight: var(--haos-font-weight-normal, 450);
+    ${ENTITY_SURFACE_CSS}
+  }
+  .card.interactive { cursor: pointer; transition: transform .16s ease, box-shadow .16s ease; }
+  .card.interactive:hover { transform: translateY(-1px); }
+
+  /* Aktiv = neutraler Glasrahmen + inneres Akzentleuchten, KEIN blauer Aussenrahmen */
+  .card.is-on {
+    box-shadow: var(--haos-entity-shadow), inset 0 0 40px color-mix(in srgb, var(--haos-accent, #0a84ff) 20%, transparent);
+  }
+  .card.is-unavailable { opacity: .55; }
+
+  .row { display: flex; align-items: center; gap: 10px; }
+  .spacer { flex: 1; }
+  .title { font-size: 15px; font-weight: var(--haos-font-weight-semibold, 650); }
+  .subtitle { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
+  .muted { color: rgba(var(--haos-text-rgb, 255,255,255), .55); font-size: 11px; }
+
+  .chip {
+    width: 38px; height: 38px; flex: 0 0 38px; border-radius: 12px;
+    display: grid; place-items: center;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .08);
+  }
+  .chip ha-icon { --mdc-icon-size: 20px; }
+  .is-on .chip ha-icon { color: var(--haos-accent, #0a84ff); filter: drop-shadow(0 0 6px color-mix(in srgb, var(--haos-accent, #0a84ff) 55%, transparent)); }
+  .is-off .chip ha-icon { color: var(--haos-status-off, #a8b0b8); }
+  .is-unavailable .chip ha-icon { color: var(--haos-status-unavailable, #ff6961); }
+
+  /* --- Schalter --- */
+  .switch {
+    width: 46px; height: 27px; flex: 0 0 46px; border-radius: 999px; position: relative;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .18); transition: background .18s ease;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 21px; height: 21px; border-radius: 50%;
+    background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.3); transition: transform .18s ease;
+  }
+  .is-on .switch { background: var(--haos-accent, #0a84ff); }
+  .is-on .switch::after { transform: translateX(19px); }
+
+  /* --- Slider --- */
+  .slider-track { position: relative; height: 40px; border-radius: 14px; overflow: hidden; background: rgba(var(--haos-text-rgb, 255,255,255), .10); }
+  .slider-fill { position: absolute; inset: 0 auto 0 0; width: 0%; background: color-mix(in srgb, var(--haos-accent, #0a84ff) 55%, transparent); transition: width .12s ease; }
+  .slider-track input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
+  .slider-value { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 12px; font-size: 12px; font-weight: 650; pointer-events: none; }
+
+  /* --- Thermostat --- */
+  .dial-wrap { flex: 1; min-height: 0; display: grid; place-items: center; }
+  .dial { position: relative; width: 100%; max-width: 220px; aspect-ratio: 1; }
+  .dial svg { width: 100%; height: 100%; transform: rotate(135deg); }
+  .dial .track { fill: none; stroke: rgba(var(--haos-text-rgb, 255,255,255), .14); stroke-linecap: round; }
+  .dial .value { fill: none; stroke: var(--haos-accent, #0a84ff); stroke-linecap: round; transition: stroke-dashoffset .25s ease; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--haos-accent, #0a84ff) 60%, transparent)); }
+  .dial-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+  .dial-temp { font-size: 34px; font-weight: 700; letter-spacing: -.02em; }
+  .dial-label { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
+  .stepper { display: flex; justify-content: center; gap: 14px; }
+  .stepper button { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(var(--haos-text-rgb, 255,255,255), .09); }
+  .stepper button:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .16); }
+  .modes { display: flex; justify-content: space-around; gap: 6px; }
+  .mode { display: grid; justify-items: center; gap: 5px; font-size: 10px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
+  .mode .dot { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(var(--haos-text-rgb, 255,255,255), .09); }
+  .mode.active { color: var(--haos-text, #fff); }
+  .mode.active .dot { background: #fff; color: #18212a; }
+
+  /* --- Wetter --- */
+  .weather-head { display: flex; align-items: flex-start; gap: 10px; }
+  .weather-now { font-size: 40px; font-weight: 300; letter-spacing: -.03em; line-height: 1; }
+  .weather-now sup { font-size: 18px; vertical-align: super; }
+  .weather-bottom { margin-top: auto; display: grid; gap: 2px; }
+
+  /* Verlaufskurve: gleiche Spalteneinteilung wie die Vorhersagezeile darunter,
+     damit jeder Kurvenpunkt über seinem Wert sitzt. */
+  .weather-graph { height: 54px; }
+  .weather-graph.is-hidden { display: none; }
+  .weather-graph svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .weather-graph .area { stroke: none; fill: url(#haos-weather-fade); }
+  .weather-graph .line {
+    fill: none; stroke: var(--haos-accent, #0a84ff); stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke;
+    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--haos-accent, #0a84ff) 55%, transparent));
+  }
+
+  .forecast { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
+  .forecast-item { display: grid; justify-items: center; gap: 4px; font-size: 10px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
+  .forecast-item b { font-size: 13px; color: var(--haos-text, #fff); font-weight: 600; }
+  .forecast-item ha-icon { --mdc-icon-size: 17px; }
+
+  /* --- Balkendiagramm (Energie) --- */
+  .bars { flex: 1; min-height: 60px; display: flex; align-items: flex-end; gap: 6px; }
+  .bar-col { flex: 1; display: grid; grid-template-rows: 1fr auto; gap: 6px; height: 100%; }
+  .bar { align-self: end; width: 100%; border-radius: 6px 6px 3px 3px; background: rgba(var(--haos-text-rgb, 255,255,255), .22); min-height: 3px; transition: height .3s ease; }
+  .bar.peak { background: var(--haos-accent, #0a84ff); }
+  .bar-label { text-align: center; font-size: 9px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
+
+  /* --- Media --- */
+  .media-head { display: flex; gap: 12px; align-items: center; }
+  .media-art { width: 52px; height: 52px; flex: 0 0 52px; border-radius: 10px; overflow: hidden; background: rgba(var(--haos-text-rgb, 255,255,255), .1); display: grid; place-items: center; }
+  .media-art img { width: 100%; height: 100%; object-fit: cover; }
+  .progress { height: 3px; border-radius: 2px; background: rgba(var(--haos-text-rgb, 255,255,255), .18); overflow: hidden; }
+  .progress span { display: block; height: 100%; width: 0%; background: var(--haos-accent, #0a84ff); transition: width .5s linear; }
+  .media-times { display: flex; justify-content: space-between; font-size: 9px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
+  .media-controls { display: flex; align-items: center; justify-content: space-between; }
+  .media-controls button { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: rgba(var(--haos-text-rgb, 255,255,255), .75); }
+  .media-controls button:hover { color: var(--haos-text, #fff); background: rgba(var(--haos-text-rgb, 255,255,255), .1); }
+  .media-controls .play { width: 44px; height: 44px; background: #fff; color: #18212a; }
+  .media-controls .play:hover { background: #fff; }
+
+  /* --- Mitglieder --- */
+  .members { display: flex; align-items: center; }
+  .member { width: 40px; height: 40px; margin-left: -10px; border-radius: 50%; overflow: hidden; border: 2px solid rgba(var(--haos-card-surface-rgb, 255,255,255), .35); display: grid; place-items: center; background: rgba(var(--haos-text-rgb, 255,255,255), .12); font-size: 11px; font-weight: 800; }
+  .member:first-child { margin-left: 0; }
+  .member img { width: 100%; height: 100%; object-fit: cover; }
+  .member.is-home { border-color: color-mix(in srgb, var(--haos-status-home, #32d583) 80%, transparent); }
+  .member.is-away { opacity: .7; border-color: color-mix(in srgb, var(--haos-status-away, #f7b955) 70%, transparent); }
+  .member.is-unavailable { opacity: .45; filter: saturate(.3); }
+
+  /* --- Kalender --- */
+  .events { flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 7px; scrollbar-width: thin; }
+  .event { display: grid; grid-template-columns: 42px 1fr; gap: 9px; align-items: center; }
+  .event .when { font-size: 9px; text-align: center; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
+  .event .when b { display: block; font-size: 14px; color: var(--haos-text, #fff); }
+  .event .what { min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* --- Auswahl --- */
+  .options { display: flex; flex-wrap: wrap; gap: 6px; }
+  .option { padding: 7px 13px; border-radius: 10px; font-size: 12px; background: rgba(var(--haos-text-rgb, 255,255,255), .09); }
+  .option.active { background: var(--haos-accent, #0a84ff); color: #fff; }
+  select.dropdown { width: 100%; padding: 10px 12px; border-radius: 12px; font: inherit; color: var(--haos-text, #fff); background: rgba(var(--haos-text-rgb, 255,255,255), .09); border: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .14); }
+  select.dropdown option { color: #18212a; }
+
+  /* --- Uhr --- */
+  .clock { flex: 1; display: grid; place-content: center; text-align: center; }
+  .clock-time { font-size: 44px; font-weight: 300; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .clock-date { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
+
+  .error { display: grid; place-content: center; height: 100%; text-align: center; gap: 6px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
+`;
+
+const pad = (value) => String(value).padStart(2, "0");
+
+const formatDuration = (seconds) => {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+  const total = Math.floor(seconds);
+  return `${Math.floor(total / 60)}:${pad(total % 60)}`;
+};
+
+/**
+ * Zahl aus einem Attribut lesen.
+ *
+ * Nicht durch Number() ersetzen: Number(null) und Number("") ergeben 0. Ein
+ * fehlender Messwert würde dadurch als echte Null gezeichnet statt als "--".
+ */
+const numeric = (value) =>
+  value === null || value === undefined || value === "" ? NaN : Number(value);
+
+/**
+ * Zeichnet die Temperaturkurve der Wetterkarte.
+ *
+ * Erzeugt bewusst KEIN DOM: die beiden Pfade stehen bereits, hier ändert sich
+ * nur ihr d-Attribut. Die x-Positionen entsprechen den Spaltenmitten der
+ * Vorhersagezeile darunter, damit Punkt und Wert übereinanderliegen.
+ *
+ * Die Kontrollpunkte werden zwischen die beiden Endwerte geklemmt. Ohne das
+ * überschwingt eine Catmull-Rom-Kurve bei Temperatursprüngen und zeichnet
+ * Werte, die es in der Vorhersage nicht gibt.
+ */
+const drawWeatherGraph = (ctx, items) => {
+  const graph = ctx.nodes.graph;
+  if (!graph) return;
+
+  const values = (items || []).map((entry) => numeric(entry?.temperature));
+  const usable =
+    ctx.config.show_graph !== false && values.length >= 2 && values.every(Number.isFinite);
+
+  graph.classList.toggle("is-hidden", !usable);
+  if (!usable) return;
+
+  const count = values.length;
+  const low = Math.min(...values);
+  const high = Math.max(...values);
+  const span = high - low || 1;
+  const top = 6;
+  const base = 34;
+
+  const points = values.map((value, index) => ({
+    x: ((index + 0.5) / count) * 100,
+    y: base - ((value - low) / span) * (base - top),
+  }));
+
+  const round = (value) => Math.round(value * 100) / 100;
+  let path = `M ${round(points[0].x)} ${round(points[0].y)}`;
+
+  for (let index = 0; index < count - 1; index += 1) {
+    const start = points[index];
+    const end = points[index + 1];
+    const before = points[index - 1] || start;
+    const after = points[index + 2] || end;
+    const lower = Math.min(start.y, end.y);
+    const upper = Math.max(start.y, end.y);
+    const clamp = (value) => Math.min(upper, Math.max(lower, value));
+
+    const c1x = start.x + (end.x - before.x) / 6;
+    const c1y = clamp(start.y + (end.y - before.y) / 6);
+    const c2x = end.x - (after.x - start.x) / 6;
+    const c2y = clamp(end.y - (after.y - start.y) / 6);
+
+    path += ` C ${round(c1x)} ${round(c1y)} ${round(c2x)} ${round(c2y)} ${round(end.x)} ${round(end.y)}`;
+  }
+
+  ctx.nodes.graphLine.setAttribute("d", path);
+  ctx.nodes.graphArea.setAttribute(
+    "d",
+    `${path} L ${round(points[count - 1].x)} 40 L ${round(points[0].x)} 40 Z`
+  );
+};
+
+// ---------------------------------------------------------------- Renderer
+
+const renderers = {
+  // ------------------------------------------------------------- Button
+  button: {
+    build(ctx) {
+      const root = el("div");
+      const row = el("div", "row");
+      ctx.nodes.chip = el("div", "chip");
+      ctx.nodes.chipIcon = icon("mdi:circle-outline");
+      ctx.nodes.chip.append(ctx.nodes.chipIcon);
+
+      const text = el("div");
+      ctx.nodes.title = el("div", "title");
+      ctx.nodes.subtitle = el("div", "subtitle");
+      text.append(ctx.nodes.title, ctx.nodes.subtitle);
+
+      row.append(ctx.nodes.chip, text, el("div", "spacer"));
+
+      if (ctx.config.show_toggle !== false) {
+        ctx.nodes.toggle = el("div", "switch");
+        row.append(ctx.nodes.toggle);
+      }
+
+      root.append(row);
+      ctx.card.classList.add("interactive");
+      ctx.card.addEventListener("click", () =>
+        handleAction(ctx.host, ctx.hass, ctx.config.tap_action || { action: "toggle" }, ctx.config.entity)
+      );
+      return root;
+    },
+    update(ctx) {
+      const state = ctx.hass?.states?.[ctx.config.entity];
+      ctx.nodes.chipIcon.setAttribute("icon", ctx.config.icon || domainIcon(ctx.config.entity, state));
+      ctx.nodes.title.textContent = ctx.config.name || friendlyName(ctx.config.entity, state);
+      ctx.nodes.subtitle.textContent =
+        ctx.config.show_state === false ? "" : formatState(ctx.hass, ctx.config.entity);
+    },
+  },
+
+  // ------------------------------------------------------------- Slider
+  slider: {
+    build(ctx) {
+      const root = el("div");
+      const head = el("div", "row");
+      ctx.nodes.chip = el("div", "chip");
+      ctx.nodes.chipIcon = icon("mdi:brightness-6");
+      ctx.nodes.chip.append(ctx.nodes.chipIcon);
+      ctx.nodes.title = el("div", "title");
+      head.append(ctx.nodes.chip, ctx.nodes.title);
+
+      const track = el("div", "slider-track");
+      ctx.nodes.fill = el("div", "slider-fill");
+      ctx.nodes.output = el("div", "slider-value");
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = 0;
+      input.max = 100;
+      input.step = 1;
+      ctx.nodes.input = input;
+
+      // Während des Ziehens keine Zustandsübernahme von aussen – sonst springt der Regler.
+      input.addEventListener("pointerdown", () => {
+        ctx.nodes.dragging = true;
+      });
+      const release = () => {
+        ctx.nodes.dragging = false;
+      };
+      input.addEventListener("pointerup", release);
+      input.addEventListener("pointercancel", release);
+      input.addEventListener("input", () => {
+        ctx.nodes.fill.style.width = `${input.value}%`;
+        ctx.nodes.output.textContent = `${input.value}%`;
+      });
+      input.addEventListener("change", () => {
+        release();
+        renderers.slider.commit(ctx, Number(input.value));
+      });
+
+      track.append(ctx.nodes.fill, ctx.nodes.output, input);
+      root.append(head, track);
+      return root;
+    },
+    read(ctx) {
+      const entityId = ctx.config.entity || "";
+      const state = ctx.hass?.states?.[entityId];
+      if (!state) return 0;
+      const domain = entityId.split(".")[0];
+      if (domain === "light") return Math.round(((state.attributes.brightness || 0) / 255) * 100);
+      if (domain === "cover") return Number(state.attributes.current_position ?? 0);
+      if (domain === "fan") return Number(state.attributes.percentage ?? 0);
+      if (domain === "media_player") return Math.round((state.attributes.volume_level || 0) * 100);
+      return clampNumber(state.state, 0, 100, 0);
+    },
+    commit(ctx, value) {
+      const entityId = ctx.config.entity || "";
+      const domain = entityId.split(".")[0];
+      const hass = ctx.hass;
+      if (!hass || !entityId) return;
+
+      if (domain === "light") {
+        hass.callService("light", "turn_on", { entity_id: entityId, brightness_pct: value });
+      } else if (domain === "cover") {
+        hass.callService("cover", "set_cover_position", { entity_id: entityId, position: value });
+      } else if (domain === "fan") {
+        hass.callService("fan", "set_percentage", { entity_id: entityId, percentage: value });
+      } else if (domain === "media_player") {
+        hass.callService("media_player", "volume_set", { entity_id: entityId, volume_level: value / 100 });
+      } else if (domain === "number" || domain === "input_number") {
+        hass.callService(domain, "set_value", { entity_id: entityId, value });
+      }
+    },
+    update(ctx) {
+      const state = ctx.hass?.states?.[ctx.config.entity];
+      ctx.nodes.chipIcon.setAttribute("icon", ctx.config.icon || domainIcon(ctx.config.entity, state));
+      ctx.nodes.title.textContent = ctx.config.name || friendlyName(ctx.config.entity, state);
+      if (ctx.nodes.dragging) return;
+      const value = renderers.slider.read(ctx);
+      ctx.nodes.input.value = value;
+      ctx.nodes.fill.style.width = `${value}%`;
+      ctx.nodes.output.textContent = `${value}%`;
+    },
+  },
+
+  // ------------------------------------------------------------- Thermostat
+  thermostat: {
+    build(ctx) {
+      const root = el("div");
+      root.style.cssText = "display:flex;flex-direction:column;gap:10px;flex:1;min-height:0";
+
+      const head = el("div", "row");
+      const text = el("div");
+      ctx.nodes.title = el("div", "title");
+      ctx.nodes.subtitle = el("div", "subtitle");
+      text.append(ctx.nodes.title, ctx.nodes.subtitle);
+      ctx.nodes.toggle = el("div", "switch");
+      head.append(text, el("div", "spacer"), ctx.nodes.toggle);
+      ctx.nodes.toggle.addEventListener("click", (event) => {
+        event.stopPropagation();
+        ctx.hass?.callService("climate", "toggle", { entity_id: ctx.config.entity });
+      });
+
+      const wrap = el("div", "dial-wrap");
+      const dial = el("div", "dial");
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 100 100");
+
+      const circumference = 2 * Math.PI * 42;
+      const arc = circumference * 0.75; // 270-Grad-Bogen
+
+      const track = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      track.setAttribute("class", "track");
+      track.setAttribute("cx", "50");
+      track.setAttribute("cy", "50");
+      track.setAttribute("r", "42");
+      track.setAttribute("stroke-width", "7");
+      track.setAttribute("stroke-dasharray", `${arc} ${circumference}`);
+
+      const value = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      value.setAttribute("class", "value");
+      value.setAttribute("cx", "50");
+      value.setAttribute("cy", "50");
+      value.setAttribute("r", "42");
+      value.setAttribute("stroke-width", "7");
+      value.setAttribute("stroke-dasharray", `${arc} ${circumference}`);
+      value.setAttribute("stroke-dashoffset", String(arc));
+
+      ctx.nodes.arcLength = arc;
+      ctx.nodes.arc = value;
+      svg.append(track, value);
+
+      const center = el("div", "dial-center");
+      ctx.nodes.temp = el("div", "dial-temp", "--");
+      ctx.nodes.tempLabel = el("div", "dial-label", "Temperatur");
+      center.append(ctx.nodes.temp, ctx.nodes.tempLabel);
+
+      dial.append(svg, center);
+      wrap.append(dial);
+
+      const stepper = el("div", "stepper");
+      const down = document.createElement("button");
+      down.append(icon("mdi:minus"));
+      const up = document.createElement("button");
+      up.append(icon("mdi:plus"));
+      down.addEventListener("click", () => renderers.thermostat.step(ctx, -0.5));
+      up.addEventListener("click", () => renderers.thermostat.step(ctx, 0.5));
+      stepper.append(down, up);
+
+      ctx.nodes.modes = el("div", "modes");
+
+      root.append(head, wrap, stepper, ctx.nodes.modes);
+      return root;
+    },
+    step(ctx, delta) {
+      const state = ctx.hass?.states?.[ctx.config.entity];
+      if (!state) return;
+      const current = Number(state.attributes.temperature);
+      if (!Number.isFinite(current)) return;
+      const step = Number(state.attributes.target_temp_step) || Math.abs(delta);
+      const next = Math.round((current + Math.sign(delta) * step) * 10) / 10;
+      ctx.hass.callService("climate", "set_temperature", { entity_id: ctx.config.entity, temperature: next });
+    },
+    update(ctx) {
+      const state = ctx.hass?.states?.[ctx.config.entity];
+      ctx.nodes.title.textContent = ctx.config.name || friendlyName(ctx.config.entity, state);
+      ctx.nodes.subtitle.textContent = state?.attributes?.friendly_name || "";
+
+      const target = Number(state?.attributes?.temperature);
+      const current = Number(state?.attributes?.current_temperature);
+      const min = Number(state?.attributes?.min_temp ?? 7);
+      const max = Number(state?.attributes?.max_temp ?? 35);
+
+      const shown = Number.isFinite(target) ? target : current;
+      ctx.nodes.temp.textContent = Number.isFinite(shown) ? `${shown}°` : "--";
+      ctx.nodes.tempLabel.textContent = Number.isFinite(current) ? `Aktuell ${current}°` : "Temperatur";
+
+      const ratio = Number.isFinite(shown) && max > min ? clampNumber((shown - min) / (max - min), 0, 1, 0) : 0;
+      ctx.nodes.arc.setAttribute("stroke-dashoffset", String(ctx.nodes.arcLength * (1 - ratio)));
+
+      // Betriebsarten
+      const modes = state?.attributes?.hvac_modes || [];
+      const labels = { off: "Aus", heat: "Heizen", cool: "Kühlen", auto: "Auto", dry: "Trocken", fan_only: "Lüfter", heat_cool: "Auto" };
+      const icons = { off: "mdi:power", heat: "mdi:fire", cool: "mdi:snowflake", auto: "mdi:autorenew", dry: "mdi:water-percent", fan_only: "mdi:fan", heat_cool: "mdi:sun-snowflake" };
+
+      if (ctx.nodes.modeKey !== modes.join("|")) {
+        ctx.nodes.modeKey = modes.join("|");
+        ctx.nodes.modes.replaceChildren();
+        ctx.nodes.modeButtons = new Map();
+        modes.forEach((mode) => {
+          const button = el("button", "mode");
+          const dot = el("span", "dot");
+          dot.append(icon(icons[mode] || "mdi:circle-outline"));
+          button.append(dot, el("span", null, labels[mode] || mode));
+          button.addEventListener("click", () =>
+            ctx.hass.callService("climate", "set_hvac_mode", { entity_id: ctx.config.entity, hvac_mode: mode })
+          );
+          ctx.nodes.modeButtons.set(mode, button);
+          ctx.nodes.modes.append(button);
+        });
+      }
+      ctx.nodes.modeButtons?.forEach((button, mode) => button.classList.toggle("active", state?.state === mode));
+    },
+  },
+
+  // ------------------------------------------------------------- Wetter
+  weather: {
+    build(ctx) {
+      const root = el("div");
+      root.style.cssText = "display:flex;flex-direction:column;gap:10px;flex:1;min-height:0";
+
+      const head = el("div", "weather-head");
+      ctx.nodes.now = el("div", "weather-now");
+      const meta = el("div");
+      ctx.nodes.condition = el("div", "title");
+      ctx.nodes.wind = el("div", "subtitle");
+      meta.append(ctx.nodes.condition, ctx.nodes.wind);
+      head.append(ctx.nodes.now, meta);
+
+      // Verlaufskurve. Das DOM entsteht hier einmal und vollständig; im
+      // Update-Pfad ändert sich ausschliesslich das d-Attribut der beiden Pfade.
+      const SVG_NS = "http://www.w3.org/2000/svg";
+      ctx.nodes.graph = el("div", "weather-graph");
+      const graphSvg = document.createElementNS(SVG_NS, "svg");
+      graphSvg.setAttribute("viewBox", "0 0 100 40");
+      graphSvg.setAttribute("preserveAspectRatio", "none");
+
+      // Die id wirkt nur im Shadow Root dieser Karte – keine Kollision mit
+      // weiteren Wetterkarten auf derselben Seite.
+      const defs = document.createElementNS(SVG_NS, "defs");
+      const fade = document.createElementNS(SVG_NS, "linearGradient");
+      fade.setAttribute("id", "haos-weather-fade");
+      fade.setAttribute("x1", "0");
+      fade.setAttribute("y1", "0");
+      fade.setAttribute("x2", "0");
+      fade.setAttribute("y2", "1");
+      [
+        ["0%", "currentColor", ".38"],
+        ["100%", "currentColor", "0"],
+      ].forEach(([offset, color, opacity]) => {
+        const stop = document.createElementNS(SVG_NS, "stop");
+        stop.setAttribute("offset", offset);
+        stop.setAttribute("stop-color", color);
+        stop.setAttribute("stop-opacity", opacity);
+        fade.append(stop);
+      });
+      defs.append(fade);
+
+      ctx.nodes.graphArea = document.createElementNS(SVG_NS, "path");
+      ctx.nodes.graphArea.setAttribute("class", "area");
+      ctx.nodes.graphArea.setAttribute("d", "");
+      ctx.nodes.graphLine = document.createElementNS(SVG_NS, "path");
+      ctx.nodes.graphLine.setAttribute("class", "line");
+      ctx.nodes.graphLine.setAttribute("d", "");
+
+      graphSvg.append(defs, ctx.nodes.graphArea, ctx.nodes.graphLine);
+      ctx.nodes.graph.append(graphSvg);
+      ctx.nodes.graph.style.color = "var(--haos-accent, #0a84ff)";
+
+      ctx.nodes.forecast = el("div", "forecast");
+      const bottom = el("div", "weather-bottom");
+      bottom.append(ctx.nodes.graph, ctx.nodes.forecast);
+      root.append(head, bottom);
+      return root;
+    },
+    update(ctx) {
+      const state = ctx.hass?.states?.[ctx.config.entity];
+      if (!state) return;
+
+      const temp = Math.round(numeric(state.attributes.temperature));
+      ctx.nodes.now.textContent = Number.isFinite(temp) ? `${temp}°` : "--";
+      ctx.nodes.condition.textContent = ctx.config.name || friendlyName(ctx.config.entity, state);
+      const speed = state.attributes.wind_speed;
+      ctx.nodes.wind.textContent = speed ? `Wind ${speed} ${state.attributes.wind_speed_unit || "km/h"}` : state.state;
+
+      // Vorhersage: neuere HA-Versionen liefern sie nicht mehr als Attribut.
+      const forecast = state.attributes.forecast || ctx.nodes.forecastData || [];
+      const items = forecast.slice(0, Number(ctx.config.forecast_count) || 5);
+
+      if (ctx.nodes.forecast.childElementCount !== items.length) {
+        ctx.nodes.forecast.replaceChildren();
+        ctx.nodes.forecastNodes = items.map(() => {
+          const node = el("div", "forecast-item");
+          const value = el("b");
+          const symbol = icon("mdi:weather-cloudy");
+          const label = el("span");
+          node.append(value, symbol, label);
+          ctx.nodes.forecast.append(node);
+          return { value, symbol, label };
+        });
+      }
+
+      const conditionIcons = {
+        sunny: "mdi:weather-sunny", clear: "mdi:weather-sunny", "clear-night": "mdi:weather-night",
+        cloudy: "mdi:weather-cloudy", partlycloudy: "mdi:weather-partly-cloudy", rainy: "mdi:weather-rainy",
+        pouring: "mdi:weather-pouring", snowy: "mdi:weather-snowy", fog: "mdi:weather-fog",
+        windy: "mdi:weather-windy", lightning: "mdi:weather-lightning", hail: "mdi:weather-hail",
+      };
+
+      items.forEach((entry, index) => {
+        const node = ctx.nodes.forecastNodes?.[index];
+        if (!node) return;
+        const value = Math.round(numeric(entry?.temperature));
+        node.value.textContent = Number.isFinite(value) ? `${value}°` : "--";
+        node.symbol.setAttribute("icon", conditionIcons[entry.condition] || "mdi:weather-cloudy");
+        const when = new Date(entry.datetime);
+        node.label.textContent = Number.isNaN(when.getTime())
+          ? ""
+          : `${pad(when.getHours())}:${pad(when.getMinutes())}`;
+      });
+
+      drawWeatherGraph(ctx, items);
+    },
+    /** Holt die Vorhersage einmalig per WebSocket-Abo (HA 2024.x+). */
+    async connect(ctx) {
+      if (!ctx.hass?.connection || !ctx.config.entity || ctx.nodes.forecastUnsub) return;
+      try {
+        ctx.nodes.forecastUnsub = await ctx.hass.connection.subscribeMessage(
+          (message) => {
+            ctx.nodes.forecastData = message.forecast || [];
+            renderers.weather.update(ctx);
+          },
+          { type: "weather/subscribe_forecast", entity_id: ctx.config.entity, forecast_type: ctx.config.forecast_type || "hourly" }
+        );
+      } catch (_error) {
+        // Ältere HA-Version: Vorhersage kommt weiter über das Attribut.
+      }
+    },
+    disconnect(ctx) {
+      ctx.nodes.forecastUnsub?.();
+      ctx.nodes.forecastUnsub = null;
+    },
+  },
+
+  // ------------------------------------------------------------- Energie
+  energy: {
+    build(ctx) {
+      const root = el("div");
+      root.style.cssText = "display:flex;flex-direction:column;gap:10px;flex:1;min-height:0";
+      const head = el("div", "row");
+      ctx.nodes.title = el("div", "title");
+      ctx.nodes.total = el("div", "muted");
+      head.append(ctx.nodes.title, el("div", "spacer"), ctx.nodes.total);
+      ctx.nodes.bars = el("div", "bars");
+      root.append(head, ctx.nodes.bars);
+      return root;
+    },
+    update(ctx) {
+      const state = ctx.hass?.states?.[ctx.config.entity];
+      ctx.nodes.title.textContent = ctx.config.name || friendlyName(ctx.config.entity, state);
+      const unit = state?.attributes?.unit_of_measurement || "";
+      ctx.nodes.total.textContent = state ? `${state.state} ${unit}` : "";
+
+      const values = ctx.nodes.history || [];
+      if (!values.length) return;
+
+      const max = Math.max(...values.map((entry) => entry.value), 1);
+
+      if (ctx.nodes.bars.childElementCount !== values.length) {
+        ctx.nodes.bars.replaceChildren();
+        ctx.nodes.barNodes = values.map(() => {
+          const column = el("div", "bar-col");
+          const bar = el("div", "bar");
+          const label = el("div", "bar-label");
+          column.append(bar, label);
+          ctx.nodes.bars.append(column);
+          return { bar, label };
+        });
+      }
+
+      const peak = values.reduce((best, entry, index) => (entry.value > values[best].value ? index : best), 0);
+      values.forEach((entry, index) => {
+        const node = ctx.nodes.barNodes?.[index];
+        if (!node) return;
+        node.bar.style.height = `${Math.max(3, (entry.value / max) * 100)}%`;
+        node.bar.classList.toggle("peak", index === peak);
+        node.label.textContent = entry.label;
+      });
+    },
+    async connect(ctx) {
+      if (!ctx.hass || !ctx.config.entity || ctx.nodes.historyLoaded) return;
+      ctx.nodes.historyLoaded = true;
+      const days = Number(ctx.config.days) || 7;
+      const end = new Date();
+      const start = new Date(end);
+      start.setDate(start.getDate() - (days - 1));
+      start.setHours(0, 0, 0, 0);
+
+      try {
+        const path =
+          `history/period/${encodeURIComponent(start.toISOString())}` +
+          `?filter_entity_id=${encodeURIComponent(ctx.config.entity)}` +
+          `&end_time=${encodeURIComponent(end.toISOString())}&minimal_response&no_attributes`;
+        const result = await ctx.hass.callApi("GET", path);
+        const series = result?.[0] || [];
+
+        const buckets = new Map();
+        series.forEach((point) => {
+          const value = Number(point.state);
+          if (!Number.isFinite(value)) return;
+          const when = new Date(point.last_changed || point.last_updated);
+          const key = when.toISOString().slice(0, 10);
+          buckets.set(key, Math.max(buckets.get(key) ?? 0, value));
+        });
+
+        const weekdays = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+        ctx.nodes.history = [...buckets.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .slice(-days)
+          .map(([key, value]) => ({ value, label: weekdays[new Date(key).getDay()] }));
+
+        renderers.energy.update(ctx);
+      } catch (_error) {
+        ctx.nodes.historyLoaded = false;
+      }
+    },
+  },
+
+  // ------------------------------------------------------------- Media
+  media: {
+    build(ctx) {
+      const root = el("div");
+      root.style.cssText = "display:flex;flex-direction:column;gap:9px;flex:1;min-height:0;justify-content:center";
+
+      const head = el("div", "media-head");
+      ctx.nodes.art = el("div", "media-art");
+      ctx.nodes.artIcon = icon("mdi:music");
+      ctx.nodes.art.append(ctx.nodes.artIcon);
+      const meta = el("div");
+      meta.style.minWidth = "0";
+      ctx.nodes.track = el("div", "title");
+      ctx.nodes.artist = el("div", "subtitle");
+      meta.append(ctx.nodes.track, ctx.nodes.artist);
+      head.append(ctx.nodes.art, meta);
+
+      ctx.nodes.progress = el("div", "progress");
+      ctx.nodes.progressBar = el("span");
+      ctx.nodes.progress.append(ctx.nodes.progressBar);
+
+      const times = el("div", "media-times");
+      ctx.nodes.elapsed = el("span", null, "0:00");
+      ctx.nodes.duration = el("span", null, "0:00");
+      times.append(ctx.nodes.elapsed, ctx.nodes.duration);
+
+      const controls = el("div", "media-controls");
+      const make = (name, service, className) => {
+        const button = el("button", className);
+        button.append(icon(name));
+        button.addEventListener("click", () =>
+          ctx.hass?.callService("media_player", service, { entity_id: ctx.config.entity })
+        );
+        return button;
+      };
+      ctx.nodes.play = make("mdi:pause", "media_play_pause", "play");
+      controls.append(
+        make("mdi:shuffle-variant", "shuffle_set", ""),
+        make("mdi:skip-previous", "media_previous_track", ""),
+        ctx.nodes.play,
+        make("mdi:skip-next", "media_next_track", ""),
+        make("mdi:repeat", "repeat_set", "")
+      );
+
+      root.append(head, ctx.nodes.progress, times, controls);
+      return root;
+    },
+    update(ctx) {
+      const state = ctx.hass?.states?.[ctx.config.entity];
+      const attributes = state?.attributes || {};
+
+      ctx.nodes.track.textContent = attributes.media_title || ctx.config.name || friendlyName(ctx.config.entity, state);
+      ctx.nodes.artist.textContent = attributes.media_artist || attributes.media_series_title || state?.state || "";
+
+      const picture = attributes.entity_picture || "";
+      if (picture !== ctx.nodes.artUrl) {
+        ctx.nodes.artUrl = picture;
+        if (picture) {
+          const img = document.createElement("img");
+          img.src = picture;
+          img.alt = "";
+          ctx.nodes.art.replaceChildren(img);
+        } else {
+          ctx.nodes.art.replaceChildren(ctx.nodes.artIcon);
+        }
+      }
+
+      const duration = Number(attributes.media_duration) || 0;
+      let position = Number(attributes.media_position) || 0;
+      if (attributes.media_position_updated_at && state?.state === "playing") {
+        position += (Date.now() - new Date(attributes.media_position_updated_at).getTime()) / 1000;
+      }
+      const ratio = duration > 0 ? clampNumber(position / duration, 0, 1, 0) : 0;
+      ctx.nodes.progressBar.style.width = `${ratio * 100}%`;
+      ctx.nodes.elapsed.textContent = formatDuration(position);
+      ctx.nodes.duration.textContent = formatDuration(duration);
+
+      ctx.nodes.play.querySelector("ha-icon")?.setAttribute("icon", state?.state === "playing" ? "mdi:pause" : "mdi:play");
+    },
+  },
+
+  // ------------------------------------------------------------- Mitglieder
+  members: {
+    build(ctx) {
+      const root = el("div");
+      const head = el("div", "row");
+      ctx.nodes.title = el("div", "title");
+      head.append(ctx.nodes.title, el("div", "spacer"));
+      ctx.nodes.list = el("div", "members");
+      root.append(head, ctx.nodes.list);
+      return root;
+    },
+    update(ctx) {
+      ctx.nodes.title.textContent = ctx.config.name || "Mitglieder";
+      const ids = ctx.config.entities?.length
+        ? ctx.config.entities
+        : Object.keys(ctx.hass?.states || {}).filter((id) => id.startsWith("person."));
+
+      if (ctx.nodes.memberKey !== ids.join("|")) {
+        ctx.nodes.memberKey = ids.join("|");
+        ctx.nodes.list.replaceChildren();
+        ctx.nodes.memberNodes = new Map();
+        ids.forEach((id) => {
+          const node = el("button", "member");
+          node.addEventListener("click", () => showMoreInfo(ctx.host, id));
+          ctx.nodes.memberNodes.set(id, { node, picture: null });
+          ctx.nodes.list.append(node);
+        });
+      }
+
+      ctx.nodes.memberNodes?.forEach((record, id) => {
+        const state = ctx.hass?.states?.[id];
+        const name = friendlyName(id, state);
+        const status = isUnavailable(state) ? "unavailable" : state.state === "home" ? "home" : "away";
+        record.node.classList.remove("is-home", "is-away", "is-unavailable");
+        record.node.classList.add(`is-${status}`);
+        record.node.title = name;
+
+        const picture = state?.attributes?.entity_picture || "";
+        if (picture !== record.picture) {
+          record.picture = picture;
+          if (picture) {
+            const img = document.createElement("img");
+            img.src = picture;
+            img.alt = "";
+            record.node.replaceChildren(img);
+          } else {
+            record.node.textContent = (name[0] || "?").toUpperCase();
+          }
+        }
+      });
+    },
+  },
+
+  // ------------------------------------------------------------- Kalender
+  calendar: {
+    build(ctx) {
+      const root = el("div");
+      root.style.cssText = "display:flex;flex-direction:column;gap:10px;flex:1;min-height:0";
+      ctx.nodes.title = el("div", "title");
+      ctx.nodes.events = el("div", "events");
+      root.append(ctx.nodes.title, ctx.nodes.events);
+      return root;
+    },
+    update(ctx) {
+      ctx.nodes.title.textContent = ctx.config.name || "Kalender";
+      const events = ctx.nodes.events_data || [];
+
+      if (!events.length) {
+        ctx.nodes.events.replaceChildren(el("div", "muted", "Keine Termine"));
+        return;
+      }
+
+      const months = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+      ctx.nodes.events.replaceChildren(
+        ...events.slice(0, Number(ctx.config.max_events) || 6).map((event) => {
+          const row = el("div", "event");
+          const when = el("div", "when");
+          const date = new Date(event.start?.dateTime || event.start?.date || event.start);
+          when.append(el("b", null, String(date.getDate())), el("span", null, months[date.getMonth()] || ""));
+          row.append(when, el("div", "what", event.summary || "Termin"));
+          return row;
+        })
+      );
+    },
+    async connect(ctx) {
+      const entities = ctx.config.entities?.length ? ctx.config.entities : [ctx.config.entity].filter(Boolean);
+      if (!ctx.hass || !entities.length || ctx.nodes.eventsLoaded) return;
+      ctx.nodes.eventsLoaded = true;
+
+      const days = Number(ctx.config.days) || 7;
+      const start = new Date();
+      const end = new Date(start.getTime() + days * 86400000);
+
+      try {
+        const lists = await Promise.all(
+          entities.map((entityId) =>
+            ctx.hass
+              .callApi(
+                "GET",
+                `calendars/${encodeURIComponent(entityId)}?start=${encodeURIComponent(
+                  start.toISOString()
+                )}&end=${encodeURIComponent(end.toISOString())}`
+              )
+              .catch(() => [])
+          )
+        );
+        ctx.nodes.events_data = lists
+          .flat()
+          .sort((a, b) =>
+            String(a.start?.dateTime || a.start?.date || "").localeCompare(String(b.start?.dateTime || b.start?.date || ""))
+          );
+        renderers.calendar.update(ctx);
+      } catch (_error) {
+        ctx.nodes.eventsLoaded = false;
+      }
+    },
+  },
+
+  // ------------------------------------------------------------- Auswahl
+  select: {
+    build(ctx) {
+      const root = el("div");
+      root.style.cssText = "display:flex;flex-direction:column;gap:10px";
+      ctx.nodes.title = el("div", "title");
+      ctx.nodes.body = el("div");
+      root.append(ctx.nodes.title, ctx.nodes.body);
+      return root;
+    },
+    update(ctx) {
+      const entityId = ctx.config.entity;
+      const state = ctx.hass?.states?.[entityId];
+      ctx.nodes.title.textContent = ctx.config.name || friendlyName(entityId, state);
+
+      const options = state?.attributes?.options || [];
+      const domain = String(entityId || "").split(".")[0];
+      const mode = ctx.config.display === "buttons" ? "buttons" : "dropdown";
+      const key = `${mode}|${options.join("|")}`;
+
+      if (ctx.nodes.selectKey !== key) {
+        ctx.nodes.selectKey = key;
+        ctx.nodes.body.replaceChildren();
+
+        if (mode === "dropdown") {
+          const select = document.createElement("select");
+          select.className = "dropdown";
+          options.forEach((option) => {
+            const node = document.createElement("option");
+            node.value = option;
+            node.textContent = option;
+            select.append(node);
+          });
+          select.addEventListener("change", () =>
+            ctx.hass?.callService(domain, "select_option", { entity_id: entityId, option: select.value })
+          );
+          ctx.nodes.select = select;
+          ctx.nodes.optionButtons = null;
+          ctx.nodes.body.append(select);
+        } else {
+          const list = el("div", "options");
+          ctx.nodes.optionButtons = new Map();
+          options.forEach((option) => {
+            const button = el("button", "option", option);
+            button.addEventListener("click", () =>
+              ctx.hass?.callService(domain, "select_option", { entity_id: entityId, option })
+            );
+            ctx.nodes.optionButtons.set(option, button);
+            list.append(button);
+          });
+          ctx.nodes.select = null;
+          ctx.nodes.body.append(list);
+        }
+      }
+
+      if (ctx.nodes.select && ctx.nodes.select.value !== state?.state) ctx.nodes.select.value = state?.state ?? "";
+      ctx.nodes.optionButtons?.forEach((button, option) => button.classList.toggle("active", option === state?.state));
+    },
+  },
+
+  // ------------------------------------------------------------- Uhr
+  clock: {
+    build(ctx) {
+      const root = el("div", "clock");
+      ctx.nodes.time = el("div", "clock-time", "--:--");
+      ctx.nodes.date = el("div", "clock-date");
+      root.append(ctx.nodes.time, ctx.nodes.date);
+
+      ctx.nodes.tick = () => {
+        const now = new Date();
+        const options = {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: ctx.config.hour_format === "12",
+        };
+        if (ctx.config.show_seconds) options.second = "2-digit";
+        if (ctx.config.time_zone) options.timeZone = ctx.config.time_zone;
+
+        try {
+          ctx.nodes.time.textContent = now.toLocaleTimeString("de-DE", options);
+          ctx.nodes.date.textContent =
+            ctx.config.show_date === false
+              ? ""
+              : now.toLocaleDateString("de-DE", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                  timeZone: ctx.config.time_zone || undefined,
+                });
+        } catch (_error) {
+          // Ungültige Zeitzone o. Ä. – auf einfache Anzeige zurückfallen.
+          ctx.nodes.time.textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+          ctx.nodes.date.textContent = "";
+        }
+      };
+
+      renderers.clock.reconnect(ctx);
+      return root;
+    },
+    update(ctx) {
+      // Die Anzeige läuft über den eigenen Timer. Hier wird nur geprüft, ob
+      // die Taktrate wegen der Sekundenanzeige angepasst werden muss.
+      const wanted = ctx.config.show_seconds ? 1000 : 15000;
+      if (ctx.nodes.interval !== wanted) renderers.clock.reconnect(ctx);
+    },
+    reconnect(ctx) {
+      if (!ctx.nodes.tick) return;
+      clearInterval(ctx.nodes.timer);
+      ctx.nodes.interval = ctx.config.show_seconds ? 1000 : 15000;
+      ctx.nodes.tick();
+      ctx.nodes.timer = setInterval(ctx.nodes.tick, ctx.nodes.interval);
+    },
+    disconnect(ctx) {
+      clearInterval(ctx.nodes.timer);
+      ctx.nodes.timer = null;
+    },
+  },
+};
+
+// ---------------------------------------------------------------- Karte
+
+class HaOsCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = null;
+    this._hass = null;
+    this._ctx = null;
+    this._connected = false;
+  }
+
+  static getConfigElement() {
+    return document.createElement(EDITOR_TAG);
+  }
+
+  static getStubConfig() {
+    return { type: `custom:${TAG}`, card_type: "button", entity: "" };
+  }
+
+  setConfig(config) {
+    if (!config?.card_type) throw new Error("Bitte oben einen Kartentyp auswählen.");
+    if (!renderers[config.card_type]) throw new Error(`Unbekannter Kartentyp: ${config.card_type}`);
+
+    const previous = this._config;
+    this._config = config;
+
+    const typeChanged = previous?.card_type !== config.card_type;
+    if (typeChanged || !this._ctx) {
+      this._build();
+      return;
+    }
+
+    // Gleicher Typ: DOM behalten, nur Konfiguration übernehmen.
+    this._ctx.config = config;
+
+    // Zeigt die Karte jetzt auf andere Entitäten, müssen Abos und
+    // Verlaufsdaten neu geholt werden – sonst bleiben alte Daten stehen.
+    const sourceChanged =
+      previous?.entity !== config.entity ||
+      String(previous?.entities || "") !== String(config.entities || "") ||
+      previous?.days !== config.days;
+
+    if (sourceChanged) {
+      renderers[config.card_type].disconnect?.(this._ctx);
+      ["forecastData", "forecastUnsub", "history", "historyLoaded", "events_data", "eventsLoaded"].forEach(
+        (key) => delete this._ctx.nodes[key]
+      );
+      this._ctx.connected = false;
+    }
+
+    this._safeUpdate();
+
+    if (sourceChanged && this._hass) {
+      this._ctx.connected = true;
+      renderers[config.card_type].connect?.(this._ctx);
+    }
+  }
+
+  set hass(hass) {
+    const first = !this._hass;
+    this._hass = hass;
+    if (!this._ctx) return;
+    this._ctx.hass = hass;
+
+    // Home Assistant schiebt bei JEDER Zustandsänderung im ganzen System ein
+    // neues hass-Objekt herein. Ohne diesen Filter würde jede Karte hunderte
+    // Male pro Minute aktualisiert, obwohl sie gar nicht betroffen ist.
+    if (first || this._watchedChanged(hass)) this._safeUpdate();
+
+    if (!this._ctx.connected) {
+      this._ctx.connected = true;
+      renderers[this._config.card_type].connect?.(this._ctx);
+    }
+  }
+
+  get hass() {
+    return this._hass;
+  }
+
+  /** Entitäten, auf die diese Karte tatsächlich reagieren muss. */
+  _watchedEntities() {
+    const config = this._config || {};
+    const ids = [config.entity, ...(config.entities || [])].filter(Boolean);
+
+    // Mitglieder ohne feste Liste beobachten alle Personen.
+    if (config.card_type === "members" && !config.entities?.length) {
+      return Object.keys(this._hass?.states || {}).filter((id) => id.startsWith("person."));
+    }
+    return ids;
+  }
+
+  _watchedChanged(hass) {
+    const watched = this._watchedEntities();
+
+    // Karten ohne Entität (z. B. Uhr) brauchen keine hass-Updates.
+    if (!watched.length) return false;
+
+    const previous = this._lastStates;
+    const current = new Map(watched.map((id) => [id, hass?.states?.[id]]));
+    this._lastStates = current;
+
+    if (!previous || previous.size !== current.size) return true;
+    for (const [id, state] of current) {
+      // HA erzeugt nur bei echter Änderung ein neues State-Objekt.
+      if (previous.get(id) !== state) return true;
+    }
+    return false;
+  }
+
+  connectedCallback() {
+    this._connected = true;
+    // Wird die Karte im DOM verschoben, muss z. B. der Uhr-Timer weiterlaufen.
+    if (this._ctx) renderers[this._config?.card_type]?.reconnect?.(this._ctx);
+  }
+
+  disconnectedCallback() {
+    this._connected = false;
+    if (this._ctx) renderers[this._config?.card_type]?.disconnect?.(this._ctx);
+  }
+
+  getCardSize() {
+    return 3;
+  }
+
+  _build() {
+    if (this._ctx) renderers[this._ctx.type]?.disconnect?.(this._ctx);
+
+    const style = document.createElement("style");
+    style.textContent = STYLES;
+
+    const card = el("div", "card");
+    this._ctx = {
+      host: this,
+      card,
+      config: this._config,
+      hass: this._hass,
+      nodes: {},
+      type: this._config.card_type,
+      connected: false,
+    };
+
+    try {
+      card.append(renderers[this._config.card_type].build(this._ctx));
+    } catch (error) {
+      card.replaceChildren(el("div", "error", `Fehler beim Aufbau: ${error.message}`));
+    }
+
+    this.shadowRoot.replaceChildren(style, card);
+    this._safeUpdate();
+  }
+
+  _safeUpdate() {
+    if (!this._ctx || !this._hass) return;
+    try {
+      renderers[this._config.card_type].update(this._ctx);
+    } catch (error) {
+      console.error(`[${TAG}] Update fehlgeschlagen`, error);
+      return;
+    }
+
+    // Statusklasse für Akzentleuchten – gilt für alle Typen mit Entität.
+    const state = this._hass.states?.[this._config.entity];
+    this._ctx.card.classList.remove("is-on", "is-off", "is-unavailable");
+    if (this._config.entity) this._ctx.card.classList.add(statusClass(state));
+  }
+}
+
+if (!customElements.get(TAG)) customElements.define(TAG, HaOsCard);
+
+registerCard({
+  type: TAG,
+  name: "HA-OS Karte",
+  description: "Eine Karte für alle Typen – Button, Slider, Thermostat, Wetter, Energie, Medien und mehr.",
+  preview: false,
+});
+
+export { HaOsCard, TAG as CARD_TAG, EDITOR_TAG as CARD_EDITOR_TAG, renderers };
