@@ -13,6 +13,7 @@ import {
   ENTITY_SURFACE_CSS,
   clampNumber,
   domainIcon,
+  domainOf,
   formatState,
   friendlyName,
   handleAction,
@@ -101,6 +102,40 @@ const STYLES = `
   }
   .is-on .switch { background: var(--haos-accent, #0a84ff); }
   .is-on .switch::after { transform: translateX(19px); }
+
+  /* Ohne !important gewinnen die display-Regeln der Bedienelemente. */
+  [hidden] { display: none !important; }
+
+  /* --- Taster (button, input_button, scene, script) ---
+     Diese Entitäten haben keinen Zustand, den man umschalten könnte. Sie
+     brauchen einen Druckknopf mit sichtbarer Rückmeldung, weil sonst nichts
+     erkennen lässt, ob der Druck angekommen ist. */
+  .press-btn {
+    width: 46px; height: 46px; flex: 0 0 46px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+    border: 1px solid rgba(var(--haos-entity-border-rgb, 255,255,255), .22);
+    transition: transform .12s ease, background .18s ease, color .18s ease;
+  }
+  .press-btn:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .18); }
+  .press-btn:active, .press-btn.is-pressed {
+    transform: scale(.88);
+    background: var(--haos-accent, #0a84ff);
+    color: #fff;
+    box-shadow: 0 0 18px color-mix(in srgb, var(--haos-accent, #0a84ff) 55%, transparent);
+  }
+  .press-btn ha-icon { --mdc-icon-size: 22px; }
+
+  /* --- Rollo/Tor (cover) --- */
+  .cover-ctrl { display: flex; gap: 6px; }
+  .cover-ctrl button {
+    width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+    transition: background .18s ease;
+  }
+  .cover-ctrl button:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .18); }
+  .cover-ctrl button:active { background: var(--haos-accent, #0a84ff); color: #fff; }
+  .cover-ctrl ha-icon { --mdc-icon-size: 18px; }
 
   /* --- Slider --- */
   .slider-track { position: relative; height: 40px; border-radius: 14px; overflow: hidden; background: rgba(var(--haos-text-rgb, 255,255,255), .10); }
@@ -218,6 +253,68 @@ const numeric = (value) =>
   value === null || value === undefined || value === "" ? NaN : Number(value);
 
 /**
+ * Welche Bedienform braucht diese Entität?
+ *
+ * Der Auslöser für diese Unterscheidung: eine Entität der Domain `button`
+ * ("Taste" in der deutschen Oberfläche) hat gar keinen Zustand, sondern nur
+ * einen Zeitpunkt der letzten Betätigung. Ein Umschalter kann daran nichts
+ * umschalten – die Kachel sah bedienbar aus und tat nichts.
+ */
+const PRESS_DOMAINS = new Set(["button", "input_button", "scene", "script"]);
+
+const buttonKind = (entityId) => {
+  const domain = domainOf(entityId);
+  if (PRESS_DOMAINS.has(domain)) return "press";
+  if (domain === "cover") return "cover";
+  return "toggle";
+};
+
+/** Löst eine Taste, Szene oder ein Skript aus. */
+const runPress = (ctx) => {
+  const entityId = ctx.config.entity;
+  if (!entityId) return;
+  const domain = domainOf(entityId);
+  const service = domain === "button" || domain === "input_button" ? "press" : "turn_on";
+  ctx.hass?.callService(domain, service, { entity_id: entityId });
+
+  // Sichtbare Rückmeldung, weil es keinen Zustand gibt, der sich ändern könnte.
+  const node = ctx.nodes.press;
+  if (!node) return;
+  node.classList.add("is-pressed");
+  clearTimeout(ctx.nodes.pressTimer);
+  ctx.nodes.pressTimer = setTimeout(() => node.classList.remove("is-pressed"), 350);
+};
+
+/**
+ * Beschriftung einer Vorhersagespalte.
+ *
+ * Bei Tagesvorhersagen liegen alle Einträge auf 00:00 UTC. Eine Uhrzeit
+ * darunter zu schreiben ergab fünfmal denselben Wert – bei Enrico "02:00",
+ * weil Mitteleuropa im Sommer zwei Stunden vorgeht. Für Tage gehört dorthin
+ * der Wochentag, für Stunden die Uhrzeit.
+ */
+const forecastLabel = (datetime, forecastType) => {
+  const when = new Date(datetime);
+  if (Number.isNaN(when.getTime())) return "";
+
+  if (forecastType === "daily" || forecastType === "twice_daily") {
+    const today = new Date();
+    const sameDay =
+      when.getDate() === today.getDate() &&
+      when.getMonth() === today.getMonth() &&
+      when.getFullYear() === today.getFullYear();
+    if (sameDay) return "Heute";
+    try {
+      return when.toLocaleDateString(undefined, { weekday: "short" });
+    } catch (_error) {
+      return ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"][when.getDay()];
+    }
+  }
+
+  return `${pad(when.getHours())}:${pad(when.getMinutes())}`;
+};
+
+/**
  * Zeichnet die Temperaturkurve der Wetterkarte.
  *
  * Erzeugt bewusst KEIN DOM: die beiden Pfade stehen bereits, hier ändert sich
@@ -297,24 +394,82 @@ const renderers = {
 
       row.append(ctx.nodes.chip, text, el("div", "spacer"));
 
-      if (ctx.config.show_toggle !== false) {
-        ctx.nodes.toggle = el("div", "switch");
-        row.append(ctx.nodes.toggle);
-      }
+      // Alle drei Bedienformen entstehen hier einmal, update() blendet die
+      // unpassenden aus. Beim Wechsel der Entität behält die Karte ihr DOM –
+      // würde die Form erst hier entschieden, bliebe der falsche Regler stehen.
+      ctx.nodes.toggle = el("div", "switch");
 
-      root.append(row);
-      ctx.card.classList.add("interactive");
-      ctx.card.addEventListener("click", () =>
-        handleAction(ctx.host, ctx.hass, ctx.config.tap_action || { action: "toggle" }, ctx.config.entity)
+      ctx.nodes.press = el("button", "press-btn");
+      ctx.nodes.pressIcon = icon("mdi:gesture-tap-button");
+      ctx.nodes.press.append(ctx.nodes.pressIcon);
+      ctx.nodes.press.addEventListener("click", (event) => {
+        event.stopPropagation();
+        runPress(ctx);
+      });
+
+      const coverButton = (label, symbol, service) => {
+        const node = el("button");
+        node.append(icon(symbol));
+        node.title = label;
+        node.setAttribute("aria-label", label);
+        node.addEventListener("click", (event) => {
+          event.stopPropagation();
+          if (ctx.config.entity) ctx.hass?.callService("cover", service, { entity_id: ctx.config.entity });
+        });
+        return node;
+      };
+      ctx.nodes.cover = el("div", "cover-ctrl");
+      ctx.nodes.cover.append(
+        coverButton("Auf", "mdi:arrow-up", "open_cover"),
+        coverButton("Stopp", "mdi:stop", "stop_cover"),
+        coverButton("Zu", "mdi:arrow-down", "close_cover")
       );
+
+      row.append(ctx.nodes.toggle, ctx.nodes.press, ctx.nodes.cover);
+      root.append(row);
+
+      ctx.card.classList.add("interactive");
+      ctx.card.addEventListener("click", () => {
+        const kind = buttonKind(ctx.config.entity);
+        if (ctx.config.tap_action) {
+          handleAction(ctx.host, ctx.hass, ctx.config.tap_action, ctx.config.entity);
+          return;
+        }
+        if (kind === "press") {
+          runPress(ctx);
+          return;
+        }
+        // Bei Rollos wäre ein Umschalten auf die ganze Fläche zu grob –
+        // dafür gibt es die drei Knöpfe.
+        handleAction(ctx.host, ctx.hass, { action: kind === "cover" ? "more-info" : "toggle" }, ctx.config.entity);
+      });
       return root;
     },
     update(ctx) {
-      const state = ctx.hass?.states?.[ctx.config.entity];
-      ctx.nodes.chipIcon.setAttribute("icon", ctx.config.icon || domainIcon(ctx.config.entity, state));
-      ctx.nodes.title.textContent = ctx.config.name || friendlyName(ctx.config.entity, state);
+      const entityId = ctx.config.entity;
+      const state = ctx.hass?.states?.[entityId];
+      const kind = buttonKind(entityId);
+
+      // Der angezeigte Zustand darf von einer anderen Entität kommen. Eine
+      // Taste hat keinen – der Türkontakt oder Binärsensor daneben schon.
+      const stateId = ctx.config.state_entity || entityId;
+
+      ctx.nodes.chipIcon.setAttribute("icon", ctx.config.icon || domainIcon(entityId, state));
+      ctx.nodes.title.textContent = ctx.config.name || friendlyName(entityId, state);
       ctx.nodes.subtitle.textContent =
-        ctx.config.show_state === false ? "" : formatState(ctx.hass, ctx.config.entity);
+        ctx.config.show_state === false ? "" : formatState(ctx.hass, stateId);
+
+      const visible = ctx.config.show_toggle !== false;
+      ctx.nodes.toggle.hidden = !(visible && kind === "toggle");
+      ctx.nodes.press.hidden = !(visible && kind === "press");
+      ctx.nodes.cover.hidden = !(visible && kind === "cover");
+
+      if (kind === "press") {
+        ctx.nodes.pressIcon.setAttribute("icon", ctx.config.press_icon || "mdi:gesture-tap-button");
+      }
+    },
+    disconnect(ctx) {
+      clearTimeout(ctx.nodes.pressTimer);
     },
   },
 
@@ -622,10 +777,7 @@ const renderers = {
         const value = Math.round(numeric(entry?.temperature));
         node.value.textContent = Number.isFinite(value) ? `${value}°` : "--";
         node.symbol.setAttribute("icon", conditionIcons[entry.condition] || "mdi:weather-cloudy");
-        const when = new Date(entry.datetime);
-        node.label.textContent = Number.isNaN(when.getTime())
-          ? ""
-          : `${pad(when.getHours())}:${pad(when.getMinutes())}`;
+        node.label.textContent = forecastLabel(entry?.datetime, ctx.config.forecast_type);
       });
 
       drawWeatherGraph(ctx, items);
@@ -1093,6 +1245,7 @@ class HaOsCard extends HTMLElement {
     // Verlaufsdaten neu geholt werden – sonst bleiben alte Daten stehen.
     const sourceChanged =
       previous?.entity !== config.entity ||
+      previous?.state_entity !== config.state_entity ||
       String(previous?.entities || "") !== String(config.entities || "") ||
       previous?.days !== config.days;
 
@@ -1136,7 +1289,7 @@ class HaOsCard extends HTMLElement {
   /** Entitäten, auf die diese Karte tatsächlich reagieren muss. */
   _watchedEntities() {
     const config = this._config || {};
-    const ids = [config.entity, ...(config.entities || [])].filter(Boolean);
+    const ids = [config.entity, config.state_entity, ...(config.entities || [])].filter(Boolean);
 
     // Mitglieder ohne feste Liste beobachten alle Personen.
     if (config.card_type === "members" && !config.entities?.length) {
@@ -1215,9 +1368,12 @@ class HaOsCard extends HTMLElement {
     }
 
     // Statusklasse für Akzentleuchten – gilt für alle Typen mit Entität.
-    const state = this._hass.states?.[this._config.entity];
+    // Ist eine getrennte Zustandsentität gesetzt, zählt deren Zustand: eine
+    // Taste ist nie "an", der Sensor daneben schon.
+    const statusId = this._config.state_entity || this._config.entity;
+    const state = this._hass.states?.[statusId];
     this._ctx.card.classList.remove("is-on", "is-off", "is-unavailable");
-    if (this._config.entity) this._ctx.card.classList.add(statusClass(state));
+    if (statusId) this._ctx.card.classList.add(statusClass(state));
   }
 }
 

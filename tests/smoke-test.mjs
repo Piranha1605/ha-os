@@ -105,9 +105,13 @@ check("ha-os-shell registriert", Boolean(customElements.get("ha-os-shell")));
 check("ha-os-card registriert", Boolean(customElements.get("ha-os-card")));
 check("ha-os-shell-editor registriert", Boolean(customElements.get("ha-os-shell-editor")));
 check("ha-os-card-editor registriert", Boolean(customElements.get("ha-os-card-editor")));
+check("ha-os-grid registriert", Boolean(customElements.get("ha-os-grid")));
+check("ha-os-grid-editor registriert", Boolean(customElements.get("ha-os-grid-editor")));
 check(
-  "beide Karten im HA-Auswahldialog",
-  window.customCards?.length === 2,
+  "alle drei Karten im HA-Auswahldialog",
+  ["ha-os-shell", "ha-os-card", "ha-os-grid"].every((type) =>
+    window.customCards?.some((entry) => entry.type === type)
+  ),
   `gefunden: ${window.customCards?.map((c) => c.type).join(", ")}`
 );
 check("Theme-Variablen gesetzt", document.documentElement.style.getPropertyValue("--haos-accent") === "#0a84ff");

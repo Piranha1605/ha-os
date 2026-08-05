@@ -19,19 +19,22 @@
  * Registrierte Karten:
  *   custom:ha-os-shell  – Grundgerüst (Glasfläche, Seitenleiste, Kopfzeile, drei Raster)
  *   custom:ha-os-card   – generische Karte mit Typ-Auswahl
+ *   custom:ha-os-grid   – 2×2-Raster mit vier frei belegbaren Plätzen
  *
  * Das alte glass-dashboard bleibt vollständig unberührt und kann parallel
  * geladen werden: alle Element-Namen, CSS-Variablen und Speicherschlüssel
  * sind verschieden.
  */
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
 
 import "./shared/theme.js";
 import "./cards/shell-card.js";
 import "./cards/shell-editor.js";
 import "./cards/haos-card.js";
 import "./cards/haos-card-editor.js";
+import "./cards/grid-card.js";
+import "./cards/grid-editor.js";
 
 export { CARD_TYPES } from "./cards/haos-card.js";
 

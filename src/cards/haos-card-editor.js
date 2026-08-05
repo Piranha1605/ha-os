@@ -49,7 +49,14 @@ const ACTION = {
 
 /** Feldsatz je Kartentyp. */
 const SCHEMAS = {
-  button: [entityField(), APPEARANCE, { name: "show_state", selector: { boolean: {} } }, { name: "show_toggle", selector: { boolean: {} } }, ACTION],
+  button: [
+    entityField(),
+    APPEARANCE,
+    { name: "state_entity", selector: { entity: {} } },
+    bool("show_state"),
+    bool("show_toggle"),
+    ACTION,
+  ],
   slider: [entityField(["light", "cover", "fan", "media_player", "number", "input_number"]), APPEARANCE],
   thermostat: [entityField(["climate"]), APPEARANCE],
   weather: [
@@ -117,7 +124,8 @@ const LABELS = {
   name: "Name",
   icon: "Symbol",
   show_state: "Zustand anzeigen",
-  show_toggle: "Schalter anzeigen",
+  show_toggle: "Bedienelement anzeigen",
+  state_entity: "Zustand von anderer Entität",
   tap_action: "Tippen",
   darstellung: "Darstellung",
   aktion: "Aktion",
@@ -139,6 +147,11 @@ const HELPERS = {
   time_zone: "Leer lassen für die Zeitzone des Browsers, z. B. Europe/Berlin.",
   days: "Zeitraum, der geladen wird.",
   show_graph: "Temperaturverlauf über der Vorhersagezeile. Standardmäßig an.",
+  show_toggle:
+    "Die Form richtet sich nach der Entität: Umschalter, Taster oder Auf/Stopp/Zu.",
+  state_entity:
+    "Leer lassen, wenn die Entität selbst einen Zustand hat. Tasten (button) haben keinen – " +
+    "hier dann den Sensor eintragen, der den echten Zustand meldet, z. B. den Türkontakt.",
 };
 
 class HaOsCardEditor extends HTMLElement {

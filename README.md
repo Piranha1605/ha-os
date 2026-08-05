@@ -4,7 +4,7 @@ Dashboard-Grundgerüst für Home Assistant im Glassmorphism-Stil. Eine grosse
 Glasfläche mit Seitenleiste, Kopfzeile und drei frei gewichteten Rastern – in
 die jede installierte Lovelace-Karte passt.
 
-Version 0.2.0
+Version 0.3.0
 
 ---
 
@@ -23,13 +23,13 @@ Version 0.2.0
 
 5. Browser hart neu laden (Cmd+Shift+R bzw. Strg+F5)
 
-**Prüfen, ob es geladen hat:** In der Browserkonsole muss `HA-OS 0.2.0` stehen.
+**Prüfen, ob es geladen hat:** In der Browserkonsole muss `HA-OS 0.3.0` stehen.
 
 ---
 
-## Die zwei Karten
+## Die drei Karten
 
-Beide erscheinen im normalen Kartenauswahldialog.
+Alle erscheinen im normalen Kartenauswahldialog.
 
 **`custom:ha-os-shell` – das Grundgerüst.**
 Glasfläche, Seitenleiste, Kopfzeile mit Reitern, Badges und Benutzern, drei
@@ -42,6 +42,17 @@ Oben im Editor ein Typ-Auswahlfeld, darunter nur die Felder des gewählten Typs:
 
 `button` · `slider` · `thermostat` · `weather` · `energy` · `media` ·
 `members` · `calendar` · `select` · `clock`
+
+Die Form des Bedienelements richtet sich beim Typ `button` nach der Entität:
+Umschalter bei schaltbaren Dingen, **Taster** bei `button`, `input_button`,
+`scene` und `script`, **Auf / Stopp / Zu** bei `cover`. Tasten haben keinen
+eigenen Zustand – dafür gibt es das Feld *Zustand von anderer Entität*, in das
+etwa ein Türkontakt eingetragen wird.
+
+**`custom:ha-os-grid` – das 2×2-Raster.**
+Vier Plätze in zwei Spalten und zwei Reihen, jeder frei mit einer beliebigen
+installierten Karte belegbar. Spaltenverhältnis und Abstand einstellbar, auf
+dem Telefon wahlweise untereinander.
 
 ---
 
@@ -103,12 +114,16 @@ src/
 ├── shared/
 │   ├── theme.js              Glass Light/Dark, CSS-Variablen, Statusfarben
 │   ├── config.js             Normalisierung der Shell-Konfiguration
-│   └── utils.js              gemeinsame Helfer, Kartenerzeugung, Aktionen
+│   ├── utils.js              gemeinsame Helfer, Kartenerzeugung, Aktionen
+│   └── card-catalog.js       Kartenliste und eingebetteter HA-Karteneditor
 └── cards/
     ├── shell-card.js         custom:ha-os-shell
     ├── shell-editor.js       Editor der Shell
     ├── haos-card.js          custom:ha-os-card + alle Renderer
-    └── haos-card-editor.js   Editor der generischen Karte
+    ├── haos-card-editor.js   Editor der generischen Karte
+
+├── grid-card.js          custom:ha-os-grid
+    └── grid-editor.js        Editor des 2×2-Rasters
 
 dist/ha-os.js                 gebaut – nicht von Hand bearbeiten, wird committet
 scripts/build.mjs             esbuild-Bündelung mit Vollständigkeitsprüfung
@@ -176,9 +191,22 @@ Home-Assistant-Version sauber funktioniert, zeigt nur ein Blick ins Frontend.
 ## Noch offen
 
 - Türschloss-Kacheln aus dem Zielbild fehlen
-- Fremdkarten werden im Shell-Editor über YAML konfiguriert; ein eingebetteter
-  HA-Karteneditor kommt, sobald die Grundfunktion abgenommen ist
 - Mobilansicht ist funktionsfähig, aber noch nicht feingeschliffen
+
+## Karten ohne YAML einsetzen
+
+Fremdkarten werden über eine Auswahlliste eingefügt und danach mit ihrem
+echten Home-Assistant-Editor konfiguriert.
+
+Zur Umsetzung, weil sie nicht offensichtlich ist: `hui-card-element-editor`
+ist verfügbar, sobald unser Editor läuft – er steckt im selben nachgeladenen
+Paket wie HAs Kartendialog, und darin läuft unser Editor immer.
+`hui-card-picker` dagegen lädt erst, wenn der Anwender in Home Assistant
+selbst auf *Karte hinzufügen* tippt, und lässt sich von außen nicht
+zuverlässig nachladen. Die Auswahlliste ist deshalb Eigenbau: sie liest
+`window.customCards`, wo sich jede installierte Fremdkarte beim Laden selbst
+einträgt, und ergänzt die gebräuchlichen Standardkarten. Fehlt HAs Editor in
+einer Version, fällt die Karte auf YAML zurück.
 
 ---
 

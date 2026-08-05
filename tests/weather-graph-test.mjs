@@ -153,5 +153,48 @@ broken.hass = brokenHass;
 check("fehlender Messwert blendet die Kurve aus statt NaN zu zeichnen",
   broken.shadowRoot.querySelector(".weather-graph").classList.contains("is-hidden"));
 
+console.log("\n5. Beschriftung der Vorhersagespalten");
+const labelsOf = (element) =>
+  [...element.shadowRoot.querySelectorAll(".forecast-item span")].map((n) => n.textContent);
+
+// Tagesvorhersage: alle Einträge liegen auf 00:00 UTC. Uhrzeiten wären hier
+// fünfmal derselbe Wert – das war der Fehler.
+const daily = document.createElement("ha-os-card");
+daily.setConfig({
+  type: "custom:ha-os-card", card_type: "weather", entity: "weather.zuhause",
+  forecast_type: "daily", forecast_count: 4,
+});
+document.body.append(daily);
+const dailyHass = makeHass();
+dailyHass.states["weather.zuhause"].attributes.forecast = [0, 1, 2, 3].map((i) => {
+  const d = new Date();
+  d.setDate(d.getDate() + i);
+  d.setHours(0, 0, 0, 0);
+  return { datetime: d.toISOString(), temperature: 18 + i, condition: "sunny" };
+});
+daily.hass = dailyHass;
+const dailyLabels = labelsOf(daily);
+check("erste Spalte heisst Heute", dailyLabels[0] === "Heute", dailyLabels.join(" | "));
+check("keine Uhrzeiten bei Tagesvorhersage", !dailyLabels.some((l) => l.includes(":")), dailyLabels.join(" | "));
+check("vier verschiedene Beschriftungen", new Set(dailyLabels).size === 4, dailyLabels.join(" | "));
+
+// Stundenvorhersage: hier ist die Uhrzeit richtig.
+const hourly = document.createElement("ha-os-card");
+hourly.setConfig({
+  type: "custom:ha-os-card", card_type: "weather", entity: "weather.zuhause",
+  forecast_type: "hourly", forecast_count: 3,
+});
+document.body.append(hourly);
+const hourlyHass = makeHass();
+hourlyHass.states["weather.zuhause"].attributes.forecast = [0, 1, 2].map((i) => ({
+  datetime: new Date(Date.now() + i * 3600e3).toISOString(),
+  temperature: 18 + i,
+  condition: "sunny",
+}));
+hourly.hass = hourlyHass;
+const hourlyLabels = labelsOf(hourly);
+check("Stundenvorhersage zeigt weiter Uhrzeiten", hourlyLabels.every((l) => /^\d{2}:\d{2}$/.test(l)),
+  hourlyLabels.join(" | "));
+
 console.log(failures === 0 ? "\nAlle Prüfungen bestanden.\n" : `\n${failures} FEHLER.\n`);
 process.exit(failures === 0 ? 0 : 1);

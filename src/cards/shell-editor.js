@@ -11,6 +11,7 @@
 
 import { normalizeShellConfig, createEmptyGrids, DEFAULT_GRID_WIDTHS } from "../shared/config.js";
 import { isEqualConfig, deepClone } from "../shared/utils.js";
+import { cardCatalog, stubConfigFor, createHaCardEditor } from "../shared/card-catalog.js";
 
 const EDITOR_TAG = "ha-os-shell-editor";
 
@@ -136,6 +137,30 @@ const STYLES = `
   .field { display: grid; gap: 5px; margin-bottom: 10px; }
   .field > label { font-size: 12px; color: var(--secondary-text-color); }
   .widths { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+  /* --- Kartenauswahl --- */
+  .picker { display: grid; gap: 8px; }
+  .picker-list {
+    max-height: 320px; overflow-y: auto; display: grid; gap: 4px;
+    border: 1px solid var(--divider-color, rgba(127,127,127,.3)); border-radius: 10px; padding: 6px;
+  }
+  .picker-item {
+    display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px;
+    border: 0; border-radius: 8px; background: none; cursor: pointer; font: inherit;
+    color: var(--primary-text-color); text-align: left;
+  }
+  .picker-item:hover { background: rgba(127,127,127,.14); }
+  .picker-item ha-icon { --mdc-icon-size: 20px; color: var(--secondary-text-color); flex: 0 0 20px; }
+  .picker-item .pi-text { min-width: 0; }
+  .picker-item .pi-name { font-size: 13px; font-weight: 600; }
+  .picker-item .pi-desc {
+    font-size: 11px; color: var(--secondary-text-color);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .picker-item .pi-tag {
+    margin-left: auto; flex: 0 0 auto; font-size: 10px; padding: 2px 6px; border-radius: 6px;
+    background: rgba(127,127,127,.18); color: var(--secondary-text-color);
+  }
 `;
 
 const el = (tag, className, text) => {
@@ -585,16 +610,83 @@ class HaOsShellEditor extends HTMLElement {
       );
 
       const addOther = el("button", "add");
-      addOther.append(icon("mdi:code-braces"), el("span", null, "Andere Karte (YAML)"));
-      addOther.addEventListener("click", () =>
-        this._mutate((draft) => {
-          draft.pages[pageIndex].grids[columnIndex].cards.push({ type: "entities", entities: [], haos_weight: 1 });
-        }, true)
-      );
+      addOther.append(icon("mdi:view-dashboard-outline"), el("span", null, "Andere Karte wählen"));
+      addOther.addEventListener("click", () => {
+        const key = `picker-${pageIndex}-${columnIndex}`;
+        this._openPicker = this._openPicker === key ? null : key;
+        this._render();
+      });
 
       addRow.append(addOwn, addOther);
       this._panel.append(addRow);
+
+      if (this._openPicker === `picker-${pageIndex}-${columnIndex}`) {
+        this._panel.append(
+          this._cardPicker(async (type) => {
+            const card = await stubConfigFor(type);
+            this._openPicker = null;
+            this._mutate((draft) => {
+              draft.pages[pageIndex].grids[columnIndex].cards.push({ ...card, haos_weight: 1 });
+            }, true);
+          })
+        );
+      }
     });
+  }
+
+  /**
+   * Auswahlliste aller installierten Karten.
+   *
+   * Eigenbau, weil `hui-card-picker` sich von außen nicht zuverlässig laden
+   * lässt – er kommt erst, wenn der Anwender in Home Assistant selbst auf
+   * "Karte hinzufügen" tippt. `window.customCards` dagegen ist immer da:
+   * dort trägt sich jede installierte Fremdkarte beim Laden selbst ein.
+   */
+  _cardPicker(onPick) {
+    const wrap = el("div", "picker");
+
+    const search = document.createElement("input");
+    search.className = "plain";
+    search.type = "search";
+    search.placeholder = "Karte suchen …";
+
+    const list = el("div", "picker-list");
+    const entries = cardCatalog();
+
+    const fill = (term) => {
+      const needle = term.trim().toLowerCase();
+      const hits = entries.filter(
+        (entry) =>
+          !needle ||
+          entry.name.toLowerCase().includes(needle) ||
+          entry.type.toLowerCase().includes(needle) ||
+          entry.description.toLowerCase().includes(needle)
+      );
+
+      list.replaceChildren();
+      if (!hits.length) {
+        list.append(el("div", "empty", "Keine Karte gefunden."));
+        return;
+      }
+
+      hits.forEach((entry) => {
+        const item = el("button", "picker-item");
+        const text = el("div", "pi-text");
+        text.append(el("div", "pi-name", entry.name), el("div", "pi-desc", entry.description || entry.type));
+        item.append(icon(entry.icon), text);
+        if (entry.custom) item.append(el("span", "pi-tag", "installiert"));
+        item.addEventListener("click", () => onPick(entry.type));
+        list.append(item);
+      });
+    };
+
+    // Kein _render() beim Tippen: der Editor würde neu aufgebaut und das
+    // Suchfeld verlöre nach jedem Zeichen den Fokus.
+    search.addEventListener("input", () => fill(search.value));
+    fill("");
+
+    wrap.append(search, list);
+    return wrap;
   }
 
   _cardLabel(card) {
@@ -633,8 +725,27 @@ class HaOsShellEditor extends HTMLElement {
       return wrap;
     }
 
+    // Home Assistants eigener Karteneditor. Er liefert für jede installierte
+    // Karte deren echte Eingabemaske – Entitätswähler, Farbwahl, alles.
+    const haEditor = createHaCardEditor({
+      hass: this._hass,
+      value: card,
+      onChange: (next) => write({ ...next, haos_weight: card.haos_weight }),
+    });
+
+    if (haEditor) {
+      wrap.append(haEditor);
+      wrap.append(this._weightField(card, write));
+      return wrap;
+    }
+
     wrap.append(
-      el("p", "hint", "Konfiguration dieser Karte als YAML – genau wie im normalen Home-Assistant-Karteneditor.")
+      el(
+        "p",
+        "hint",
+        "Der Karteneditor von Home Assistant steht hier nicht zur Verfügung – " +
+          "Konfiguration deshalb als YAML."
+      )
     );
 
     const yamlEditor = document.createElement("ha-yaml-editor");
@@ -662,6 +773,11 @@ class HaOsShellEditor extends HTMLElement {
       wrap.append(area);
     }
 
+    wrap.append(this._weightField(card, write));
+    return wrap;
+  }
+
+  _weightField(card, write) {
     const weight = el("div", "field");
     weight.append(el("label", null, "Höhenfaktor (1 = Standardhöhe)"));
     const input = el("input", "plain");
@@ -672,9 +788,7 @@ class HaOsShellEditor extends HTMLElement {
     input.value = card.haos_weight ?? 1;
     input.addEventListener("change", () => write({ ...card, haos_weight: Number(input.value) }));
     weight.append(input);
-    wrap.append(weight);
-
-    return wrap;
+    return weight;
   }
 }
 

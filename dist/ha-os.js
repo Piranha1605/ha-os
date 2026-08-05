@@ -1,4 +1,4 @@
-/* HA-OS 0.2.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.3.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -632,9 +632,9 @@ var el = (tag, className, text2) => {
   if (text2 !== void 0) node.textContent = text2;
   return node;
 };
-var iconEl = (icon3) => {
+var iconEl = (icon4) => {
   const node = document.createElement("ha-icon");
-  node.setAttribute("icon", icon3);
+  node.setAttribute("icon", icon4);
   return node;
 };
 var HaOsShell = class extends HTMLElement {
@@ -1037,8 +1037,8 @@ var HaOsShell = class extends HTMLElement {
     this._badges.clear();
     badges.forEach((badge) => {
       const root = el("button", "badge");
-      const icon3 = iconEl(badge.icon || "mdi:circle-outline");
-      root.append(icon3);
+      const icon4 = iconEl(badge.icon || "mdi:circle-outline");
+      root.append(icon4);
       let name = null;
       let state = null;
       if (badge.show_state || badge.name) {
@@ -1054,13 +1054,13 @@ var HaOsShell = class extends HTMLElement {
         root.classList.add("icon-only");
       }
       root.addEventListener("click", () => handleAction(this, this._hass, badge.tap_action, badge.entity));
-      this._badges.set(badge.id, { root, icon: icon3, name, state, badge });
+      this._badges.set(badge.id, { root, icon: icon4, name, state, badge });
       this._badgeList.append(root);
     });
     this._updateBadgeStates();
   }
   _updateBadgeStates() {
-    this._badges.forEach(({ root, icon: icon3, name, state, badge }) => {
+    this._badges.forEach(({ root, icon: icon4, name, state, badge }) => {
       if (badge.kind === "link") {
         root.classList.remove("is-on", "is-off", "is-unavailable");
         if (name) name.textContent = badge.name || "Link";
@@ -1072,7 +1072,7 @@ var HaOsShell = class extends HTMLElement {
       const label = badge.name || friendlyName(badge.entity, entityState);
       root.classList.remove("is-on", "is-off", "is-unavailable");
       root.classList.add(statusClass(entityState));
-      icon3.setAttribute("icon", badge.icon || domainIcon(badge.entity, entityState));
+      icon4.setAttribute("icon", badge.icon || domainIcon(badge.entity, entityState));
       if (name) name.textContent = label;
       if (state) state.textContent = formatState(this._hass, badge.entity);
       root.title = label;
@@ -1290,6 +1290,71 @@ registerCard({
   documentationURL: "https://github.com/"
 });
 
+// src/shared/card-catalog.js
+var STANDARD_CARDS = [
+  { type: "tile", name: "Kachel", description: "Kompakte Kachel mit Symbol, Name und Zustand.", icon: "mdi:card-outline" },
+  { type: "entities", name: "Entitäten", description: "Liste mehrerer Entitäten untereinander.", icon: "mdi:format-list-bulleted" },
+  { type: "button", name: "Schaltfläche", description: "Großer Knopf mit Symbol.", icon: "mdi:gesture-tap-button" },
+  { type: "light", name: "Licht", description: "Helligkeitsregler mit Farbwahl.", icon: "mdi:lightbulb" },
+  { type: "thermostat", name: "Thermostat", description: "Temperaturregler mit Drehknopf.", icon: "mdi:thermostat" },
+  { type: "weather-forecast", name: "Wetter", description: "Aktuelles Wetter mit Vorhersage.", icon: "mdi:weather-partly-cloudy" },
+  { type: "media-control", name: "Medien", description: "Steuerung eines Media Players.", icon: "mdi:speaker" },
+  { type: "history-graph", name: "Verlauf", description: "Verlaufskurve über die Zeit.", icon: "mdi:chart-line" },
+  { type: "statistic", name: "Statistik", description: "Ein einzelner statistischer Wert.", icon: "mdi:chart-box-outline" },
+  { type: "gauge", name: "Messuhr", description: "Rundanzeige für einen Messwert.", icon: "mdi:gauge" },
+  { type: "picture-entity", name: "Bild mit Entität", description: "Bild, das auf einen Zustand reagiert.", icon: "mdi:image" },
+  { type: "map", name: "Karte", description: "Standorte auf einer Landkarte.", icon: "mdi:map" },
+  { type: "markdown", name: "Text", description: "Freier Text mit Vorlagen.", icon: "mdi:text" },
+  { type: "iframe", name: "Webseite", description: "Eingebettete Webseite.", icon: "mdi:web" },
+  { type: "calendar", name: "Kalender", description: "Termine aus Kalender-Entitäten.", icon: "mdi:calendar" },
+  { type: "conditional", name: "Bedingt", description: "Zeigt eine Karte nur unter einer Bedingung.", icon: "mdi:eye-check-outline" },
+  { type: "vertical-stack", name: "Stapel senkrecht", description: "Mehrere Karten untereinander.", icon: "mdi:view-sequential" },
+  { type: "horizontal-stack", name: "Stapel waagerecht", description: "Mehrere Karten nebeneinander.", icon: "mdi:view-column" },
+  { type: "grid", name: "Raster", description: "Karten in einem Raster.", icon: "mdi:view-grid" }
+];
+var cardCatalog = () => {
+  const custom = (window.customCards || []).filter((entry) => entry?.type && !String(entry.type).startsWith("ha-os-")).map((entry) => ({
+    type: `custom:${String(entry.type).replace(/^custom:/, "")}`,
+    name: entry.name || entry.type,
+    description: entry.description || "",
+    icon: "mdi:puzzle-outline",
+    custom: true
+  }));
+  const seen = /* @__PURE__ */ new Set();
+  return [...STANDARD_CARDS, ...custom].filter((entry) => {
+    if (seen.has(entry.type)) return false;
+    seen.add(entry.type);
+    return true;
+  });
+};
+var stubConfigFor = async (type) => {
+  const bare = String(type).replace(/^custom:/, "");
+  const element = customElements.get(bare);
+  try {
+    const stub = await element?.getStubConfig?.();
+    if (stub) return { ...stub, type };
+  } catch (_error) {
+  }
+  if (type === "entities") return { type, entities: [] };
+  if (type === "markdown") return { type, content: "Text hier eintragen." };
+  if (["vertical-stack", "horizontal-stack", "grid"].includes(type)) return { type, cards: [] };
+  return { type };
+};
+var createHaCardEditor = ({ hass, value, onChange }) => {
+  if (!customElements.get("hui-card-element-editor")) return null;
+  const editor = document.createElement("hui-card-element-editor");
+  editor.hass = hass;
+  editor.lovelace = { config: { views: [] }, editMode: true, saveConfig: async () => {
+  } };
+  editor.value = value;
+  editor.addEventListener("config-changed", (event) => {
+    event.stopPropagation();
+    const next = event.detail?.config;
+    if (next) onChange(next);
+  });
+  return editor;
+};
+
 // src/cards/shell-editor.js
 var EDITOR_TAG2 = "ha-os-shell-editor";
 var LABELS = {
@@ -1407,6 +1472,30 @@ var STYLES2 = `
   .field { display: grid; gap: 5px; margin-bottom: 10px; }
   .field > label { font-size: 12px; color: var(--secondary-text-color); }
   .widths { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+  /* --- Kartenauswahl --- */
+  .picker { display: grid; gap: 8px; }
+  .picker-list {
+    max-height: 320px; overflow-y: auto; display: grid; gap: 4px;
+    border: 1px solid var(--divider-color, rgba(127,127,127,.3)); border-radius: 10px; padding: 6px;
+  }
+  .picker-item {
+    display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px;
+    border: 0; border-radius: 8px; background: none; cursor: pointer; font: inherit;
+    color: var(--primary-text-color); text-align: left;
+  }
+  .picker-item:hover { background: rgba(127,127,127,.14); }
+  .picker-item ha-icon { --mdc-icon-size: 20px; color: var(--secondary-text-color); flex: 0 0 20px; }
+  .picker-item .pi-text { min-width: 0; }
+  .picker-item .pi-name { font-size: 13px; font-weight: 600; }
+  .picker-item .pi-desc {
+    font-size: 11px; color: var(--secondary-text-color);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .picker-item .pi-tag {
+    margin-left: auto; flex: 0 0 auto; font-size: 10px; padding: 2px 6px; border-radius: 6px;
+    background: rgba(127,127,127,.18); color: var(--secondary-text-color);
+  }
 `;
 var el2 = (tag, className, text2) => {
   const node = document.createElement(tag);
@@ -1813,16 +1902,67 @@ var HaOsShellEditor = class extends HTMLElement {
         }, true)
       );
       const addOther = el2("button", "add");
-      addOther.append(icon("mdi:code-braces"), el2("span", null, "Andere Karte (YAML)"));
-      addOther.addEventListener(
-        "click",
-        () => this._mutate((draft) => {
-          draft.pages[pageIndex].grids[columnIndex].cards.push({ type: "entities", entities: [], haos_weight: 1 });
-        }, true)
-      );
+      addOther.append(icon("mdi:view-dashboard-outline"), el2("span", null, "Andere Karte wählen"));
+      addOther.addEventListener("click", () => {
+        const key = `picker-${pageIndex}-${columnIndex}`;
+        this._openPicker = this._openPicker === key ? null : key;
+        this._render();
+      });
       addRow.append(addOwn, addOther);
       this._panel.append(addRow);
+      if (this._openPicker === `picker-${pageIndex}-${columnIndex}`) {
+        this._panel.append(
+          this._cardPicker(async (type) => {
+            const card = await stubConfigFor(type);
+            this._openPicker = null;
+            this._mutate((draft) => {
+              draft.pages[pageIndex].grids[columnIndex].cards.push({ ...card, haos_weight: 1 });
+            }, true);
+          })
+        );
+      }
     });
+  }
+  /**
+   * Auswahlliste aller installierten Karten.
+   *
+   * Eigenbau, weil `hui-card-picker` sich von außen nicht zuverlässig laden
+   * lässt – er kommt erst, wenn der Anwender in Home Assistant selbst auf
+   * "Karte hinzufügen" tippt. `window.customCards` dagegen ist immer da:
+   * dort trägt sich jede installierte Fremdkarte beim Laden selbst ein.
+   */
+  _cardPicker(onPick) {
+    const wrap = el2("div", "picker");
+    const search = document.createElement("input");
+    search.className = "plain";
+    search.type = "search";
+    search.placeholder = "Karte suchen …";
+    const list = el2("div", "picker-list");
+    const entries = cardCatalog();
+    const fill = (term) => {
+      const needle = term.trim().toLowerCase();
+      const hits = entries.filter(
+        (entry) => !needle || entry.name.toLowerCase().includes(needle) || entry.type.toLowerCase().includes(needle) || entry.description.toLowerCase().includes(needle)
+      );
+      list.replaceChildren();
+      if (!hits.length) {
+        list.append(el2("div", "empty", "Keine Karte gefunden."));
+        return;
+      }
+      hits.forEach((entry) => {
+        const item = el2("button", "picker-item");
+        const text2 = el2("div", "pi-text");
+        text2.append(el2("div", "pi-name", entry.name), el2("div", "pi-desc", entry.description || entry.type));
+        item.append(icon(entry.icon), text2);
+        if (entry.custom) item.append(el2("span", "pi-tag", "installiert"));
+        item.addEventListener("click", () => onPick(entry.type));
+        list.append(item);
+      });
+    };
+    search.addEventListener("input", () => fill(search.value));
+    fill("");
+    wrap.append(search, list);
+    return wrap;
   }
   _cardLabel(card) {
     if (card.type === "custom:ha-os-card") return `HA-OS · ${card.card_type || "unbestimmt"}`;
@@ -1854,8 +1994,22 @@ var HaOsShellEditor = class extends HTMLElement {
       wrap.append(editor);
       return wrap;
     }
+    const haEditor = createHaCardEditor({
+      hass: this._hass,
+      value: card,
+      onChange: (next) => write({ ...next, haos_weight: card.haos_weight })
+    });
+    if (haEditor) {
+      wrap.append(haEditor);
+      wrap.append(this._weightField(card, write));
+      return wrap;
+    }
     wrap.append(
-      el2("p", "hint", "Konfiguration dieser Karte als YAML – genau wie im normalen Home-Assistant-Karteneditor.")
+      el2(
+        "p",
+        "hint",
+        "Der Karteneditor von Home Assistant steht hier nicht zur Verfügung – Konfiguration deshalb als YAML."
+      )
     );
     const yamlEditor = document.createElement("ha-yaml-editor");
     if (typeof yamlEditor.setConfig === "function" || "defaultValue" in yamlEditor || customElements.get("ha-yaml-editor")) {
@@ -1879,6 +2033,10 @@ var HaOsShellEditor = class extends HTMLElement {
       });
       wrap.append(area);
     }
+    wrap.append(this._weightField(card, write));
+    return wrap;
+  }
+  _weightField(card, write) {
     const weight = el2("div", "field");
     weight.append(el2("label", null, "Höhenfaktor (1 = Standardhöhe)"));
     const input = el2("input", "plain");
@@ -1889,8 +2047,7 @@ var HaOsShellEditor = class extends HTMLElement {
     input.value = card.haos_weight ?? 1;
     input.addEventListener("change", () => write({ ...card, haos_weight: Number(input.value) }));
     weight.append(input);
-    wrap.append(weight);
-    return wrap;
+    return weight;
   }
 };
 if (!customElements.get(EDITOR_TAG2)) customElements.define(EDITOR_TAG2, HaOsShellEditor);
@@ -1970,6 +2127,40 @@ var STYLES3 = `
   }
   .is-on .switch { background: var(--haos-accent, #0a84ff); }
   .is-on .switch::after { transform: translateX(19px); }
+
+  /* Ohne !important gewinnen die display-Regeln der Bedienelemente. */
+  [hidden] { display: none !important; }
+
+  /* --- Taster (button, input_button, scene, script) ---
+     Diese Entitäten haben keinen Zustand, den man umschalten könnte. Sie
+     brauchen einen Druckknopf mit sichtbarer Rückmeldung, weil sonst nichts
+     erkennen lässt, ob der Druck angekommen ist. */
+  .press-btn {
+    width: 46px; height: 46px; flex: 0 0 46px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+    border: 1px solid rgba(var(--haos-entity-border-rgb, 255,255,255), .22);
+    transition: transform .12s ease, background .18s ease, color .18s ease;
+  }
+  .press-btn:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .18); }
+  .press-btn:active, .press-btn.is-pressed {
+    transform: scale(.88);
+    background: var(--haos-accent, #0a84ff);
+    color: #fff;
+    box-shadow: 0 0 18px color-mix(in srgb, var(--haos-accent, #0a84ff) 55%, transparent);
+  }
+  .press-btn ha-icon { --mdc-icon-size: 22px; }
+
+  /* --- Rollo/Tor (cover) --- */
+  .cover-ctrl { display: flex; gap: 6px; }
+  .cover-ctrl button {
+    width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+    transition: background .18s ease;
+  }
+  .cover-ctrl button:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .18); }
+  .cover-ctrl button:active { background: var(--haos-accent, #0a84ff); color: #fff; }
+  .cover-ctrl ha-icon { --mdc-icon-size: 18px; }
 
   /* --- Slider --- */
   .slider-track { position: relative; height: 40px; border-radius: 14px; overflow: hidden; background: rgba(var(--haos-text-rgb, 255,255,255), .10); }
@@ -2075,6 +2266,40 @@ var formatDuration = (seconds) => {
   return `${Math.floor(total / 60)}:${pad(total % 60)}`;
 };
 var numeric = (value) => value === null || value === void 0 || value === "" ? NaN : Number(value);
+var PRESS_DOMAINS = /* @__PURE__ */ new Set(["button", "input_button", "scene", "script"]);
+var buttonKind = (entityId) => {
+  const domain = domainOf(entityId);
+  if (PRESS_DOMAINS.has(domain)) return "press";
+  if (domain === "cover") return "cover";
+  return "toggle";
+};
+var runPress = (ctx) => {
+  const entityId = ctx.config.entity;
+  if (!entityId) return;
+  const domain = domainOf(entityId);
+  const service = domain === "button" || domain === "input_button" ? "press" : "turn_on";
+  ctx.hass?.callService(domain, service, { entity_id: entityId });
+  const node = ctx.nodes.press;
+  if (!node) return;
+  node.classList.add("is-pressed");
+  clearTimeout(ctx.nodes.pressTimer);
+  ctx.nodes.pressTimer = setTimeout(() => node.classList.remove("is-pressed"), 350);
+};
+var forecastLabel = (datetime, forecastType) => {
+  const when = new Date(datetime);
+  if (Number.isNaN(when.getTime())) return "";
+  if (forecastType === "daily" || forecastType === "twice_daily") {
+    const today = /* @__PURE__ */ new Date();
+    const sameDay = when.getDate() === today.getDate() && when.getMonth() === today.getMonth() && when.getFullYear() === today.getFullYear();
+    if (sameDay) return "Heute";
+    try {
+      return when.toLocaleDateString(void 0, { weekday: "short" });
+    } catch (_error) {
+      return ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"][when.getDay()];
+    }
+  }
+  return `${pad(when.getHours())}:${pad(when.getMinutes())}`;
+};
 var drawWeatherGraph = (ctx, items) => {
   const graph = ctx.nodes.graph;
   if (!graph) return;
@@ -2128,23 +2353,66 @@ var renderers = {
       ctx.nodes.subtitle = el3("div", "subtitle");
       text2.append(ctx.nodes.title, ctx.nodes.subtitle);
       row.append(ctx.nodes.chip, text2, el3("div", "spacer"));
-      if (ctx.config.show_toggle !== false) {
-        ctx.nodes.toggle = el3("div", "switch");
-        row.append(ctx.nodes.toggle);
-      }
+      ctx.nodes.toggle = el3("div", "switch");
+      ctx.nodes.press = el3("button", "press-btn");
+      ctx.nodes.pressIcon = icon2("mdi:gesture-tap-button");
+      ctx.nodes.press.append(ctx.nodes.pressIcon);
+      ctx.nodes.press.addEventListener("click", (event) => {
+        event.stopPropagation();
+        runPress(ctx);
+      });
+      const coverButton = (label, symbol, service) => {
+        const node = el3("button");
+        node.append(icon2(symbol));
+        node.title = label;
+        node.setAttribute("aria-label", label);
+        node.addEventListener("click", (event) => {
+          event.stopPropagation();
+          if (ctx.config.entity) ctx.hass?.callService("cover", service, { entity_id: ctx.config.entity });
+        });
+        return node;
+      };
+      ctx.nodes.cover = el3("div", "cover-ctrl");
+      ctx.nodes.cover.append(
+        coverButton("Auf", "mdi:arrow-up", "open_cover"),
+        coverButton("Stopp", "mdi:stop", "stop_cover"),
+        coverButton("Zu", "mdi:arrow-down", "close_cover")
+      );
+      row.append(ctx.nodes.toggle, ctx.nodes.press, ctx.nodes.cover);
       root.append(row);
       ctx.card.classList.add("interactive");
-      ctx.card.addEventListener(
-        "click",
-        () => handleAction(ctx.host, ctx.hass, ctx.config.tap_action || { action: "toggle" }, ctx.config.entity)
-      );
+      ctx.card.addEventListener("click", () => {
+        const kind = buttonKind(ctx.config.entity);
+        if (ctx.config.tap_action) {
+          handleAction(ctx.host, ctx.hass, ctx.config.tap_action, ctx.config.entity);
+          return;
+        }
+        if (kind === "press") {
+          runPress(ctx);
+          return;
+        }
+        handleAction(ctx.host, ctx.hass, { action: kind === "cover" ? "more-info" : "toggle" }, ctx.config.entity);
+      });
       return root;
     },
     update(ctx) {
-      const state = ctx.hass?.states?.[ctx.config.entity];
-      ctx.nodes.chipIcon.setAttribute("icon", ctx.config.icon || domainIcon(ctx.config.entity, state));
-      ctx.nodes.title.textContent = ctx.config.name || friendlyName(ctx.config.entity, state);
-      ctx.nodes.subtitle.textContent = ctx.config.show_state === false ? "" : formatState(ctx.hass, ctx.config.entity);
+      const entityId = ctx.config.entity;
+      const state = ctx.hass?.states?.[entityId];
+      const kind = buttonKind(entityId);
+      const stateId = ctx.config.state_entity || entityId;
+      ctx.nodes.chipIcon.setAttribute("icon", ctx.config.icon || domainIcon(entityId, state));
+      ctx.nodes.title.textContent = ctx.config.name || friendlyName(entityId, state);
+      ctx.nodes.subtitle.textContent = ctx.config.show_state === false ? "" : formatState(ctx.hass, stateId);
+      const visible = ctx.config.show_toggle !== false;
+      ctx.nodes.toggle.hidden = !(visible && kind === "toggle");
+      ctx.nodes.press.hidden = !(visible && kind === "press");
+      ctx.nodes.cover.hidden = !(visible && kind === "cover");
+      if (kind === "press") {
+        ctx.nodes.pressIcon.setAttribute("icon", ctx.config.press_icon || "mdi:gesture-tap-button");
+      }
+    },
+    disconnect(ctx) {
+      clearTimeout(ctx.nodes.pressTimer);
     }
   },
   // ------------------------------------------------------------- Slider
@@ -2420,8 +2688,7 @@ var renderers = {
         const value = Math.round(numeric(entry?.temperature));
         node.value.textContent = Number.isFinite(value) ? `${value}°` : "--";
         node.symbol.setAttribute("icon", conditionIcons[entry.condition] || "mdi:weather-cloudy");
-        const when = new Date(entry.datetime);
-        node.label.textContent = Number.isNaN(when.getTime()) ? "" : `${pad(when.getHours())}:${pad(when.getMinutes())}`;
+        node.label.textContent = forecastLabel(entry?.datetime, ctx.config.forecast_type);
       });
       drawWeatherGraph(ctx, items);
     },
@@ -2820,7 +3087,7 @@ var HaOsCard = class extends HTMLElement {
       return;
     }
     this._ctx.config = config;
-    const sourceChanged = previous?.entity !== config.entity || String(previous?.entities || "") !== String(config.entities || "") || previous?.days !== config.days;
+    const sourceChanged = previous?.entity !== config.entity || previous?.state_entity !== config.state_entity || String(previous?.entities || "") !== String(config.entities || "") || previous?.days !== config.days;
     if (sourceChanged) {
       renderers[config.card_type].disconnect?.(this._ctx);
       ["forecastData", "forecastUnsub", "history", "historyLoaded", "events_data", "eventsLoaded"].forEach(
@@ -2851,7 +3118,7 @@ var HaOsCard = class extends HTMLElement {
   /** Entitäten, auf die diese Karte tatsächlich reagieren muss. */
   _watchedEntities() {
     const config = this._config || {};
-    const ids = [config.entity, ...config.entities || []].filter(Boolean);
+    const ids = [config.entity, config.state_entity, ...config.entities || []].filter(Boolean);
     if (config.card_type === "members" && !config.entities?.length) {
       return Object.keys(this._hass?.states || {}).filter((id) => id.startsWith("person."));
     }
@@ -2910,9 +3177,10 @@ var HaOsCard = class extends HTMLElement {
       console.error(`[${TAG2}] Update fehlgeschlagen`, error);
       return;
     }
-    const state = this._hass.states?.[this._config.entity];
+    const statusId = this._config.state_entity || this._config.entity;
+    const state = this._hass.states?.[statusId];
     this._ctx.card.classList.remove("is-on", "is-off", "is-unavailable");
-    if (this._config.entity) this._ctx.card.classList.add(statusClass(state));
+    if (statusId) this._ctx.card.classList.add(statusClass(state));
   }
 };
 if (!customElements.get(TAG2)) customElements.define(TAG2, HaOsCard);
@@ -2953,7 +3221,14 @@ var ACTION = {
   schema: [{ name: "tap_action", selector: { ui_action: {} } }]
 };
 var SCHEMAS = {
-  button: [entityField(), APPEARANCE, { name: "show_state", selector: { boolean: {} } }, { name: "show_toggle", selector: { boolean: {} } }, ACTION],
+  button: [
+    entityField(),
+    APPEARANCE,
+    { name: "state_entity", selector: { entity: {} } },
+    bool("show_state"),
+    bool("show_toggle"),
+    ACTION
+  ],
   slider: [entityField(["light", "cover", "fan", "media_player", "number", "input_number"]), APPEARANCE],
   thermostat: [entityField(["climate"]), APPEARANCE],
   weather: [
@@ -3020,7 +3295,8 @@ var LABELS2 = {
   name: "Name",
   icon: "Symbol",
   show_state: "Zustand anzeigen",
-  show_toggle: "Schalter anzeigen",
+  show_toggle: "Bedienelement anzeigen",
+  state_entity: "Zustand von anderer Entität",
   tap_action: "Tippen",
   darstellung: "Darstellung",
   aktion: "Aktion",
@@ -3040,7 +3316,9 @@ var HELPERS2 = {
   haos_weight: "1 entspricht der Standard-Kartenhöhe der Shell. 2 ist doppelt so hoch.",
   time_zone: "Leer lassen für die Zeitzone des Browsers, z. B. Europe/Berlin.",
   days: "Zeitraum, der geladen wird.",
-  show_graph: "Temperaturverlauf über der Vorhersagezeile. Standardmäßig an."
+  show_graph: "Temperaturverlauf über der Vorhersagezeile. Standardmäßig an.",
+  show_toggle: "Die Form richtet sich nach der Entität: Umschalter, Taster oder Auf/Stopp/Zu.",
+  state_entity: "Leer lassen, wenn die Entität selbst einen Zustand hat. Tasten (button) haben keinen – hier dann den Sensor eintragen, der den echten Zustand meldet, z. B. den Türkontakt."
 };
 var HaOsCardEditor = class extends HTMLElement {
   constructor() {
@@ -3109,8 +3387,474 @@ var HaOsCardEditor = class extends HTMLElement {
 };
 if (!customElements.get(EDITOR_TAG4)) customElements.define(EDITOR_TAG4, HaOsCardEditor);
 
+// src/cards/grid-card.js
+var TAG3 = "ha-os-grid";
+var EDITOR_TAG5 = "ha-os-grid-editor";
+var SLOTS = 4;
+var STYLES4 = `
+  :host { display: block; height: 100%; }
+  * { box-sizing: border-box; }
+
+  .grid {
+    height: 100%; display: grid; grid-template-rows: 1fr 1fr;
+    padding: var(--haos-grid-padding, 0);
+  }
+  .grid.framed {
+    padding: var(--haos-grid-padding, 12px);
+    color: var(--haos-text, #fff);
+    ${CARD_SURFACE_CSS}
+  }
+
+  .slot { min-width: 0; min-height: 0; display: block; }
+  .slot > * { height: 100%; }
+
+  .empty {
+    display: grid; place-items: center; gap: 6px; height: 100%;
+    border: 1px dashed rgba(var(--haos-text-rgb, 255,255,255), .28);
+    border-radius: var(--haos-entity-radius, 14px);
+    color: rgba(var(--haos-text-rgb, 255,255,255), .5);
+    font-size: 12px; text-align: center; padding: 8px;
+  }
+
+  @media (max-width: 600px) {
+    /* Zwei Spalten sind auf dem Telefon zu schmal – dort untereinander. */
+    .grid.responsive { grid-template-columns: 1fr !important; grid-template-rows: repeat(4, 1fr); }
+  }
+`;
+var clampRatio = (value, fallback) => {
+  const number2 = Number(value);
+  return Number.isFinite(number2) && number2 > 0 ? number2 : fallback;
+};
+var HaOsGridCard = class extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = null;
+    this._hass = null;
+    this._slots = [];
+    this._elements = [];
+    this._configs = [];
+  }
+  static getConfigElement() {
+    return document.createElement(EDITOR_TAG5);
+  }
+  static getStubConfig() {
+    return { type: `custom:${TAG3}`, column_widths: [1, 1], gap: 12, cards: [] };
+  }
+  setConfig(config) {
+    this._config = {
+      column_widths: [1, 1],
+      gap: 12,
+      framed: false,
+      responsive: true,
+      cards: [],
+      ...config
+    };
+    if (!this._grid) this._build();
+    this._applyLayout();
+    this._syncCards();
+  }
+  set hass(hass) {
+    this._hass = hass;
+    this._elements.forEach((element) => {
+      if (element) element.hass = hass;
+    });
+  }
+  get hass() {
+    return this._hass;
+  }
+  getCardSize() {
+    return 6;
+  }
+  getGridOptions() {
+    return { columns: "full", rows: 8, min_columns: 6 };
+  }
+  _build() {
+    const style = document.createElement("style");
+    style.textContent = STYLES4;
+    this._grid = document.createElement("div");
+    this._grid.className = "grid";
+    this._slots = Array.from({ length: SLOTS }, () => {
+      const slot = document.createElement("div");
+      slot.className = "slot";
+      this._grid.append(slot);
+      return slot;
+    });
+    this.shadowRoot.replaceChildren(style, this._grid);
+  }
+  _applyLayout() {
+    const [left, right] = this._config.column_widths || [1, 1];
+    this._grid.style.gridTemplateColumns = `${clampRatio(left, 1)}fr ${clampRatio(right, 1)}fr`;
+    this._grid.style.gap = `${clampRatio(this._config.gap, 12)}px`;
+    this._grid.classList.toggle("framed", this._config.framed === true);
+    this._grid.classList.toggle("responsive", this._config.responsive !== false);
+  }
+  async _syncCards() {
+    const wanted = this._config.cards || [];
+    for (let index = 0; index < SLOTS; index += 1) {
+      const config = wanted[index];
+      const slot = this._slots[index];
+      if (!config || !config.type) {
+        if (this._elements[index]) {
+          this._elements[index] = null;
+          this._configs[index] = null;
+          slot.replaceChildren(this._placeholder(index));
+        } else if (!slot.firstElementChild) {
+          slot.replaceChildren(this._placeholder(index));
+        }
+        continue;
+      }
+      if (this._elements[index] && isEqualConfig(this._configs[index], config)) continue;
+      const element = await createCardElement(config);
+      if (this._hass) element.hass = this._hass;
+      this._elements[index] = element;
+      this._configs[index] = config;
+      slot.replaceChildren(element);
+    }
+  }
+  _placeholder(index) {
+    const node = document.createElement("div");
+    node.className = "empty";
+    node.textContent = `Platz ${index + 1} – im Editor eine Karte wählen`;
+    return node;
+  }
+};
+if (!customElements.get(TAG3)) customElements.define(TAG3, HaOsGridCard);
+registerCard({
+  type: TAG3,
+  name: "HA-OS 2×2-Raster",
+  description: "Vier Plätze in zwei Spalten und zwei Reihen, jeder frei mit einer beliebigen Karte belegbar.",
+  preview: false
+});
+
+// src/cards/grid-editor.js
+var STYLES5 = `
+  :host { display: block; }
+  * { box-sizing: border-box; }
+  button { font: inherit; cursor: pointer; }
+
+  .wrap { display: grid; gap: 12px; }
+  .hint { margin: 0; font-size: 12px; line-height: 1.45; color: var(--secondary-text-color); }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .field { display: grid; gap: 5px; }
+  .field > label { font-size: 12px; color: var(--secondary-text-color); }
+  input.plain {
+    width: 100%; padding: 9px 10px; font: inherit; color: var(--primary-text-color);
+    background: var(--secondary-background-color, rgba(127,127,127,.08));
+    border: 1px solid var(--divider-color, rgba(127,127,127,.3)); border-radius: 8px;
+  }
+  .toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+
+  .slot { border: 1px solid var(--divider-color, rgba(127,127,127,.3)); border-radius: 10px; overflow: hidden; }
+  .slot > header {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    background: var(--secondary-background-color, rgba(127,127,127,.08));
+  }
+  .slot > header .label { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .slot > header .pos { font-size: 11px; font-weight: 400; color: var(--secondary-text-color); }
+  .slot > .body { padding: 10px; }
+  .slot > .body[hidden] { display: none; }
+
+  .mini { width: 32px; height: 32px; flex: 0 0 32px; border: 0; border-radius: 8px; background: none; color: var(--secondary-text-color); display: grid; place-items: center; }
+  .mini:hover { background: rgba(127,127,127,.16); color: var(--primary-text-color); }
+  .mini.danger:hover { color: var(--error-color, #db4437); }
+  .mini ha-icon { --mdc-icon-size: 18px; }
+
+  .choose {
+    width: 100%; padding: 12px; border: 1px dashed var(--divider-color, rgba(127,127,127,.4));
+    border-radius: 10px; background: none; color: var(--primary-color);
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .choose:hover { background: rgba(127,127,127,.08); }
+
+  .picker { display: grid; gap: 8px; }
+  .picker-list {
+    max-height: 300px; overflow-y: auto; display: grid; gap: 4px;
+    border: 1px solid var(--divider-color, rgba(127,127,127,.3)); border-radius: 10px; padding: 6px;
+  }
+  .picker-item {
+    display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px;
+    border: 0; border-radius: 8px; background: none; color: var(--primary-text-color); text-align: left;
+  }
+  .picker-item:hover { background: rgba(127,127,127,.14); }
+  .picker-item ha-icon { --mdc-icon-size: 20px; color: var(--secondary-text-color); flex: 0 0 20px; }
+  .picker-item .pi-name { font-size: 13px; font-weight: 600; }
+  .picker-item .pi-desc { font-size: 11px; color: var(--secondary-text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .picker-item .pi-tag { margin-left: auto; font-size: 10px; padding: 2px 6px; border-radius: 6px; background: rgba(127,127,127,.18); color: var(--secondary-text-color); }
+
+  .empty { padding: 12px; text-align: center; font-size: 12px; color: var(--secondary-text-color); }
+`;
+var el4 = (tag, className, text2) => {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text2 !== void 0) node.textContent = text2;
+  return node;
+};
+var icon3 = (name) => {
+  const node = document.createElement("ha-icon");
+  node.setAttribute("icon", name);
+  return node;
+};
+var miniButton2 = (symbol, title, onClick, className = "mini") => {
+  const node = el4("button", className);
+  node.title = title;
+  node.setAttribute("aria-label", title);
+  node.append(icon3(symbol));
+  node.addEventListener("click", onClick);
+  return node;
+};
+var labelFor = (card) => {
+  if (!card?.type) return "Leer";
+  const entry = cardCatalog().find((item) => item.type === card.type);
+  return entry ? entry.name : card.type;
+};
+var HaOsGridEditor = class extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = null;
+    this._hass = null;
+    this._open = null;
+    this._picking = null;
+  }
+  setConfig(config) {
+    const next = {
+      column_widths: [1, 1],
+      gap: 12,
+      framed: false,
+      responsive: true,
+      cards: [],
+      ...config
+    };
+    if (isEqualConfig(next, this._config) && this._root) return;
+    this._config = next;
+    this._render();
+  }
+  set hass(hass) {
+    this._hass = hass;
+    if (!this._root && this._config) this._render();
+  }
+  get hass() {
+    return this._hass;
+  }
+  _emit() {
+    this.dispatchEvent(
+      new CustomEvent("config-changed", {
+        detail: { config: this._config },
+        bubbles: true,
+        composed: true
+      })
+    );
+  }
+  /** @param structural true, wenn sich der Aufbau ändert und neu gezeichnet werden muss. */
+  _mutate(change, structural = false) {
+    const draft = deepClone(this._config);
+    change(draft);
+    this._config = draft;
+    this._emit();
+    if (structural) this._render();
+  }
+  _render() {
+    if (!this._root) {
+      const style = document.createElement("style");
+      style.textContent = STYLES5;
+      this._root = el4("div", "wrap");
+      this.shadowRoot.replaceChildren(style, this._root);
+    }
+    this._root.replaceChildren();
+    this._root.append(
+      el4(
+        "p",
+        "hint",
+        "Vier Plätze in zwei Spalten und zwei Reihen. In jeden Platz passt jede installierte Karte."
+      )
+    );
+    const row = el4("div", "row2");
+    row.append(
+      this._numberField(
+        "Breite linke Spalte",
+        this._config.column_widths?.[0] ?? 1,
+        (value) => this._mutate((draft) => {
+          draft.column_widths = [value, draft.column_widths?.[1] ?? 1];
+        })
+      ),
+      this._numberField(
+        "Breite rechte Spalte",
+        this._config.column_widths?.[1] ?? 1,
+        (value) => this._mutate((draft) => {
+          draft.column_widths = [draft.column_widths?.[0] ?? 1, value];
+        })
+      )
+    );
+    this._root.append(row);
+    this._root.append(
+      this._numberField(
+        "Abstand in px",
+        this._config.gap ?? 12,
+        (value) => this._mutate((draft) => {
+          draft.gap = value;
+        }),
+        0,
+        60,
+        1
+      )
+    );
+    this._root.append(
+      this._switchField(
+        "Eigene Glasfläche um das Raster",
+        this._config.framed === true,
+        (checked) => this._mutate((draft) => {
+          draft.framed = checked;
+        })
+      ),
+      this._switchField(
+        "Auf dem Telefon untereinander",
+        this._config.responsive !== false,
+        (checked) => this._mutate((draft) => {
+          draft.responsive = checked;
+        })
+      )
+    );
+    for (let index = 0; index < SLOTS; index += 1) this._root.append(this._slotBlock(index));
+  }
+  _numberField(label, value, onChange, min = 0.25, max = 6, step = 0.25) {
+    const field = el4("div", "field");
+    field.append(el4("label", null, label));
+    const input = el4("input", "plain");
+    input.type = "number";
+    input.min = String(min);
+    input.max = String(max);
+    input.step = String(step);
+    input.value = value;
+    input.addEventListener("change", () => onChange(Number(input.value)));
+    field.append(input);
+    return field;
+  }
+  _switchField(label, checked, onChange) {
+    const wrap = el4("label", "toggle");
+    const box = document.createElement("ha-switch");
+    box.checked = checked;
+    box.addEventListener("change", () => onChange(box.checked));
+    wrap.append(box, el4("span", null, label));
+    return wrap;
+  }
+  _slotBlock(index) {
+    const card = this._config.cards?.[index];
+    const block = el4("div", "slot");
+    const header = document.createElement("header");
+    header.append(
+      el4("span", "label", labelFor(card)),
+      el4("span", "pos", `Platz ${index + 1}`)
+    );
+    if (card?.type) {
+      header.append(
+        miniButton2("mdi:pencil", "Bearbeiten", () => {
+          this._open = this._open === index ? null : index;
+          this._picking = null;
+          this._render();
+        }),
+        miniButton2(
+          "mdi:delete-outline",
+          "Karte entfernen",
+          () => this._mutate((draft) => {
+            draft.cards = draft.cards || [];
+            draft.cards[index] = null;
+            while (draft.cards.length && draft.cards[draft.cards.length - 1] == null) draft.cards.pop();
+          }, true),
+          "mini danger"
+        )
+      );
+    }
+    block.append(header);
+    const body = el4("div", "body");
+    if (!card?.type) {
+      if (this._picking === index) {
+        body.append(this._picker(index));
+      } else {
+        const choose = el4("button", "choose");
+        choose.append(icon3("mdi:plus"), el4("span", null, "Karte wählen"));
+        choose.addEventListener("click", () => {
+          this._picking = index;
+          this._open = null;
+          this._render();
+        });
+        body.append(choose);
+      }
+    } else if (this._open === index) {
+      body.append(this._cardEditor(index, card));
+    } else {
+      body.hidden = true;
+    }
+    block.append(body);
+    return block;
+  }
+  _picker(index) {
+    const wrap = el4("div", "picker");
+    const search = el4("input", "plain");
+    search.type = "search";
+    search.placeholder = "Karte suchen …";
+    const list = el4("div", "picker-list");
+    const entries = cardCatalog();
+    const fill = (term) => {
+      const needle = term.trim().toLowerCase();
+      const hits = entries.filter(
+        (entry) => !needle || entry.name.toLowerCase().includes(needle) || entry.type.toLowerCase().includes(needle) || entry.description.toLowerCase().includes(needle)
+      );
+      list.replaceChildren();
+      if (!hits.length) {
+        list.append(el4("div", "empty", "Keine Karte gefunden."));
+        return;
+      }
+      hits.forEach((entry) => {
+        const item = el4("button", "picker-item");
+        const text2 = el4("div");
+        text2.append(el4("div", "pi-name", entry.name), el4("div", "pi-desc", entry.description || entry.type));
+        item.append(icon3(entry.icon), text2);
+        if (entry.custom) item.append(el4("span", "pi-tag", "installiert"));
+        item.addEventListener("click", async () => {
+          const stub = await stubConfigFor(entry.type);
+          this._picking = null;
+          this._open = index;
+          this._mutate((draft) => {
+            draft.cards = draft.cards || [];
+            while (draft.cards.length < index) draft.cards.push(null);
+            draft.cards[index] = stub;
+          }, true);
+        });
+        list.append(item);
+      });
+    };
+    search.addEventListener("input", () => fill(search.value));
+    fill("");
+    wrap.append(search, list);
+    return wrap;
+  }
+  _cardEditor(index, card) {
+    const write = (next) => this._mutate((draft) => {
+      draft.cards[index] = next;
+    });
+    const editor = createHaCardEditor({ hass: this._hass, value: card, onChange: write });
+    if (editor) return editor;
+    const wrap = el4("div");
+    wrap.append(
+      el4("p", "hint", "Der Karteneditor von Home Assistant steht hier nicht zur Verfügung – Konfiguration als YAML.")
+    );
+    const yaml = document.createElement("ha-yaml-editor");
+    yaml.defaultValue = card;
+    yaml.addEventListener("value-changed", (event) => {
+      event.stopPropagation();
+      if (event.detail.isValid === false) return;
+      write(event.detail.value);
+    });
+    wrap.append(yaml);
+    return wrap;
+  }
+};
+if (!customElements.get(EDITOR_TAG5)) customElements.define(EDITOR_TAG5, HaOsGridEditor);
+
 // src/ha-os.js
-var VERSION = "0.2.0";
+var VERSION = "0.3.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",
