@@ -1,4 +1,4 @@
-/* HA-OS 0.7.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.8.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -2599,6 +2599,7 @@ var STYLES3 = `
   .media-controls button:hover { color: var(--haos-text, #fff); background: rgba(var(--haos-text-rgb, 255,255,255), .1); }
   .media-controls .play { width: 44px; height: 44px; background: #fff; color: #18212a; }
   .media-controls .play:hover { background: #fff; }
+  .media-controls button.is-active { color: var(--haos-accent, #0a84ff); }
 
   /* --- Mitglieder --- */
   .members { display: flex; align-items: center; }
@@ -2637,6 +2638,36 @@ var formatDuration = (seconds) => {
   return `${Math.floor(total / 60)}:${pad(total % 60)}`;
 };
 var numeric = (value) => value === null || value === void 0 || value === "" ? NaN : Number(value);
+var MEDIA_FEATURE = {
+  PAUSE: 1,
+  VOLUME_SET: 4,
+  VOLUME_MUTE: 8,
+  PREVIOUS_TRACK: 16,
+  NEXT_TRACK: 32,
+  SELECT_SOURCE: 2048,
+  PLAY: 16384,
+  SHUFFLE_SET: 32768,
+  REPEAT_SET: 262144
+};
+var sliderRange = (entityId, state) => {
+  const domain = domainOf(entityId);
+  if (domain === "number" || domain === "input_number") {
+    const min = Number(state?.attributes?.min);
+    const max = Number(state?.attributes?.max);
+    const step = Number(state?.attributes?.step);
+    return {
+      min: Number.isFinite(min) ? min : 0,
+      max: Number.isFinite(max) ? max : 100,
+      step: Number.isFinite(step) && step > 0 ? step : 1,
+      unit: state?.attributes?.unit_of_measurement || ""
+    };
+  }
+  if (domain === "fan") {
+    const step = Number(state?.attributes?.percentage_step);
+    return { min: 0, max: 100, step: Number.isFinite(step) && step > 0 ? step : 1, unit: "%" };
+  }
+  return { min: 0, max: 100, step: 1, unit: "%" };
+};
 var PRESS_DOMAINS = /* @__PURE__ */ new Set(["button", "input_button", "scene", "script"]);
 var buttonKind = (entityId) => {
   const domain = domainOf(entityId);
@@ -2824,8 +2855,10 @@ var renderers = {
       input.addEventListener("pointerup", release);
       input.addEventListener("pointercancel", release);
       input.addEventListener("input", () => {
-        ctx.nodes.fill.style.width = `${input.value}%`;
-        ctx.nodes.output.textContent = `${input.value}%`;
+        const { min, max, unit } = ctx.nodes.range || { min: 0, max: 100, unit: "%" };
+        const anteil = max > min ? (Number(input.value) - min) / (max - min) * 100 : 0;
+        ctx.nodes.fill.style.width = `${anteil}%`;
+        ctx.nodes.output.textContent = `${input.value}${unit ? ` ${unit}` : ""}`;
       });
       input.addEventListener("change", () => {
         release();
@@ -2844,7 +2877,8 @@ var renderers = {
       if (domain === "cover") return Number(state.attributes.current_position ?? 0);
       if (domain === "fan") return Number(state.attributes.percentage ?? 0);
       if (domain === "media_player") return Math.round((state.attributes.volume_level || 0) * 100);
-      return clampNumber(state.state, 0, 100, 0);
+      const { min, max } = sliderRange(entityId, state);
+      return clampNumber(state.state, min, max, min);
     },
     commit(ctx, value) {
       const entityId = ctx.config.entity || "";
@@ -2867,11 +2901,17 @@ var renderers = {
       const state = ctx.hass?.states?.[ctx.config.entity];
       ctx.nodes.chipIcon.setAttribute("icon", ctx.config.icon || domainIcon(ctx.config.entity, state));
       ctx.nodes.title.textContent = ctx.config.name || friendlyName(ctx.config.entity, state);
+      const range = sliderRange(ctx.config.entity, state);
+      ctx.nodes.range = range;
+      ctx.nodes.input.min = range.min;
+      ctx.nodes.input.max = range.max;
+      ctx.nodes.input.step = range.step;
       if (ctx.nodes.dragging) return;
       const value = renderers.slider.read(ctx);
       ctx.nodes.input.value = value;
-      ctx.nodes.fill.style.width = `${value}%`;
-      ctx.nodes.output.textContent = `${value}%`;
+      const anteil = range.max > range.min ? (value - range.min) / (range.max - range.min) * 100 : 0;
+      ctx.nodes.fill.style.width = `${anteil}%`;
+      ctx.nodes.output.textContent = `${value}${range.unit ? ` ${range.unit}` : ""}`;
     }
   },
   // ------------------------------------------------------------- Thermostat
@@ -3136,6 +3176,18 @@ var renderers = {
         node.label.textContent = entry.label;
       });
     },
+    /**
+     * Holt die Tageswerte.
+     *
+     * Ueber `recorder/statistics_during_period`, nicht ueber den Verlauf.
+     * Zaehler wie ein Energiezaehler laufen monoton hoch; aus dem Verlauf
+     * liess sich daraus nur der hoechste Stand des Tages ablesen, nicht der
+     * Verbrauch. Home Assistant fuehrt fuer solche Entitaeten Statistiken mit
+     * einer Summe je Stunde und Tag - `change` ist genau der Tagesverbrauch.
+     *
+     * Faellt auf den Verlauf zurueck, wenn keine Statistik vorliegt: nicht
+     * jede Entitaet hat eine `state_class` und damit Statistikdaten.
+     */
     async connect(ctx) {
       if (!ctx.hass || !ctx.config.entity || ctx.nodes.historyLoaded) return;
       ctx.nodes.historyLoaded = true;
@@ -3144,20 +3196,47 @@ var renderers = {
       const start = new Date(end);
       start.setDate(start.getDate() - (days - 1));
       start.setHours(0, 0, 0, 0);
+      const weekdays = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+      const beschriften = (reihen) => reihen.slice(-days).map(([key, value]) => ({ value, label: weekdays[new Date(key).getDay()] }));
       try {
-        const path = `history/period/${encodeURIComponent(start.toISOString())}?filter_entity_id=${encodeURIComponent(ctx.config.entity)}&end_time=${encodeURIComponent(end.toISOString())}&minimal_response&no_attributes`;
-        const result = await ctx.hass.callApi("GET", path);
-        const series = result?.[0] || [];
-        const buckets = /* @__PURE__ */ new Map();
-        series.forEach((point) => {
-          const value = Number(point.state);
-          if (!Number.isFinite(value)) return;
-          const when = new Date(point.last_changed || point.last_updated);
-          const key = when.toISOString().slice(0, 10);
-          buckets.set(key, Math.max(buckets.get(key) ?? 0, value));
+        const statistik = await ctx.hass.callWS({
+          type: "recorder/statistics_during_period",
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+          statistic_ids: [ctx.config.entity],
+          period: "day",
+          types: ["change", "state", "sum"]
         });
-        const weekdays = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
-        ctx.nodes.history = [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-days).map(([key, value]) => ({ value, label: weekdays[new Date(key).getDay()] }));
+        const punkte = statistik?.[ctx.config.entity] || [];
+        if (punkte.length) {
+          const werte = punkte.map((punkt) => {
+            const wert = punkt.change ?? punkt.state;
+            const zahl = numeric(wert);
+            return Number.isFinite(zahl) ? [new Date(punkt.start).toISOString().slice(0, 10), zahl] : null;
+          }).filter(Boolean);
+          if (werte.length) {
+            ctx.nodes.history = beschriften(werte);
+            ctx.nodes.historySource = "statistik";
+            renderers.energy.update(ctx);
+            return;
+          }
+        }
+      } catch (_error) {
+      }
+      try {
+        const pfad = `history/period/${encodeURIComponent(start.toISOString())}?filter_entity_id=${encodeURIComponent(ctx.config.entity)}&end_time=${encodeURIComponent(end.toISOString())}&minimal_response&no_attributes`;
+        const ergebnis = await ctx.hass.callApi("GET", pfad);
+        const reihe = ergebnis?.[0] || [];
+        const eimer = /* @__PURE__ */ new Map();
+        reihe.forEach((punkt) => {
+          const wert = numeric(punkt.state);
+          if (!Number.isFinite(wert)) return;
+          const wann = new Date(punkt.last_changed || punkt.last_updated);
+          const key = wann.toISOString().slice(0, 10);
+          eimer.set(key, Math.max(eimer.get(key) ?? 0, wert));
+        });
+        ctx.nodes.history = beschriften([...eimer.entries()].sort(([a], [b]) => a.localeCompare(b)));
+        ctx.nodes.historySource = "verlauf";
         renderers.energy.update(ctx);
       } catch (_error) {
         ctx.nodes.historyLoaded = false;
@@ -3187,23 +3266,37 @@ var renderers = {
       ctx.nodes.duration = el3("span", null, "0:00");
       times.append(ctx.nodes.elapsed, ctx.nodes.duration);
       const controls = el3("div", "media-controls");
-      const make = (name, service, className) => {
+      const make = (symbol, feature, onClick, className = "") => {
         const button = el3("button", className);
-        button.append(icon2(name));
-        button.addEventListener(
-          "click",
-          () => ctx.hass?.callService("media_player", service, { entity_id: ctx.config.entity })
-        );
-        return button;
+        button.append(icon2(symbol));
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          if (ctx.config.entity) onClick();
+        });
+        return { node: button, feature, symbol };
       };
-      ctx.nodes.play = make("mdi:pause", "media_play_pause", "play");
-      controls.append(
-        make("mdi:shuffle-variant", "shuffle_set", ""),
-        make("mdi:skip-previous", "media_previous_track", ""),
-        ctx.nodes.play,
-        make("mdi:skip-next", "media_next_track", ""),
-        make("mdi:repeat", "repeat_set", "")
+      const call = (service, data = {}) => ctx.hass?.callService("media_player", service, { entity_id: ctx.config.entity, ...data });
+      const shuffle = make("mdi:shuffle-variant", MEDIA_FEATURE.SHUFFLE_SET, () => {
+        const on = ctx.hass?.states?.[ctx.config.entity]?.attributes?.shuffle === true;
+        call("shuffle_set", { shuffle: !on });
+      });
+      const repeat = make("mdi:repeat", MEDIA_FEATURE.REPEAT_SET, () => {
+        const jetzt = ctx.hass?.states?.[ctx.config.entity]?.attributes?.repeat || "off";
+        const naechste = { off: "all", all: "one", one: "off" }[jetzt] || "off";
+        call("repeat_set", { repeat: naechste });
+      });
+      const previous = make(
+        "mdi:skip-previous",
+        MEDIA_FEATURE.PREVIOUS_TRACK,
+        () => call("media_previous_track")
       );
+      const next = make("mdi:skip-next", MEDIA_FEATURE.NEXT_TRACK, () => call("media_next_track"));
+      const play = make("mdi:pause", MEDIA_FEATURE.PLAY | MEDIA_FEATURE.PAUSE, () => call("media_play_pause"), "play");
+      ctx.nodes.play = play.node;
+      ctx.nodes.shuffle = shuffle;
+      ctx.nodes.repeat = repeat;
+      ctx.nodes.mediaButtons = [shuffle, previous, play, next, repeat];
+      controls.append(...ctx.nodes.mediaButtons.map((b) => b.node));
       root.append(head, ctx.nodes.progress, times, controls);
       return root;
     },
@@ -3234,6 +3327,14 @@ var renderers = {
       ctx.nodes.elapsed.textContent = formatDuration(position);
       ctx.nodes.duration.textContent = formatDuration(duration);
       ctx.nodes.play.querySelector("ha-icon")?.setAttribute("icon", state?.state === "playing" ? "mdi:pause" : "mdi:play");
+      const features = Number(attributes.supported_features) || 0;
+      ctx.nodes.mediaButtons?.forEach(({ node, feature }) => {
+        node.hidden = !(features & feature);
+      });
+      ctx.nodes.shuffle?.node.classList.toggle("is-active", attributes.shuffle === true);
+      const repeat = attributes.repeat || "off";
+      ctx.nodes.repeat?.node.classList.toggle("is-active", repeat !== "off");
+      ctx.nodes.repeat?.node.querySelector("ha-icon")?.setAttribute("icon", repeat === "one" ? "mdi:repeat-once" : "mdi:repeat");
     }
   },
   // ------------------------------------------------------------- Mitglieder
@@ -3614,6 +3715,7 @@ var SCHEMAS = {
     { name: "state_entity", selector: { entity: {} } },
     bool("show_state"),
     bool("show_toggle"),
+    { name: "press_icon", selector: { icon: {} } },
     ACTION
   ],
   slider: [entityField(["light", "cover", "fan", "media_player", "number", "input_number"]), APPEARANCE],
@@ -3684,6 +3786,7 @@ var LABELS2 = {
   show_state: "Zustand anzeigen",
   show_toggle: "Bedienelement anzeigen",
   state_entity: "Zustand von anderer Entität",
+  press_icon: "Symbol im Taster",
   tap_action: "Tippen",
   darstellung: "Darstellung",
   aktion: "Aktion",
@@ -3704,6 +3807,7 @@ var HELPERS2 = {
   time_zone: "Leer lassen für die Zeitzone des Browsers, z. B. Europe/Berlin.",
   days: "Zeitraum, der geladen wird.",
   show_graph: "Temperaturverlauf über der Vorhersagezeile. Standardmäßig an.",
+  press_icon: "Nur bei Tasten, Szenen und Skripten. Standard ist ein Finger.",
   show_toggle: "Die Form richtet sich nach der Entität: Umschalter, Taster oder Auf/Stopp/Zu.",
   state_entity: "Leer lassen, wenn die Entität selbst einen Zustand hat. Tasten (button) haben keinen – hier dann den Sensor eintragen, der den echten Zustand meldet, z. B. den Türkontakt."
 };
@@ -4272,7 +4376,7 @@ var HaOsGridEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG5)) customElements.define(EDITOR_TAG5, HaOsGridEditor);
 
 // src/ha-os.js
-var VERSION = "0.7.0";
+var VERSION = "0.8.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

@@ -66,6 +66,7 @@ const SCHEMAS = {
     { name: "state_entity", selector: { entity: {} } },
     bool("show_state"),
     bool("show_toggle"),
+    { name: "press_icon", selector: { icon: {} } },
     ACTION,
   ],
   slider: [entityField(["light", "cover", "fan", "media_player", "number", "input_number"]), APPEARANCE],
@@ -137,6 +138,7 @@ const LABELS = {
   show_state: "Zustand anzeigen",
   show_toggle: "Bedienelement anzeigen",
   state_entity: "Zustand von anderer Entität",
+  press_icon: "Symbol im Taster",
   tap_action: "Tippen",
   darstellung: "Darstellung",
   aktion: "Aktion",
@@ -158,6 +160,7 @@ const HELPERS = {
   time_zone: "Leer lassen für die Zeitzone des Browsers, z. B. Europe/Berlin.",
   days: "Zeitraum, der geladen wird.",
   show_graph: "Temperaturverlauf über der Vorhersagezeile. Standardmäßig an.",
+  press_icon: "Nur bei Tasten, Szenen und Skripten. Standard ist ein Finger.",
   show_toggle:
     "Die Form richtet sich nach der Entität: Umschalter, Taster oder Auf/Stopp/Zu.",
   state_entity:
