@@ -1,4 +1,4 @@
-/* HA-OS 0.5.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.5.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -1846,7 +1846,7 @@ var HaOsShellEditor = class extends HTMLElement {
       );
     });
     const add = el2("button", "add");
-    add.append(icon("mdi:plus"), el2("span", null, "Seite hinzufügen"));
+    add.append(icon("mdi:plus"), el2("span", null, "Neue Seite"));
     add.addEventListener(
       "click",
       () => this._mutate((draft) => {
@@ -1859,9 +1859,91 @@ var HaOsShellEditor = class extends HTMLElement {
         });
       }, true)
     );
+    const addProgram = el2("button", "add");
+    addProgram.append(icon("mdi:application-outline"), el2("span", null, "Programm einbinden"));
+    addProgram.addEventListener("click", () => {
+      this._pickingProgram = !this._pickingProgram;
+      this._renderPanels();
+    });
     const addRow = el2("div", "add-row");
-    addRow.append(add);
+    addRow.append(add, addProgram);
     this._panel.append(addRow);
+    if (this._pickingProgram) this._panel.append(this._programPicker());
+  }
+  /**
+   * Auswahl eines vorhandenen Home-Assistant-Programms.
+   *
+   * "Programm" meint hier alles, was Home Assistant selbst in seiner
+   * Seitenleiste führt – Add-ons wie ESPHome, Studio Code Server oder der
+   * Terminal, aber auch eigene Dashboards. Diese Liste steht in `hass.panels`.
+   * Ausgewählt wird daraus eine iFrame-Seite; das erspart das Abtippen von
+   * Adressen und trifft genau die Fälle wie 3D-Drucker oder CNC.
+   */
+  _programPicker() {
+    const wrap = el2("div", "picker");
+    wrap.append(
+      el2(
+        "p",
+        "hint",
+        "Programme sind die Einträge aus Home Assistants eigener Seitenleiste – Add-ons, Dashboards, Einstellungen. Sie werden als Seite im Rahmen geöffnet."
+      )
+    );
+    const search = el2("input", "plain");
+    search.type = "search";
+    search.placeholder = "Programm suchen …";
+    const list = el2("div", "picker-list");
+    const panels = Object.values(this._hass?.panels || {}).filter((panel) => panel?.url_path).map((panel) => ({
+      name: panel.title || panel.url_path,
+      url: `/${panel.url_path}`,
+      icon: panel.icon || "mdi:application-outline"
+    })).sort((a, b) => a.name.localeCompare(b.name, "de"));
+    const addPage = (entry) => this._mutate((draft) => {
+      draft.pages.push({
+        name: entry.name,
+        icon: entry.icon,
+        kind: "iframe",
+        url: entry.url,
+        hide_ha_chrome: true
+      });
+    }, true);
+    const fill = (term) => {
+      const needle = term.trim().toLowerCase();
+      const hits = panels.filter(
+        (entry) => !needle || entry.name.toLowerCase().includes(needle) || entry.url.toLowerCase().includes(needle)
+      );
+      list.replaceChildren();
+      const own = el2("button", "picker-item");
+      const ownText = el2("div");
+      ownText.append(
+        el2("div", "pi-name", "Eigene Adresse"),
+        el2("div", "pi-desc", "Beliebige Webseite oder HA-Pfad, danach im Feld Adresse eintragen")
+      );
+      own.append(icon("mdi:link-variant"), ownText);
+      own.addEventListener("click", () => {
+        this._pickingProgram = false;
+        addPage({ name: "Programm", icon: "mdi:application-outline", url: "" });
+      });
+      list.append(own);
+      if (!hits.length) {
+        list.append(el2("div", "empty", "Kein Programm gefunden."));
+        return;
+      }
+      hits.forEach((entry) => {
+        const item = el2("button", "picker-item");
+        const text2 = el2("div");
+        text2.append(el2("div", "pi-name", entry.name), el2("div", "pi-desc", entry.url));
+        item.append(icon(entry.icon), text2);
+        item.addEventListener("click", () => {
+          this._pickingProgram = false;
+          addPage(entry);
+        });
+        list.append(item);
+      });
+    };
+    search.addEventListener("input", () => fill(search.value));
+    fill("");
+    wrap.append(search, list);
+    return wrap;
   }
   _movePage(index, delta) {
     const target = index + delta;
@@ -1987,7 +2069,7 @@ var HaOsShellEditor = class extends HTMLElement {
           tab.title = this._cardLabel(card2);
           tab.addEventListener("click", () => {
             this._gridTab[tabKey] = cardIndex;
-            this._render();
+            this._renderPanels();
           });
           tabs.append(tab);
         });
@@ -2035,7 +2117,7 @@ var HaOsShellEditor = class extends HTMLElement {
       addOther.addEventListener("click", () => {
         const key = `picker-${pageIndex}-${columnIndex}`;
         this._openPicker = this._openPicker === key ? null : key;
-        this._render();
+        this._renderPanels();
       });
       addRow.append(addOwn, addOther);
       this._panel.append(addRow);
@@ -4029,7 +4111,7 @@ var HaOsGridEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG5)) customElements.define(EDITOR_TAG5, HaOsGridEditor);
 
 // src/ha-os.js
-var VERSION = "0.5.0";
+var VERSION = "0.5.1";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

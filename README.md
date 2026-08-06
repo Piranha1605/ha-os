@@ -4,7 +4,7 @@ Dashboard-Grundgerüst für Home Assistant im Glassmorphism-Stil. Eine grosse
 Glasfläche mit Seitenleiste, Kopfzeile und drei frei gewichteten Rastern – in
 die jede installierte Lovelace-Karte passt.
 
-Version 0.5.0
+Version 0.5.1
 
 ---
 
@@ -23,7 +23,7 @@ Version 0.5.0
 
 5. Browser hart neu laden (Cmd+Shift+R bzw. Strg+F5)
 
-**Prüfen, ob es geladen hat:** In der Browserkonsole muss `HA-OS 0.5.0` stehen.
+**Prüfen, ob es geladen hat:** In der Browserkonsole muss `HA-OS 0.5.1` stehen.
 
 ---
 

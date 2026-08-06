@@ -53,6 +53,12 @@ const makeHass = (states) => ({
     return Promise.resolve();
   },
   callApi: () => Promise.resolve([]),
+  // Programme = HAs eigene Seitenleisteneinträge
+  panels: {
+    esphome: { url_path: "esphome", title: "ESPHome Builder", icon: "mdi:chip" },
+    terminal: { url_path: "terminal", title: "Terminal", icon: "mdi:console" },
+    hacs: { url_path: "hacs", title: "HACS", icon: "mdi:store" },
+  },
   formatEntityState: (state) => `${state.state}`,
   connection: { subscribeMessage: () => Promise.reject(new Error("nicht unterstützt")) },
 });
@@ -167,7 +173,14 @@ const shellConfig = {
       grid_widths: [1, 1.55, 1.05],
       badges: [{ entity: "light.wohnzimmer", tap_action: { action: "toggle" } }],
       grids: [
-        { cards: [{ type: "custom:ha-os-card", card_type: "thermostat", entity: "climate.thermostat", haos_weight: 3 }] },
+        {
+          cards: [
+            { type: "custom:ha-os-card", card_type: "thermostat", entity: "climate.thermostat", haos_weight: 3 },
+            // Zweite Karte im selben Raster: nur damit lässt sich prüfen, ob
+            // die nummerierten Reiter tatsächlich umschalten.
+            { type: "custom:ha-os-card", card_type: "clock", haos_weight: 1 },
+          ],
+        },
         { cards: [{ type: "custom:ha-os-card", card_type: "weather", entity: "weather.zuhause", haos_weight: 1.5 }] },
         { cards: [{ type: "custom:ha-os-card", card_type: "media", entity: "media_player.stereo" }] },
       ],
@@ -199,7 +212,7 @@ check(
 );
 check("Badge erzeugt", root.querySelectorAll(".badge").length === 1);
 check("drei Raster auf Home", root.querySelector('.page[data-page-id="home"]')?.querySelectorAll(".grid-column").length === 3);
-check("Kinderkarten eingehängt", root.querySelectorAll(".slot").length === 3);
+check("Kinderkarten eingehängt", root.querySelectorAll(".slot").length === 4);
 
 const thermostatSlot = root.querySelector(".slot");
 check(
@@ -214,7 +227,7 @@ console.log("\n4. Kernprüfung: kein Neuaufbau bei hass-Updates");
 
 const cardsBefore = [...root.querySelectorAll(".slot > *")];
 const shellNodeBefore = root.querySelector(".shell");
-check("Kinderkarten wurden erzeugt", cardsBefore.length === 3);
+check("Kinderkarten wurden erzeugt", cardsBefore.length === 4);
 
 // 50 Zustandsänderungen simulieren, wie sie ein GPS-Update auslöst
 for (let index = 0; index < 50; index += 1) {
@@ -324,16 +337,66 @@ shellEditor.setConfig(shellConfig);
 check("Shell-Editor hat drei Reiter", shellEditor.shadowRoot.querySelectorAll(".tab").length === 3);
 // Der Karten-Reiter wird hier nur kurz besucht und danach zurückgeschaltet –
 // die folgende Prüfung erwartet wieder das Allgemein-Formular.
-const kartenReiterOk = (() => {
+//
+// Es genügt NICHT zu prüfen, dass die Reiter da sind: beim ersten Versuch
+// riefen sie eine Methode auf, die es im Shell-Editor gar nicht gibt. Die
+// Reiter waren sichtbar und taten nichts. Deshalb wird hier geklickt.
+const kartenReiter = (() => {
   const editorTabs = [...shellEditor.shadowRoot.querySelectorAll(".tab")];
   const cardsTab = editorTabs.find((t) => t.textContent.includes("Karten"));
-  if (!cardsTab) return false;
+  if (!cardsTab) return { anzahl: 0, wechselt: false };
+
   cardsTab.click();
-  const anzahl = shellEditor.shadowRoot.querySelectorAll(".card-tab").length;
+
+  // Auf ein einzelnes Raster zielen – über alle drei hinweg gäbe es mehrere
+  // aktive Reiter gleichzeitig, einen pro Raster.
+  const gruppe = [...shellEditor.shadowRoot.querySelectorAll(".card-tabs")].find(
+    (g) => g.querySelectorAll(".card-tab").length > 1
+  );
+  const anzahl = gruppe ? gruppe.querySelectorAll(".card-tab").length : 0;
+  let wechselt = false;
+
+  if (anzahl > 1) {
+    const vorher = shellEditor.shadowRoot.querySelector(".block .sub")?.textContent;
+    [...gruppe.querySelectorAll(".card-tab")][1].click();
+    const nachher = shellEditor.shadowRoot.querySelector(".block .sub")?.textContent;
+    const neueGruppe = [...shellEditor.shadowRoot.querySelectorAll(".card-tabs")].find(
+      (g) => g.querySelectorAll(".card-tab").length > 1
+    );
+    const aktiv = [...neueGruppe.querySelectorAll(".card-tab")].findIndex((t) =>
+      t.classList.contains("active")
+    );
+    wechselt = aktiv === 1 && Boolean(vorher) && vorher !== nachher;
+  }
+
   editorTabs[0].click();
-  return anzahl > 0;
+  return { anzahl, wechselt };
 })();
-check("Shell-Editor zeigt nummerierte Kartenreiter", kartenReiterOk);
+check("Shell-Editor zeigt nummerierte Kartenreiter", kartenReiter.anzahl > 1, `${kartenReiter.anzahl}`);
+check("Klick auf Reiter 2 wechselt die Karte", kartenReiter.wechselt);
+// Seiten-Reiter: Auswahl zwischen eigener Seite und vorhandenem Programm.
+const seitenAuswahl = (() => {
+  const editorTabs = [...shellEditor.shadowRoot.querySelectorAll(".tab")];
+  const pagesTab = editorTabs.find((t) => t.textContent.includes("Seiten"));
+  if (!pagesTab) return { beide: false, programme: 0 };
+
+  pagesTab.click();
+  const knoepfe = [...shellEditor.shadowRoot.querySelectorAll(".add")].map((b) => b.textContent);
+  const beide = knoepfe.some((t) => t.includes("Neue Seite")) && knoepfe.some((t) => t.includes("Programm"));
+
+  const programmKnopf = [...shellEditor.shadowRoot.querySelectorAll(".add")].find((b) =>
+    b.textContent.includes("Programm")
+  );
+  programmKnopf?.click();
+  const programme = shellEditor.shadowRoot.querySelectorAll(".picker-item").length;
+  programmKnopf?.click();
+
+  editorTabs[0].click();
+  return { beide, programme };
+})();
+check("Seiten-Reiter bietet Seite und Programm zur Wahl", seitenAuswahl.beide);
+check("Programmliste zeigt HAs eigene Einträge", seitenAuswahl.programme > 1, `${seitenAuswahl.programme} Einträge`);
+
 check("Shell-Editor zeigt Allgemein-Formular", Boolean(shellEditor.shadowRoot.querySelector("ha-form")));
 
 // ---------------------------------------------------------------- Grösse

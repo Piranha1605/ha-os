@@ -469,7 +469,7 @@ class HaOsShellEditor extends HTMLElement {
     });
 
     const add = el("button", "add");
-    add.append(icon("mdi:plus"), el("span", null, "Seite hinzufügen"));
+    add.append(icon("mdi:plus"), el("span", null, "Neue Seite"));
     add.addEventListener("click", () =>
       this._mutate((draft) => {
         draft.pages.push({
@@ -482,9 +482,113 @@ class HaOsShellEditor extends HTMLElement {
       }, true)
     );
 
+    const addProgram = el("button", "add");
+    addProgram.append(icon("mdi:application-outline"), el("span", null, "Programm einbinden"));
+    addProgram.addEventListener("click", () => {
+      this._pickingProgram = !this._pickingProgram;
+      this._renderPanels();
+    });
+
     const addRow = el("div", "add-row");
-    addRow.append(add);
+    addRow.append(add, addProgram);
     this._panel.append(addRow);
+
+    if (this._pickingProgram) this._panel.append(this._programPicker());
+  }
+
+  /**
+   * Auswahl eines vorhandenen Home-Assistant-Programms.
+   *
+   * "Programm" meint hier alles, was Home Assistant selbst in seiner
+   * Seitenleiste führt – Add-ons wie ESPHome, Studio Code Server oder der
+   * Terminal, aber auch eigene Dashboards. Diese Liste steht in `hass.panels`.
+   * Ausgewählt wird daraus eine iFrame-Seite; das erspart das Abtippen von
+   * Adressen und trifft genau die Fälle wie 3D-Drucker oder CNC.
+   */
+  _programPicker() {
+    const wrap = el("div", "picker");
+    wrap.append(
+      el(
+        "p",
+        "hint",
+        "Programme sind die Einträge aus Home Assistants eigener Seitenleiste – Add-ons, " +
+          "Dashboards, Einstellungen. Sie werden als Seite im Rahmen geöffnet."
+      )
+    );
+
+    const search = el("input", "plain");
+    search.type = "search";
+    search.placeholder = "Programm suchen …";
+
+    const list = el("div", "picker-list");
+
+    const panels = Object.values(this._hass?.panels || {})
+      .filter((panel) => panel?.url_path)
+      .map((panel) => ({
+        name: panel.title || panel.url_path,
+        url: `/${panel.url_path}`,
+        icon: panel.icon || "mdi:application-outline",
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, "de"));
+
+    const addPage = (entry) =>
+      this._mutate((draft) => {
+        draft.pages.push({
+          name: entry.name,
+          icon: entry.icon,
+          kind: "iframe",
+          url: entry.url,
+          hide_ha_chrome: true,
+        });
+      }, true);
+
+    const fill = (term) => {
+      const needle = term.trim().toLowerCase();
+      const hits = panels.filter(
+        (entry) => !needle || entry.name.toLowerCase().includes(needle) || entry.url.toLowerCase().includes(needle)
+      );
+
+      list.replaceChildren();
+
+      // Eigene Adresse: für alles, was nicht in HAs Seitenleiste steht –
+      // etwa die Weboberfläche eines Druckers im selben Netz.
+      const own = el("button", "picker-item");
+      const ownText = el("div");
+      ownText.append(
+        el("div", "pi-name", "Eigene Adresse"),
+        el("div", "pi-desc", "Beliebige Webseite oder HA-Pfad, danach im Feld Adresse eintragen")
+      );
+      own.append(icon("mdi:link-variant"), ownText);
+      own.addEventListener("click", () => {
+        this._pickingProgram = false;
+        addPage({ name: "Programm", icon: "mdi:application-outline", url: "" });
+      });
+      list.append(own);
+
+      if (!hits.length) {
+        list.append(el("div", "empty", "Kein Programm gefunden."));
+        return;
+      }
+
+      hits.forEach((entry) => {
+        const item = el("button", "picker-item");
+        const text = el("div");
+        text.append(el("div", "pi-name", entry.name), el("div", "pi-desc", entry.url));
+        item.append(icon(entry.icon), text);
+        item.addEventListener("click", () => {
+          this._pickingProgram = false;
+          addPage(entry);
+        });
+        list.append(item);
+      });
+    };
+
+    // Kein Neuzeichnen beim Tippen – das Suchfeld soll den Fokus behalten.
+    search.addEventListener("input", () => fill(search.value));
+    fill("");
+
+    wrap.append(search, list);
+    return wrap;
   }
 
   _movePage(index, delta) {
@@ -618,7 +722,7 @@ class HaOsShellEditor extends HTMLElement {
           tab.title = this._cardLabel(card);
           tab.addEventListener("click", () => {
             this._gridTab[tabKey] = cardIndex;
-            this._render();
+            this._renderPanels();
           });
           tabs.append(tab);
         });
@@ -670,7 +774,7 @@ class HaOsShellEditor extends HTMLElement {
       addOther.addEventListener("click", () => {
         const key = `picker-${pageIndex}-${columnIndex}`;
         this._openPicker = this._openPicker === key ? null : key;
-        this._render();
+        this._renderPanels();
       });
 
       addRow.append(addOwn, addOther);
