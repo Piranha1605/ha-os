@@ -31,6 +31,24 @@ const STYLES = `
   }
   .toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 
+  /* Nummerierte Reiter für die Plätze – wie in HAs eigener Raster-Karte.
+     Alle vier Editoren untereinander waren unübersichtlich. */
+  .slot-tabs {
+    display: flex; align-items: center; gap: 2px;
+    border-bottom: 1px solid var(--divider-color, rgba(127,127,127,.3));
+    margin-bottom: 10px;
+  }
+  .slot-tab {
+    min-width: 40px; height: 40px; padding: 0 10px; border: 0; background: none;
+    color: var(--secondary-text-color); font-size: 14px;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .slot-tab:hover { color: var(--primary-text-color); }
+  .slot-tab.active { color: var(--primary-color); border-bottom-color: var(--primary-color); font-weight: 600; }
+  .slot-tab .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--primary-color); opacity: .55; }
+  .slot-tab.empty .dot { background: var(--secondary-text-color); opacity: .3; }
+
   .slot { border: 1px solid var(--divider-color, rgba(127,127,127,.3)); border-radius: 10px; overflow: hidden; }
   .slot > header {
     display: flex; align-items: center; gap: 8px; padding: 8px 10px;
@@ -105,7 +123,7 @@ class HaOsGridEditor extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this._config = null;
     this._hass = null;
-    this._open = null;
+    this._tab = 0;
     this._picking = null;
   }
 
@@ -206,7 +224,25 @@ class HaOsGridEditor extends HTMLElement {
       )
     );
 
-    for (let index = 0; index < SLOTS; index += 1) this._root.append(this._slotBlock(index));
+    // Ein Platz nach dem anderen, ausgewählt über nummerierte Reiter.
+    if (this._tab == null || this._tab >= SLOTS) this._tab = 0;
+
+    const tabs = el("div", "slot-tabs");
+    for (let index = 0; index < SLOTS; index += 1) {
+      const belegt = Boolean(this._config.cards?.[index]?.type);
+      const tab = el("button", `slot-tab${index === this._tab ? " active" : ""}${belegt ? "" : " empty"}`);
+      tab.append(el("span", null, String(index + 1)), el("span", "dot"));
+      tab.title = belegt ? labelFor(this._config.cards[index]) : "Leer";
+      tab.addEventListener("click", () => {
+        this._tab = index;
+        this._picking = null;
+        this._open = null;
+        this._render();
+      });
+      tabs.append(tab);
+    }
+    this._root.append(tabs);
+    this._root.append(this._slotBlock(this._tab));
   }
 
   _numberField(label, value, onChange, min = 0.25, max = 6, step = 0.25) {
@@ -245,9 +281,8 @@ class HaOsGridEditor extends HTMLElement {
 
     if (card?.type) {
       header.append(
-        miniButton("mdi:pencil", "Bearbeiten", () => {
-          this._open = this._open === index ? null : index;
-          this._picking = null;
+        miniButton("mdi:swap-horizontal", "Andere Karte wählen", () => {
+          this._picking = this._picking === index ? null : index;
           this._render();
         }),
         miniButton(
@@ -266,24 +301,21 @@ class HaOsGridEditor extends HTMLElement {
 
     block.append(header);
 
+    // Der gewählte Platz ist immer aufgeklappt – es wird ohnehin nur einer
+    // gezeigt, ein zusätzliches Auf- und Zuklappen wäre ein Klick zu viel.
     const body = el("div", "body");
-    if (!card?.type) {
-      if (this._picking === index) {
-        body.append(this._picker(index));
-      } else {
-        const choose = el("button", "choose");
-        choose.append(icon("mdi:plus"), el("span", null, "Karte wählen"));
-        choose.addEventListener("click", () => {
-          this._picking = index;
-          this._open = null;
-          this._render();
-        });
-        body.append(choose);
-      }
-    } else if (this._open === index) {
-      body.append(this._cardEditor(index, card));
+    if (this._picking === index) {
+      body.append(this._picker(index));
+    } else if (!card?.type) {
+      const choose = el("button", "choose");
+      choose.append(icon("mdi:plus"), el("span", null, "Karte wählen"));
+      choose.addEventListener("click", () => {
+        this._picking = index;
+        this._render();
+      });
+      body.append(choose);
     } else {
-      body.hidden = true;
+      body.append(this._cardEditor(index, card));
     }
 
     block.append(body);
@@ -323,7 +355,6 @@ class HaOsGridEditor extends HTMLElement {
         item.addEventListener("click", async () => {
           const stub = await stubConfigFor(entry.type);
           this._picking = null;
-          this._open = index;
           this._mutate((draft) => {
             draft.cards = draft.cards || [];
             while (draft.cards.length < index) draft.cards.push(null);

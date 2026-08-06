@@ -4,7 +4,7 @@ Dashboard-Grundgerüst für Home Assistant im Glassmorphism-Stil. Eine grosse
 Glasfläche mit Seitenleiste, Kopfzeile und drei frei gewichteten Rastern – in
 die jede installierte Lovelace-Karte passt.
 
-Version 0.4.0
+Version 0.5.0
 
 ---
 
@@ -23,7 +23,7 @@ Version 0.4.0
 
 5. Browser hart neu laden (Cmd+Shift+R bzw. Strg+F5)
 
-**Prüfen, ob es geladen hat:** In der Browserkonsole muss `HA-OS 0.4.0` stehen.
+**Prüfen, ob es geladen hat:** In der Browserkonsole muss `HA-OS 0.5.0` stehen.
 
 ---
 
@@ -207,6 +207,22 @@ und Entitätskarten.
 behält Unschärfe, Rundung und Sättigung wie bisher – nur der neue Glanz kommt
 dazu. Für die überarbeiteten Vorgaben (weniger Unschärfe, mehr Sättigung,
 größere Rundung) in den Einstellungen einmal **Zurücksetzen** drücken.
+
+## Seiten und Navigation
+
+Jede Seite erscheint als Symbol in der linken Leiste **und** als Reiter in der
+Kopfzeile. Beides lässt sich im Editor unter *Allgemein* einzeln abschalten –
+bei vielen Seiten läuft die Kopfzeile sonst über, dann reicht die Leiste.
+
+Neue Seiten legt man im Editor unter *Seiten* an. Jede bekommt automatisch
+drei leere Raster.
+
+## Karten in den Rastern
+
+Die Karten eines Rasters liegen hinter nummerierten Reitern `1 2 3 …`, wie in
+Home Assistants eigener Raster-Karte. Es ist immer genau eine Karte
+aufgeklappt. Untereinander gestapelt wurde die Liste ab drei Karten
+unübersichtlich.
 
 ## Noch offen
 

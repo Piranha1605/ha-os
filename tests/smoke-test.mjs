@@ -187,6 +187,9 @@ await new Promise((resolve) => setTimeout(resolve, 60));
 const root = shell.shadowRoot;
 check("Glasfläche vorhanden", Boolean(root.querySelector(".shell")));
 check("Seitenleiste vorhanden", Boolean(root.querySelector(".sidebar")));
+check("Seiten stehen in der Seitenleiste",
+  shell.shadowRoot.querySelectorAll(".side-top .icon-button").length >= 3,
+  `${shell.shadowRoot.querySelectorAll(".side-top .icon-button").length} Symbole`);
 check("drei Reiter erzeugt", root.querySelectorAll(".tab").length === 3);
 check("Benutzericons sichtbar", root.querySelectorAll(".user").length === 2);
 check(
@@ -319,6 +322,18 @@ document.body.append(shellEditor);
 shellEditor.hass = makeHass(baseStates);
 shellEditor.setConfig(shellConfig);
 check("Shell-Editor hat drei Reiter", shellEditor.shadowRoot.querySelectorAll(".tab").length === 3);
+// Der Karten-Reiter wird hier nur kurz besucht und danach zurückgeschaltet –
+// die folgende Prüfung erwartet wieder das Allgemein-Formular.
+const kartenReiterOk = (() => {
+  const editorTabs = [...shellEditor.shadowRoot.querySelectorAll(".tab")];
+  const cardsTab = editorTabs.find((t) => t.textContent.includes("Karten"));
+  if (!cardsTab) return false;
+  cardsTab.click();
+  const anzahl = shellEditor.shadowRoot.querySelectorAll(".card-tab").length;
+  editorTabs[0].click();
+  return anzahl > 0;
+})();
+check("Shell-Editor zeigt nummerierte Kartenreiter", kartenReiterOk);
 check("Shell-Editor zeigt Allgemein-Formular", Boolean(shellEditor.shadowRoot.querySelector("ha-form")));
 
 // ---------------------------------------------------------------- Grösse

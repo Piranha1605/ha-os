@@ -20,6 +20,8 @@ const LABELS = {
   row_height: "Kartenhöhe in px",
   users: "Benutzer in der Kopfzeile",
   fullscreen_entity: "Vollbild-Schalter",
+  sidebar_pages: "Seiten in der Seitenleiste",
+  topbar_tabs: "Seiten als Reiter oben",
   show_settings_button: "Einstellungsknopf anzeigen",
   show_theme_button: "Hell/Dunkel-Knopf anzeigen",
   name: "Name",
@@ -33,6 +35,9 @@ const LABELS = {
 };
 
 const HELPERS = {
+  sidebar_pages: "Jede Seite bekommt ein Symbol in der linken Leiste.",
+  topbar_tabs:
+    "Ausschalten, wenn die Seitenleiste reichen soll – bei vielen Seiten läuft die Kopfzeile sonst über.",
   gap: "Gilt gleichmäßig waagerecht und senkrecht.",
   row_height: "Grundhöhe einer Karte mit Höhenfaktor 1.",
   fullscreen_entity: "Ein input_boolean, das den Vollbildmodus schaltet. Leer lassen, um den Knopf auszublenden.",
@@ -44,6 +49,8 @@ const GENERAL_SCHEMA = [
   { name: "row_height", selector: { number: { min: 60, max: 320, step: 5, mode: "slider" } } },
   { name: "users", selector: { entity: { domain: ["person", "device_tracker"], multiple: true } } },
   { name: "fullscreen_entity", selector: { entity: { domain: ["input_boolean"] } } },
+  { name: "sidebar_pages", selector: { boolean: {} } },
+  { name: "topbar_tabs", selector: { boolean: {} } },
   { name: "show_settings_button", selector: { boolean: {} } },
   { name: "show_theme_button", selector: { boolean: {} } },
 ];
@@ -125,6 +132,20 @@ const STYLES = `
 
   .grid-head { display: flex; align-items: center; gap: 8px; margin: 4px 0 2px; font-size: 13px; font-weight: 600; }
   .grid-head .weight { flex: 1; font-weight: 400; color: var(--secondary-text-color); font-size: 11px; }
+
+  /* Nummerierte Reiter für die Karten eines Rasters – Vorbild ist HAs eigene
+     Raster-Karte. Alle Editoren untereinander wurden schnell unübersichtlich. */
+  .card-tabs {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 2px;
+    border-bottom: 1px solid var(--divider-color, rgba(127,127,127,.3));
+  }
+  .card-tab {
+    min-width: 36px; height: 36px; padding: 0 8px; border: 0; background: none; cursor: pointer;
+    font: inherit; font-size: 13px; color: var(--secondary-text-color);
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .card-tab:hover { color: var(--primary-text-color); }
+  .card-tab.active { color: var(--primary-color); border-bottom-color: var(--primary-color); font-weight: 600; }
 
   .hint { margin: 0; font-size: 12px; line-height: 1.45; color: var(--secondary-text-color); }
   .empty { padding: 14px; text-align: center; font-size: 12px; color: var(--secondary-text-color); }
@@ -321,7 +342,11 @@ class HaOsShellEditor extends HTMLElement {
     return form;
   }
 
-  _block(labelText, subText, bodyBuilder, openKey, headerExtras = []) {
+  /**
+   * @param alwaysOpen Für Blöcke, die ohnehin einzeln über Reiter gewählt
+   *   werden – dort wäre ein zusätzliches Aufklappen ein Klick zu viel.
+   */
+  _block(labelText, subText, bodyBuilder, openKey, headerExtras = [], alwaysOpen = false) {
     const block = el("div", "block");
     const header = document.createElement("header");
 
@@ -337,17 +362,20 @@ class HaOsShellEditor extends HTMLElement {
     }
 
     const body = el("div", "body");
-    body.hidden = !this._open.has(openKey);
+    body.hidden = alwaysOpen ? false : !this._open.has(openKey);
 
-    const toggle = miniButton(body.hidden ? "mdi:chevron-down" : "mdi:chevron-up", "Aufklappen", () => {
-      const open = this._open.has(openKey);
-      if (open) this._open.delete(openKey);
-      else this._open.add(openKey);
-      body.hidden = open;
-      toggle.querySelector("ha-icon")?.setAttribute("icon", open ? "mdi:chevron-down" : "mdi:chevron-up");
-    });
-
-    header.append(...headerExtras, toggle);
+    if (alwaysOpen) {
+      header.append(...headerExtras);
+    } else {
+      const toggle = miniButton(body.hidden ? "mdi:chevron-down" : "mdi:chevron-up", "Aufklappen", () => {
+        const open = this._open.has(openKey);
+        if (open) this._open.delete(openKey);
+        else this._open.add(openKey);
+        body.hidden = open;
+        toggle.querySelector("ha-icon")?.setAttribute("icon", open ? "mdi:chevron-down" : "mdi:chevron-up");
+      });
+      header.append(...headerExtras, toggle);
+    }
     block.append(header, body);
     if (!body.hidden || true) body.append(bodyBuilder());
     return block;
@@ -411,7 +439,12 @@ class HaOsShellEditor extends HTMLElement {
 
   _renderPages() {
     this._panel.append(
-      el("p", "hint", "Die erste Seite ist immer Home. Jede weitere Seite erhält automatisch einen Reiter in der Kopfzeile und drei leere Raster.")
+      el(
+        "p",
+        "hint",
+        "Die erste Seite ist immer Home. Jede weitere Seite erhält automatisch drei leere Raster, " +
+          "ein Symbol in der Seitenleiste und einen Reiter in der Kopfzeile – beides unter Allgemein abschaltbar."
+      )
     );
 
     this._config.pages.forEach((page, index) => {
@@ -572,14 +605,36 @@ class HaOsShellEditor extends HTMLElement {
         this._panel.append(el("div", "empty", "Noch keine Karte in diesem Raster."));
       }
 
-      grid.cards.forEach((card, cardIndex) => {
+      // Nummerierte Reiter statt aller Karteneditoren untereinander. Bei
+      // mehr als zwei Karten wurde die Liste sonst unübersichtlich lang.
+      const tabKey = `${pageIndex}-${columnIndex}`;
+      this._gridTab = this._gridTab || {};
+      const openTab = Math.min(this._gridTab[tabKey] ?? 0, Math.max(grid.cards.length - 1, 0));
+
+      if (grid.cards.length) {
+        const tabs = el("div", "card-tabs");
+        grid.cards.forEach((card, cardIndex) => {
+          const tab = el("button", `card-tab${cardIndex === openTab ? " active" : ""}`, String(cardIndex + 1));
+          tab.title = this._cardLabel(card);
+          tab.addEventListener("click", () => {
+            this._gridTab[tabKey] = cardIndex;
+            this._render();
+          });
+          tabs.append(tab);
+        });
+        this._panel.append(tabs);
+
+        const card = grid.cards[openTab];
         const extras = [
-          miniButton("mdi:arrow-up", "Nach oben", () => this._moveCard(pageIndex, columnIndex, cardIndex, -1)),
-          miniButton("mdi:arrow-down", "Nach unten", () => this._moveCard(pageIndex, columnIndex, cardIndex, 1)),
+          miniButton("mdi:arrow-up", "Nach oben", () => this._moveCard(pageIndex, columnIndex, openTab, -1)),
+          miniButton("mdi:arrow-down", "Nach unten", () => this._moveCard(pageIndex, columnIndex, openTab, 1)),
           miniButton(
             "mdi:delete-outline",
             "Karte entfernen",
-            () => this._mutate((draft) => draft.pages[pageIndex].grids[columnIndex].cards.splice(cardIndex, 1), true),
+            () => {
+              this._gridTab[tabKey] = Math.max(openTab - 1, 0);
+              this._mutate((draft) => draft.pages[pageIndex].grids[columnIndex].cards.splice(openTab, 1), true);
+            },
             "mini danger"
           ),
         ];
@@ -587,13 +642,14 @@ class HaOsShellEditor extends HTMLElement {
         this._panel.append(
           this._block(
             this._cardLabel(card),
-            card.type,
-            () => this._cardBody(pageIndex, columnIndex, cardIndex, card),
-            `card-${pageIndex}-${columnIndex}-${cardIndex}`,
-            extras
+            `Karte ${openTab + 1} von ${grid.cards.length} · ${card.type}`,
+            () => this._cardBody(pageIndex, columnIndex, openTab, card),
+            `card-${pageIndex}-${columnIndex}-${openTab}`,
+            extras,
+            true
           )
         );
-      });
+      }
 
       const addRow = el("div", "add-row");
 

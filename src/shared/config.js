@@ -135,6 +135,13 @@ export const normalizeShellConfig = (config = {}) => {
     fullscreen_entity: config.fullscreen_entity || "",
     show_settings_button: config.show_settings_button !== false,
     show_theme_button: config.show_theme_button !== false,
+
+    // Seiten sind ab 0.5.0 zusätzlich über die Seitenleiste erreichbar.
+    // Beide Wege bleiben standardmäßig an: wer die Reiter oben gewohnt ist,
+    // soll sie nach dem Update nicht plötzlich vermissen.
+    sidebar_pages: config.sidebar_pages !== false,
+    topbar_tabs: config.topbar_tabs !== false,
+
     quick_actions: (Array.isArray(config.quick_actions) ? config.quick_actions : []).map((action, index) =>
       normalizeQuickAction(action, index, usedActionIds)
     ),

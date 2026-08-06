@@ -456,8 +456,28 @@ class HaOsShell extends HTMLElement {
   _syncSidebar() {
     const config = this._config;
 
-    // Schnellaktionen
     this._sideTop.replaceChildren();
+
+    // Seiten als Symbolliste. Die Reiter oben bleiben davon unberührt – wer
+    // viele Seiten hat, kommt über die Leiste schneller hin, ohne dass die
+    // Kopfzeile überläuft.
+    this._sidebarPages = new Map();
+    if (config.sidebar_pages) {
+      config.pages.forEach((page) => {
+        const button = el("button", "icon-button");
+        button.title = page.name;
+        button.setAttribute("aria-label", page.name);
+        button.append(iconEl(page.icon || "mdi:view-dashboard-outline"));
+        button.addEventListener("click", () => this._selectPage(page.id));
+        this._sidebarPages.set(page.id, button);
+        this._sideTop.append(button);
+      });
+      if (config.pages.length && config.quick_actions.length) {
+        this._sideTop.append(el("div", "side-divider"));
+      }
+    }
+
+    // Schnellaktionen
     this._quickActions = new Map();
     config.quick_actions.forEach((action) => {
       const button = el("button", "icon-button");
@@ -507,6 +527,8 @@ class HaOsShell extends HTMLElement {
     this._tabList.replaceChildren();
     this._tabs.clear();
 
+    if (!this._config.topbar_tabs) return;
+
     this._config.pages.forEach((page) => {
       const tab = el("button", "tab", page.name);
       tab.setAttribute("role", "tab");
@@ -550,6 +572,7 @@ class HaOsShell extends HTMLElement {
     });
 
     this._tabs.forEach((tab, pageId) => tab.classList.toggle("active", pageId === activeId));
+    this._sidebarPages?.forEach((button, pageId) => button.classList.toggle("active", pageId === activeId));
     this._settingsButton?.classList.toggle("active", activeId === SETTINGS_PAGE_ID);
 
     this._syncBadges();

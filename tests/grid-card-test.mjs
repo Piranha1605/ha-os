@@ -128,13 +128,24 @@ editor.setConfig({ type: "custom:ha-os-grid", cards: [{ type: "tile", entity: "l
 document.body.append(editor);
 await settle();
 
-const slots = editor.shadowRoot.querySelectorAll(".slot");
-check("vier Plätze im Editor", slots.length === 4);
-check("belegter Platz zeigt den Kartennamen", slots[0].querySelector(".label").textContent === "Kachel",
-  slots[0].querySelector(".label").textContent);
-check("drei Plätze bieten die Auswahl an", editor.shadowRoot.querySelectorAll(".choose").length === 3);
+const tabs = editor.shadowRoot.querySelectorAll(".slot-tab");
+check("vier nummerierte Reiter", tabs.length === 4, `${tabs.length}`);
+check("Reiter 1 ist aktiv", tabs[0].classList.contains("active"));
+check("belegter Platz ohne empty-Markierung", !tabs[0].classList.contains("empty"));
+check("leere Plätze sind markiert", [...tabs].slice(1).every((t) => t.classList.contains("empty")));
+check("nur ein Platz gleichzeitig sichtbar", editor.shadowRoot.querySelectorAll(".slot").length === 1);
+check("belegter Platz zeigt den Kartennamen",
+  editor.shadowRoot.querySelector(".slot .label").textContent === "Kachel",
+  editor.shadowRoot.querySelector(".slot .label").textContent);
 
-editor.shadowRoot.querySelectorAll(".choose")[0].click();
+// Auf einen leeren Platz wechseln
+tabs[1].click();
+await settle();
+check("Wechsel zeigt den leeren Platz", editor.shadowRoot.querySelector(".slot .pos").textContent === "Platz 2",
+  editor.shadowRoot.querySelector(".slot .pos").textContent);
+check("leerer Platz bietet die Auswahl an", editor.shadowRoot.querySelectorAll(".choose").length === 1);
+
+editor.shadowRoot.querySelector(".choose").click();
 await settle();
 const items = editor.shadowRoot.querySelectorAll(".picker-item");
 check("Auswahlliste erscheint", items.length > 0);
