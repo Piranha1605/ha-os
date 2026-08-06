@@ -54,8 +54,11 @@ export const STANDARD_CARDS = [
  * genau die Karten, die auf diesem Home Assistant tatsächlich vorhanden sind.
  */
 export const cardCatalog = () => {
+  // Nur die Shell selbst ausschliessen – sie darf nicht in sich selbst
+  // stecken. Das 2×2-Raster und die generische Karte gehören sehr wohl in
+  // die Liste: sonst liessen sie sich in den Rastern gar nicht einsetzen.
   const custom = (window.customCards || [])
-    .filter((entry) => entry?.type && !String(entry.type).startsWith("ha-os-"))
+    .filter((entry) => entry?.type && String(entry.type).replace(/^custom:/, "") !== "ha-os-shell")
     .map((entry) => ({
       type: `custom:${String(entry.type).replace(/^custom:/, "")}`,
       name: entry.name || entry.type,

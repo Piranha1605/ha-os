@@ -1391,7 +1391,7 @@ var STANDARD_CARDS = [
   { type: "grid", name: "Raster", description: "Karten in einem Raster.", icon: "mdi:view-grid" }
 ];
 var cardCatalog = () => {
-  const custom = (window.customCards || []).filter((entry) => entry?.type && !String(entry.type).startsWith("ha-os-")).map((entry) => ({
+  const custom = (window.customCards || []).filter((entry) => entry?.type && String(entry.type).replace(/^custom:/, "") !== "ha-os-shell").map((entry) => ({
     type: `custom:${String(entry.type).replace(/^custom:/, "")}`,
     name: entry.name || entry.type,
     description: entry.description || "",

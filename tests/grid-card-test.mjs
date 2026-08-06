@@ -153,6 +153,13 @@ check("Standardkarten enthalten", [...items].some((i) => i.textContent.includes(
 check("installierte Fremdkarten enthalten", [...items].some((i) => i.textContent.includes("Bubble Card")),
   [...items].map((i) => i.querySelector(".pi-name").textContent).join(", "));
 
+// Das 2×2-Raster muss selbst wählbar sein – sonst liesse es sich in den
+// Shell-Rastern gar nicht einsetzen. Nur die Shell darf fehlen, sie würde
+// sich sonst in sich selbst stecken.
+check("2x2-Raster steht zur Auswahl", [...items].some((i) => i.textContent.includes("2×2")),
+  [...items].map((i) => i.querySelector(".pi-name").textContent).join(", "));
+check("Shell steht NICHT zur Auswahl", ![...items].some((i) => i.textContent.includes("HA-OS Shell")));
+
 const search = editor.shadowRoot.querySelector('input[type=search]');
 search.value = "bubble";
 search.dispatchEvent(new dom.window.Event("input"));
