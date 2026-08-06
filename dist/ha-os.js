@@ -1,4 +1,4 @@
-/* HA-OS 0.6.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.7.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -6,6 +6,10 @@ var THEME_DEFAULTS = Object.freeze({
   mode: "dark",
   accent: "#0a84ff",
   margin: 25,
+  // Hintergrundbilder, getrennt fuer Hell und Dunkel. Leer = kein Bild.
+  backgroundLight: "",
+  backgroundDark: "",
+  backgroundDim: 0,
   // Hintergrundkarte = die grosse Glasflaeche der Shell
   cardSurface: "#ffffff",
   cardOpacity: 10,
@@ -30,6 +34,11 @@ var clamp = (value, min, max, fallback) => {
   return Number.isFinite(number2) ? Math.min(max, Math.max(min, number2)) : fallback;
 };
 var color = (value, fallback) => /^#[0-9a-f]{6}$/i.test(String(value || "")) ? String(value).toLowerCase() : fallback;
+var imageUrl = (value) => {
+  const text2 = String(value || "").trim();
+  if (!text2) return "";
+  return /^\/(local|api|media|hacsfiles)\//.test(text2) ? text2 : "";
+};
 var hexToRgb = (hex) => {
   const value = String(hex).replace("#", "");
   return [0, 2, 4].map((start) => Number.parseInt(value.slice(start, start + 2), 16)).join(", ");
@@ -57,6 +66,9 @@ var normalizeTheme = (settings = {}) => ({
   mode: settings.mode === "light" ? "light" : "dark",
   accent: color(settings.accent, THEME_DEFAULTS.accent),
   margin: clamp(settings.margin, 0, 60, THEME_DEFAULTS.margin),
+  backgroundLight: imageUrl(settings.backgroundLight),
+  backgroundDark: imageUrl(settings.backgroundDark),
+  backgroundDim: clamp(settings.backgroundDim, 0, 80, THEME_DEFAULTS.backgroundDim),
   cardSurface: color(settings.cardSurface, THEME_DEFAULTS.cardSurface),
   cardOpacity: clamp(settings.cardOpacity, 0, 95, THEME_DEFAULTS.cardOpacity),
   cardBlur: clamp(settings.cardBlur, 0, 50, THEME_DEFAULTS.cardBlur),
@@ -115,6 +127,8 @@ var apply = (settings) => {
     "--haos-status-home": light ? "#168a4a" : "#32d583",
     "--haos-status-away": light ? "#a06a10" : "#f7b955",
     "--haos-margin": `${t.margin}px`,
+    "--haos-background-image": (light ? t.backgroundLight : t.backgroundDark) ? `url("${light ? t.backgroundLight : t.backgroundDark}")` : "none",
+    "--haos-background-dim": String(t.backgroundDim / 100),
     "--haos-card-surface-rgb": hexToRgb(t.cardSurface),
     "--haos-card-opacity": String(cardOpacity / 100),
     "--haos-card-blur": `${t.cardBlur}px`,
@@ -472,6 +486,22 @@ var STYLES = `
   * { box-sizing: border-box; }
   button { font: inherit; color: inherit; }
 
+  /* Hintergrundbild.
+     Liegt fest hinter dem gesamten Fenster, nicht in der Shell: das Glas soll
+     etwas haben, wodurch es hindurchschaut. Eine Flaeche innerhalb der Shell
+     waere von ihr selbst verdeckt.
+     pointer-events: none, damit die Schicht keine Klicks abfaengt. */
+  .wallpaper {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background-image: var(--haos-background-image, none);
+    background-size: cover; background-position: center; background-repeat: no-repeat;
+  }
+  .wallpaper::after {
+    content: ""; position: absolute; inset: 0;
+    background: rgba(0, 0, 0, var(--haos-background-dim, 0));
+  }
+  .wallpaper[hidden] { display: none; }
+
   .shell {
     min-height: var(--haos-shell-height, 480px);
     padding: var(--haos-shell-gap, 16px);
@@ -491,7 +521,9 @@ var STYLES = `
   /* ---------- Seitenleiste ---------- */
   .sidebar { grid-area: sidebar; min-width: 0; min-height: 0; ${ENTITY_SURFACE_CSS} }
   .sidebar nav { height: 100%; padding: 7px 6px; display: flex; flex-direction: column; align-items: center; }
-  .side-top { width: 100%; flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 7px; overflow-y: auto; scrollbar-width: none; }
+  /* Etwas Luft nach beiden Seiten, damit der Rand des aktiven Knopfes nicht
+     direkt an der Scroll-Kante klebt. */
+  .side-top { width: 100%; flex: 1; min-height: 0; padding: 2px 3px; display: flex; flex-direction: column; align-items: center; gap: 7px; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
   .side-top::-webkit-scrollbar { display: none; }
   .side-bottom { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 7px; }
   .side-divider { width: 28px; height: 1px; margin: 3px 0; background: rgba(var(--haos-text-rgb, 255,255,255), .18); }
@@ -512,11 +544,14 @@ var STYLES = `
     color: var(--haos-text, #fff);
     border-color: rgba(var(--haos-card-border-rgb, 255,255,255), calc(var(--haos-card-border-opacity, .25) + .20));
     background: linear-gradient(145deg, rgba(var(--haos-card-border-rgb, 255,255,255), .18), rgba(var(--haos-card-surface-rgb, 255,255,255), .07));
+    /* Schatten bewusst flach: die Leiste scrollt (overflow-y: auto) und
+       schneidet alles ab, was über den aktiven Knopf hinausragt. Ein weiter
+       Schlagschatten wirkte dadurch abgeschnitten statt weich. */
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.38),
       inset 0 -10px 22px color-mix(in srgb, var(--haos-accent, #0a84ff) 18%, transparent),
-      0 8px 22px rgba(0,0,0,.16),
-      0 0 14px color-mix(in srgb, var(--haos-accent, #0a84ff) 18%, transparent);
+      0 2px 6px rgba(0,0,0,.14),
+      0 0 6px color-mix(in srgb, var(--haos-accent, #0a84ff) 16%, transparent);
   }
   .icon-button.active ha-icon { filter: drop-shadow(0 0 5px color-mix(in srgb, var(--haos-accent, #0a84ff) 55%, transparent)); }
 
@@ -617,6 +652,15 @@ var STYLES = `
   .control { min-height: 58px; padding: 9px 4px; display: grid; grid-template-columns: minmax(140px, 1fr) 60px minmax(140px, 1.2fr); align-items: center; gap: 12px; border-top: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .08); }
   .group-body > .control:first-child { border-top: 0; }
   .control.color { grid-template-columns: 1fr 58px; }
+  /* Bildauswahl braucht die volle Breite – Vorschau und Uploadfläche passen
+     nicht in eine Rasterspalte. */
+  .control.stacked { display: grid; grid-template-columns: 1fr; gap: 8px; }
+  .control.stacked input.path {
+    width: 100%; padding: 8px 10px; font: inherit; font-size: 12px;
+    color: var(--haos-text, #fff);
+    background: rgba(var(--haos-text-rgb, 255,255,255), .08);
+    border: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .16); border-radius: 8px;
+  }
   .control b { display: block; font-size: 12px; }
   .control small { display: block; margin-top: 3px; font-size: 9px; color: rgba(var(--haos-text-rgb, 255,255,255), .53); }
   .control output { text-align: right; font-size: 11px; font-weight: 750; color: rgba(var(--haos-text-rgb, 255,255,255), .82); }
@@ -669,6 +713,9 @@ var STYLES = `
 var THEME_CONTROLS = [
   { group: "general", key: "accent", label: "Akzentfarbe", hint: "Aktive Elemente", type: "color" },
   { group: "general", key: "margin", label: "Außenabstand", hint: "Abstand um die Shell", min: 0, max: 60, step: 1, unit: "px" },
+  { group: "background", key: "backgroundDark", label: "Bild für Dunkel", hint: "Hintergrund im dunklen Modus", type: "image" },
+  { group: "background", key: "backgroundLight", label: "Bild für Hell", hint: "Hintergrund im hellen Modus", type: "image" },
+  { group: "background", key: "backgroundDim", label: "Abdunkeln", hint: "Schwarze Schicht über dem Bild", min: 0, max: 80, step: 1, unit: "%" },
   { group: "card", key: "cardSurface", label: "Grundfarbe", hint: "Farbe der Glasfläche", type: "color" },
   { group: "card", key: "cardOpacity", label: "Transparenz", hint: "Hintergrundkarte", min: 0, max: 95, step: 1, unit: "%" },
   { group: "card", key: "cardBlur", label: "Unschärfe", hint: "Hintergrundkarte", min: 0, max: 50, step: 1, unit: "px" },
@@ -686,7 +733,12 @@ var THEME_CONTROLS = [
   { group: "entity", key: "entityBorderOpacity", label: "Rahmenstärke", hint: "Entitätskarte", min: 0, max: 80, step: 1, unit: "%" },
   { group: "entity", key: "entitySheen", label: "Glanz", hint: "Helle Kante oben, Schimmer über der Fläche", min: 0, max: 100, step: 1, unit: "%" }
 ];
-var GROUP_TITLES = { general: "Allgemein", card: "Hintergrundkarte", entity: "Entitätskarten" };
+var GROUP_TITLES = {
+  general: "Allgemein",
+  background: "Hintergrundbild",
+  card: "Hintergrundkarte",
+  entity: "Entitätskarten"
+};
 var el = (tag, className, text2) => {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -821,8 +873,10 @@ var HaOsShell = class extends HTMLElement {
     this._userList.setAttribute("aria-label", "Personen");
     this._topbar.append(this._tabList, this._badgeList, this._userList);
     this._content = el("main", "content");
+    this._wallpaper = el("div", "wallpaper");
+    this._wallpaper.setAttribute("aria-hidden", "true");
     this._shell.append(this._sidebar, this._topbar, this._content);
-    this.shadowRoot.append(style, this._shell);
+    this.shadowRoot.append(style, this._wallpaper, this._shell);
     this._built = true;
   }
   // ---------------------------------------------------------------- Seitenleiste
@@ -1285,7 +1339,9 @@ var HaOsShell = class extends HTMLElement {
     header.append(titleBox, backButton);
     const body = el("div", "settings-body");
     this._settingsInputs = /* @__PURE__ */ new Map();
-    ["general", "card", "entity"].forEach((groupId) => {
+    this._settingsPaths = /* @__PURE__ */ new Map();
+    this._settingsImages = /* @__PURE__ */ new Map();
+    Object.keys(GROUP_TITLES).forEach((groupId) => {
       const group = el("section", "group");
       const toggle = document.createElement("button");
       toggle.append(el("h3", null, GROUP_TITLES[groupId]), iconEl("mdi:chevron-down"));
@@ -1322,6 +1378,7 @@ var HaOsShell = class extends HTMLElement {
     this._syncSettingsValues();
   }
   _buildThemeControl(control) {
+    if (control.type === "image") return this._buildImageControl(control);
     const label = document.createElement("label");
     label.className = control.type === "color" ? "control color" : "control";
     const text2 = el("span");
@@ -1348,6 +1405,49 @@ var HaOsShell = class extends HTMLElement {
     label.append(input);
     return label;
   }
+  /**
+   * Bildauswahl mit Upload.
+   *
+   * Eine Lovelace-Karte darf nicht in `config/www/` schreiben – dafür gibt es
+   * keine Schnittstelle. Home Assistant bringt aber eine eigene Bildablage
+   * samt Upload mit, erreichbar über `ha-selector` mit dem Typ `image`. Das
+   * hochgeladene Bild liegt danach unter `/api/image/serve/…`.
+   *
+   * Das Textfeld darunter bleibt für alle, die ihre Bilder lieber selbst nach
+   * `config/www/wallpaper/` legen und `/local/wallpaper/…` eintragen.
+   */
+  _buildImageControl(control) {
+    const wrap = el("div", "control stacked");
+    const text2 = el("span");
+    text2.append(el("b", null, control.label), el("small", null, control.hint));
+    wrap.append(text2);
+    const current = () => HaOsTheme.get()[control.key] || "";
+    if (customElements.get("ha-selector")) {
+      const selector = document.createElement("ha-selector");
+      selector.hass = this._hass;
+      selector.selector = { image: {} };
+      selector.value = current();
+      selector.addEventListener("value-changed", (event) => {
+        event.stopPropagation();
+        HaOsTheme.save({ [control.key]: event.detail.value || "" });
+        pathInput.value = HaOsTheme.get()[control.key] || "";
+      });
+      wrap.append(selector);
+      this._settingsImages.set(control.key, { selector, control });
+    }
+    const pathInput = document.createElement("input");
+    pathInput.type = "text";
+    pathInput.className = "path";
+    pathInput.placeholder = "/local/wallpaper/bild.jpg";
+    pathInput.value = current();
+    pathInput.addEventListener("change", () => {
+      HaOsTheme.save({ [control.key]: pathInput.value.trim() });
+      pathInput.value = HaOsTheme.get()[control.key] || "";
+    });
+    wrap.append(pathInput);
+    this._settingsPaths.set(control.key, pathInput);
+    return wrap;
+  }
   _syncSettingsValues() {
     if (!this._settingsInputs) return;
     const theme = HaOsTheme.get();
@@ -1356,6 +1456,12 @@ var HaOsShell = class extends HTMLElement {
       if (value === void 0) return;
       input.value = value;
       if (output) output.textContent = `${value}${control.unit || ""}`;
+    });
+    this._settingsPaths?.forEach((input, key) => {
+      input.value = theme[key] || "";
+    });
+    this._settingsImages?.forEach(({ selector }, key) => {
+      selector.value = theme[key] || "";
     });
   }
 };
@@ -1422,6 +1528,7 @@ var createHaCardEditor = ({ hass, value, onChange }) => {
   if (!customElements.get("hui-card-element-editor")) return null;
   const editor = document.createElement("hui-card-element-editor");
   editor.hass = hass;
+  editor.GUImode = true;
   editor.lovelace = { config: { views: [] }, editMode: true, saveConfig: async () => {
   } };
   editor.value = value;
@@ -1431,6 +1538,35 @@ var createHaCardEditor = ({ hass, value, onChange }) => {
     if (next) onChange(next);
   });
   return editor;
+};
+var createCardEditorWithCode = ({ hass, value, onChange, codeMode, onToggleCode, el: el5 }) => {
+  const wrap = el5("div");
+  const gui = codeMode ? null : createHaCardEditor({ hass, value, onChange });
+  if (gui) {
+    wrap.append(gui);
+  } else {
+    if (!codeMode) {
+      wrap.append(
+        el5(
+          "p",
+          "hint",
+          "Der Karteneditor von Home Assistant steht hier nicht zur Verfuegung - Konfiguration als YAML."
+        )
+      );
+    }
+    const yaml = document.createElement("ha-yaml-editor");
+    yaml.defaultValue = value;
+    yaml.addEventListener("value-changed", (event) => {
+      event.stopPropagation();
+      if (event.detail.isValid === false) return;
+      onChange(event.detail.value);
+    });
+    wrap.append(yaml);
+  }
+  const toggle = el5("button", "linkish", codeMode ? "Eingabemaske anzeigen" : "Code-Editor anzeigen");
+  toggle.addEventListener("click", onToggleCode);
+  wrap.append(toggle);
+  return wrap;
 };
 
 // src/cards/shell-editor.js
@@ -1549,6 +1685,12 @@ var STYLES2 = `
   }
   .add:hover { background: rgba(127,127,127,.08); }
   .add ha-icon { --mdc-icon-size: 18px; }
+
+  /* Umschalter auf den Code-Editor – wie in HAs eigenem Kartendialog unten. */
+  .linkish {
+    margin-top: 10px; padding: 6px 0; border: 0; background: none; cursor: pointer;
+    font: inherit; font-size: 13px; color: var(--primary-color);
+  }
 
   /* Der offene Block hebt sich ab – bei vier Ebenen ist das die zweite
      Orientierungshilfe neben der Pfadzeile. */
@@ -2243,45 +2385,22 @@ var HaOsShellEditor = class extends HTMLElement {
       wrap.append(editor);
       return wrap;
     }
-    const haEditor = createHaCardEditor({
-      hass: this._hass,
-      value: card,
-      onChange: (next) => write({ ...next, haos_weight: card.haos_weight })
-    });
-    if (haEditor) {
-      wrap.append(haEditor);
-      wrap.append(this._weightField(card, write));
-      return wrap;
-    }
+    const codeKey = `${pageIndex}-${columnIndex}-${cardIndex}`;
+    this._codeMode = this._codeMode || /* @__PURE__ */ new Set();
     wrap.append(
-      el2(
-        "p",
-        "hint",
-        "Der Karteneditor von Home Assistant steht hier nicht zur Verfügung – Konfiguration deshalb als YAML."
-      )
+      createCardEditorWithCode({
+        hass: this._hass,
+        value: card,
+        onChange: (next) => write({ ...next, haos_weight: card.haos_weight }),
+        codeMode: this._codeMode.has(codeKey),
+        onToggleCode: () => {
+          if (this._codeMode.has(codeKey)) this._codeMode.delete(codeKey);
+          else this._codeMode.add(codeKey);
+          this._renderPanels();
+        },
+        el: el2
+      })
     );
-    const yamlEditor = document.createElement("ha-yaml-editor");
-    if (typeof yamlEditor.setConfig === "function" || "defaultValue" in yamlEditor || customElements.get("ha-yaml-editor")) {
-      yamlEditor.defaultValue = card;
-      yamlEditor.addEventListener("value-changed", (event) => {
-        event.stopPropagation();
-        if (event.detail.isValid === false) return;
-        write({ ...event.detail.value, haos_weight: card.haos_weight });
-      });
-      wrap.append(yamlEditor);
-    } else {
-      const area = document.createElement("textarea");
-      area.className = "plain";
-      area.rows = 10;
-      area.value = JSON.stringify(card, null, 2);
-      area.addEventListener("change", () => {
-        try {
-          write({ ...JSON.parse(area.value), haos_weight: card.haos_weight });
-        } catch (_error) {
-        }
-      });
-      wrap.append(area);
-    }
     wrap.append(this._weightField(card, write));
     return wrap;
   }
@@ -3854,6 +3973,12 @@ var STYLES5 = `
   }
   .choose:hover { background: rgba(127,127,127,.08); }
 
+  /* Umschalter auf den Code-Editor – wie in HAs eigenem Kartendialog unten. */
+  .linkish {
+    margin-top: 10px; padding: 6px 0; border: 0; background: none; cursor: pointer;
+    font: inherit; font-size: 13px; color: var(--primary-color);
+  }
+
   .picker { display: grid; gap: 8px; }
   .picker-list {
     max-height: 300px; overflow-y: auto; display: grid; gap: 4px;
@@ -4129,27 +4254,25 @@ var HaOsGridEditor = class extends HTMLElement {
     const write = (next) => this._mutate((draft) => {
       draft.cards[index] = next;
     });
-    const editor = createHaCardEditor({ hass: this._hass, value: card, onChange: write });
-    if (editor) return editor;
-    const wrap = el4("div");
-    wrap.append(
-      el4("p", "hint", "Der Karteneditor von Home Assistant steht hier nicht zur Verfügung – Konfiguration als YAML.")
-    );
-    const yaml = document.createElement("ha-yaml-editor");
-    yaml.defaultValue = card;
-    yaml.addEventListener("value-changed", (event) => {
-      event.stopPropagation();
-      if (event.detail.isValid === false) return;
-      write(event.detail.value);
+    this._codeMode = this._codeMode || /* @__PURE__ */ new Set();
+    return createCardEditorWithCode({
+      hass: this._hass,
+      value: card,
+      onChange: write,
+      codeMode: this._codeMode.has(index),
+      onToggleCode: () => {
+        if (this._codeMode.has(index)) this._codeMode.delete(index);
+        else this._codeMode.add(index);
+        this._render();
+      },
+      el: el4
     });
-    wrap.append(yaml);
-    return wrap;
   }
 };
 if (!customElements.get(EDITOR_TAG5)) customElements.define(EDITOR_TAG5, HaOsGridEditor);
 
 // src/ha-os.js
-var VERSION = "0.6.0";
+var VERSION = "0.7.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

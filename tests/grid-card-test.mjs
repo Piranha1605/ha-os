@@ -177,5 +177,29 @@ check("Auswahl schreibt die Karte in den freien Platz",
   emitted?.cards?.[1]?.type === "custom:bubble-card",
   JSON.stringify(emitted?.cards));
 
+console.log("\n7. Rückfallebene Code-Editor");
+// Manche Karten bieten in ihrer Eingabemaske nicht alle Felder an – die alte
+// glass-devices-card etwa keine Entität. Ohne Umschalter käme man nicht heran.
+const codeEditor = document.createElement("ha-os-grid-editor");
+codeEditor.hass = makeHass();
+codeEditor.setConfig({
+  type: "custom:ha-os-grid",
+  cards: [{ type: "custom:glass-devices-card", size: "standard" }],
+});
+document.body.append(codeEditor);
+await settle();
+
+const umschalter = [...codeEditor.shadowRoot.querySelectorAll(".linkish")];
+check("Umschalter auf den Code-Editor vorhanden", umschalter.length === 1, `${umschalter.length}`);
+check("Umschalter heisst zuerst Code-Editor anzeigen",
+  umschalter[0]?.textContent === "Code-Editor anzeigen", umschalter[0]?.textContent);
+
+umschalter[0].click();
+await settle();
+check("nach dem Klick steht dort Eingabemaske anzeigen",
+  codeEditor.shadowRoot.querySelector(".linkish")?.textContent === "Eingabemaske anzeigen",
+  codeEditor.shadowRoot.querySelector(".linkish")?.textContent);
+check("YAML-Feld erscheint", Boolean(codeEditor.shadowRoot.querySelector("ha-yaml-editor")));
+
 console.log(failures === 0 ? "\nAlle Prüfungen bestanden.\n" : `\n${failures} FEHLER.\n`);
 process.exit(failures === 0 ? 0 : 1);

@@ -4,7 +4,7 @@ Dashboard-Grundgerüst für Home Assistant im Glassmorphism-Stil. Eine grosse
 Glasfläche mit Seitenleiste, Kopfzeile und drei frei gewichteten Rastern – in
 die jede installierte Lovelace-Karte passt.
 
-Version 0.6.0
+Version 0.7.0
 
 ---
 
@@ -23,7 +23,7 @@ Version 0.6.0
 
 5. Browser hart neu laden (Cmd+Shift+R bzw. Strg+F5)
 
-**Prüfen, ob es geladen hat:** In der Browserkonsole muss `HA-OS 0.6.0` stehen.
+**Prüfen, ob es geladen hat:** In der Browserkonsole muss `HA-OS 0.7.0` stehen.
 
 ---
 
@@ -187,6 +187,25 @@ echten Implementierung. Ob der visuelle Editor in der installierten
 Home-Assistant-Version sauber funktioniert, zeigt nur ein Blick ins Frontend.
 
 ---
+
+## Hintergrundbild
+
+In der internen Einstellungsseite unter *Hintergrundbild*, getrennt für Hell
+und Dunkel, dazu ein Regler zum Abdunkeln.
+
+Zwei Wege, ein Bild zu hinterlegen:
+
+- **Hochladen** über Home Assistants eigene Bildablage. Das Bild liegt danach
+  unter `/api/image/serve/…`.
+- **Eigener Pfad**, etwa `/local/wallpaper/bild.jpg` für Dateien, die man
+  selbst nach `config/www/wallpaper/` gelegt hat.
+
+Eine Lovelace-Karte kann **nicht** selbst nach `config/www/` schreiben – dafür
+gibt es keine Schnittstelle. Deshalb der Umweg über HAs Bildablage.
+
+Zugelassen sind nur Adressen innerhalb dieser Installation (`/local/`,
+`/api/`, `/media/`, `/hacsfiles/`). Ein Bild von einer fremden Adresse würde
+bei jedem Laden des Dashboards eine Verbindung dorthin aufbauen.
 
 ## Glasoptik
 

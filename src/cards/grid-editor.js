@@ -10,7 +10,7 @@
  */
 
 import { deepClone, isEqualConfig } from "../shared/utils.js";
-import { cardCatalog, stubConfigFor, createHaCardEditor } from "../shared/card-catalog.js";
+import { cardCatalog, stubConfigFor, createCardEditorWithCode } from "../shared/card-catalog.js";
 import { GRID_EDITOR_TAG, SLOTS } from "./grid-card.js";
 
 const STYLES = `
@@ -70,6 +70,12 @@ const STYLES = `
     display: flex; align-items: center; justify-content: center; gap: 6px;
   }
   .choose:hover { background: rgba(127,127,127,.08); }
+
+  /* Umschalter auf den Code-Editor – wie in HAs eigenem Kartendialog unten. */
+  .linkish {
+    margin-top: 10px; padding: 6px 0; border: 0; background: none; cursor: pointer;
+    font: inherit; font-size: 13px; color: var(--primary-color);
+  }
 
   .picker { display: grid; gap: 8px; }
   .picker-list {
@@ -379,23 +385,22 @@ class HaOsGridEditor extends HTMLElement {
         draft.cards[index] = next;
       });
 
-    const editor = createHaCardEditor({ hass: this._hass, value: card, onChange: write });
-    if (editor) return editor;
+    // Mit Umschalter auf YAML: manche Karten bieten in ihrer Eingabemaske
+    // nicht alle Felder an – die alte glass-devices-card etwa keine Entitaet.
+    this._codeMode = this._codeMode || new Set();
 
-    // Rückfallebene, falls HAs Karteneditor in dieser Version fehlt.
-    const wrap = el("div");
-    wrap.append(
-      el("p", "hint", "Der Karteneditor von Home Assistant steht hier nicht zur Verfügung – Konfiguration als YAML.")
-    );
-    const yaml = document.createElement("ha-yaml-editor");
-    yaml.defaultValue = card;
-    yaml.addEventListener("value-changed", (event) => {
-      event.stopPropagation();
-      if (event.detail.isValid === false) return;
-      write(event.detail.value);
+    return createCardEditorWithCode({
+      hass: this._hass,
+      value: card,
+      onChange: write,
+      codeMode: this._codeMode.has(index),
+      onToggleCode: () => {
+        if (this._codeMode.has(index)) this._codeMode.delete(index);
+        else this._codeMode.add(index);
+        this._render();
+      },
+      el,
     });
-    wrap.append(yaml);
-    return wrap;
   }
 }
 

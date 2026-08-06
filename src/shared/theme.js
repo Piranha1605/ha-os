@@ -14,6 +14,11 @@ export const THEME_DEFAULTS = Object.freeze({
   accent: "#0a84ff",
   margin: 25,
 
+  // Hintergrundbilder, getrennt fuer Hell und Dunkel. Leer = kein Bild.
+  backgroundLight: "",
+  backgroundDark: "",
+  backgroundDim: 0,
+
   // Hintergrundkarte = die grosse Glasflaeche der Shell
   cardSurface: "#ffffff",
   cardOpacity: 10,
@@ -42,6 +47,21 @@ const clamp = (value, min, max, fallback) => {
 
 const color = (value, fallback) =>
   /^#[0-9a-f]{6}$/i.test(String(value || "")) ? String(value).toLowerCase() : fallback;
+
+/**
+ * Prueft eine Bildadresse.
+ *
+ * Zugelassen sind nur Pfade innerhalb dieser Home-Assistant-Installation:
+ * `/local/...` fuer Dateien unter `config/www/`, `/api/image/serve/...` fuer
+ * Bilder, die ueber HAs eigenen Upload abgelegt wurden. Fremde Adressen
+ * bleiben draussen - ein Hintergrundbild von irgendwoher wuerde bei jedem
+ * Laden des Dashboards eine Verbindung dorthin aufbauen.
+ */
+const imageUrl = (value) => {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return /^\/(local|api|media|hacsfiles)\//.test(text) ? text : "";
+};
 
 const hexToRgb = (hex) => {
   const value = String(hex).replace("#", "");
@@ -99,6 +119,9 @@ export const normalizeTheme = (settings = {}) => ({
   mode: settings.mode === "light" ? "light" : "dark",
   accent: color(settings.accent, THEME_DEFAULTS.accent),
   margin: clamp(settings.margin, 0, 60, THEME_DEFAULTS.margin),
+  backgroundLight: imageUrl(settings.backgroundLight),
+  backgroundDark: imageUrl(settings.backgroundDark),
+  backgroundDim: clamp(settings.backgroundDim, 0, 80, THEME_DEFAULTS.backgroundDim),
 
   cardSurface: color(settings.cardSurface, THEME_DEFAULTS.cardSurface),
   cardOpacity: clamp(settings.cardOpacity, 0, 95, THEME_DEFAULTS.cardOpacity),
@@ -183,6 +206,11 @@ const apply = (settings) => {
     "--haos-status-away": light ? "#a06a10" : "#f7b955",
 
     "--haos-margin": `${t.margin}px`,
+
+    "--haos-background-image": (light ? t.backgroundLight : t.backgroundDark)
+      ? `url("${light ? t.backgroundLight : t.backgroundDark}")`
+      : "none",
+    "--haos-background-dim": String(t.backgroundDim / 100),
 
     "--haos-card-surface-rgb": hexToRgb(t.cardSurface),
     "--haos-card-opacity": String(cardOpacity / 100),

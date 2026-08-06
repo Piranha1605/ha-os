@@ -16,7 +16,7 @@
 
 import { normalizeShellConfig, createEmptyGrids, DEFAULT_GRID_WIDTHS } from "../shared/config.js";
 import { isEqualConfig, deepClone } from "../shared/utils.js";
-import { cardCatalog, stubConfigFor, createHaCardEditor } from "../shared/card-catalog.js";
+import { cardCatalog, stubConfigFor, createCardEditorWithCode } from "../shared/card-catalog.js";
 
 const EDITOR_TAG = "ha-os-shell-editor";
 
@@ -155,6 +155,12 @@ const STYLES = `
   }
   .add:hover { background: rgba(127,127,127,.08); }
   .add ha-icon { --mdc-icon-size: 18px; }
+
+  /* Umschalter auf den Code-Editor – wie in HAs eigenem Kartendialog unten. */
+  .linkish {
+    margin-top: 10px; padding: 6px 0; border: 0; background: none; cursor: pointer;
+    font: inherit; font-size: 13px; color: var(--primary-color);
+  }
 
   /* Der offene Block hebt sich ab – bei vier Ebenen ist das die zweite
      Orientierungshilfe neben der Pfadzeile. */
@@ -954,53 +960,26 @@ class HaOsShellEditor extends HTMLElement {
       return wrap;
     }
 
-    // Home Assistants eigener Karteneditor. Er liefert für jede installierte
-    // Karte deren echte Eingabemaske – Entitätswähler, Farbwahl, alles.
-    const haEditor = createHaCardEditor({
-      hass: this._hass,
-      value: card,
-      onChange: (next) => write({ ...next, haos_weight: card.haos_weight }),
-    });
-
-    if (haEditor) {
-      wrap.append(haEditor);
-      wrap.append(this._weightField(card, write));
-      return wrap;
-    }
+    // Home Assistants eigener Karteneditor, mit Umschalter auf YAML. Der
+    // Umschalter ist noetig, weil manche Karten in ihrer Eingabemaske nicht
+    // alle Felder anbieten - die alte glass-devices-card etwa keine Entitaet.
+    const codeKey = `${pageIndex}-${columnIndex}-${cardIndex}`;
+    this._codeMode = this._codeMode || new Set();
 
     wrap.append(
-      el(
-        "p",
-        "hint",
-        "Der Karteneditor von Home Assistant steht hier nicht zur Verfügung – " +
-          "Konfiguration deshalb als YAML."
-      )
+      createCardEditorWithCode({
+        hass: this._hass,
+        value: card,
+        onChange: (next) => write({ ...next, haos_weight: card.haos_weight }),
+        codeMode: this._codeMode.has(codeKey),
+        onToggleCode: () => {
+          if (this._codeMode.has(codeKey)) this._codeMode.delete(codeKey);
+          else this._codeMode.add(codeKey);
+          this._renderPanels();
+        },
+        el,
+      })
     );
-
-    const yamlEditor = document.createElement("ha-yaml-editor");
-    if (typeof yamlEditor.setConfig === "function" || "defaultValue" in yamlEditor || customElements.get("ha-yaml-editor")) {
-      yamlEditor.defaultValue = card;
-      yamlEditor.addEventListener("value-changed", (event) => {
-        event.stopPropagation();
-        if (event.detail.isValid === false) return;
-        write({ ...event.detail.value, haos_weight: card.haos_weight });
-      });
-      wrap.append(yamlEditor);
-    } else {
-      // Rückfallebene, falls ha-yaml-editor in dieser HA-Version fehlt.
-      const area = document.createElement("textarea");
-      area.className = "plain";
-      area.rows = 10;
-      area.value = JSON.stringify(card, null, 2);
-      area.addEventListener("change", () => {
-        try {
-          write({ ...JSON.parse(area.value), haos_weight: card.haos_weight });
-        } catch (_error) {
-          /* Ungültiges JSON – Eingabe bleibt stehen, nichts wird gespeichert. */
-        }
-      });
-      wrap.append(area);
-    }
 
     wrap.append(this._weightField(card, write));
     return wrap;

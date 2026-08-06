@@ -302,6 +302,31 @@ check(
   "Design muss über CSS laufen, nicht über JavaScript"
 );
 
+// Hintergrundbild, getrennt fuer Hell und Dunkel.
+const cssVar = (name) => document.documentElement.style.getPropertyValue(name);
+check("Bildschicht vorhanden", Boolean(root.querySelector(".wallpaper")));
+check("Pfadfeld fuer eigene Bilder vorhanden",
+  root.querySelectorAll(".control.stacked input.path").length === 2,
+  `${root.querySelectorAll(".control.stacked input.path").length}`);
+
+window.HaOsTheme.save({ mode: "dark", backgroundDark: "/local/wallpaper/nacht.jpg", backgroundDim: 30 });
+check("dunkles Bild wird gesetzt", cssVar("--haos-background-image").includes("nacht.jpg"),
+  cssVar("--haos-background-image"));
+check("Abdunkeln wird gesetzt", cssVar("--haos-background-dim") === "0.3", cssVar("--haos-background-dim"));
+
+window.HaOsTheme.save({ backgroundLight: "/local/wallpaper/tag.jpg", mode: "light" });
+check("Hell nutzt sein eigenes Bild", cssVar("--haos-background-image").includes("tag.jpg"),
+  cssVar("--haos-background-image"));
+
+// Fremde Adressen bleiben draussen – sonst baute das Dashboard bei jedem
+// Laden eine Verbindung nach aussen auf.
+window.HaOsTheme.save({ backgroundLight: "https://example.com/bild.jpg" });
+check("fremde Adresse wird verworfen", cssVar("--haos-background-image") === "none",
+  cssVar("--haos-background-image"));
+
+window.HaOsTheme.save({ mode: "dark", backgroundDark: "", backgroundLight: "", backgroundDim: 0 });
+check("ohne Bild bleibt die Schicht leer", cssVar("--haos-background-image") === "none");
+
 // ---------------------------------------------------------------- Editor
 
 console.log("\n7. Editoren");

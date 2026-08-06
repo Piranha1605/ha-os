@@ -107,6 +107,7 @@ export const createHaCardEditor = ({ hass, value, onChange }) => {
 
   const editor = document.createElement("hui-card-element-editor");
   editor.hass = hass;
+  editor.GUImode = true;
 
   // Der Editor erwartet ein Lovelace-Objekt. Ein leeres genügt: er liest
   // daraus nur den Bearbeitungsmodus. Gespeichert wird über uns, nicht über
@@ -121,4 +122,56 @@ export const createHaCardEditor = ({ hass, value, onChange }) => {
   });
 
   return editor;
+};
+
+/**
+ * Karteneditor mit Umschalter auf den Code-Editor.
+ *
+ * Der Umschalter ist keine Bequemlichkeit, sondern die Rueckfallebene: manche
+ * Karten bieten in ihrer Eingabemaske gar nicht alle Felder an. Die alte
+ * `glass-devices-card` etwa laesst keine Entitaet auswaehlen - ohne YAML kaeme
+ * man an sie nicht heran. In Home Assistants eigenem Dialog sitzt derselbe
+ * Knopf unten, er gehoert dort aber zum Dialograhmen und geht beim Einbetten
+ * verloren.
+ *
+ * Der Zustand des Umschalters bleibt bewusst im Editor. Im Kartenkonfig
+ * abgelegt landete er in der gespeicherten Lovelace-Datei.
+ *
+ * @param codeMode      true, wenn gerade YAML gezeigt wird
+ * @param onToggleCode  wird beim Umschalten aufgerufen
+ * @param el            Hilfsfunktion zum Erzeugen von Elementen
+ */
+export const createCardEditorWithCode = ({ hass, value, onChange, codeMode, onToggleCode, el }) => {
+  const wrap = el("div");
+
+  const gui = codeMode ? null : createHaCardEditor({ hass, value, onChange });
+
+  if (gui) {
+    wrap.append(gui);
+  } else {
+    if (!codeMode) {
+      wrap.append(
+        el(
+          "p",
+          "hint",
+          "Der Karteneditor von Home Assistant steht hier nicht zur Verfuegung - Konfiguration als YAML."
+        )
+      );
+    }
+
+    const yaml = document.createElement("ha-yaml-editor");
+    yaml.defaultValue = value;
+    yaml.addEventListener("value-changed", (event) => {
+      event.stopPropagation();
+      if (event.detail.isValid === false) return;
+      onChange(event.detail.value);
+    });
+    wrap.append(yaml);
+  }
+
+  const toggle = el("button", "linkish", codeMode ? "Eingabemaske anzeigen" : "Code-Editor anzeigen");
+  toggle.addEventListener("click", onToggleCode);
+  wrap.append(toggle);
+
+  return wrap;
 };
