@@ -1,4 +1,4 @@
-/* HA-OS 0.5.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.6.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -1461,15 +1461,17 @@ var HELPERS = {
   fullscreen_entity: "Ein input_boolean, das den Vollbildmodus schaltet. Leer lassen, um den Knopf auszublenden.",
   users: "Leer lassen, um automatisch alle person-Entitäten anzuzeigen."
 };
-var GENERAL_SCHEMA = [
+var APPEARANCE_SCHEMA = [
   { name: "gap", selector: { number: { min: 0, max: 48, step: 1, mode: "slider" } } },
-  { name: "row_height", selector: { number: { min: 60, max: 320, step: 5, mode: "slider" } } },
+  { name: "row_height", selector: { number: { min: 60, max: 320, step: 5, mode: "slider" } } }
+];
+var BARS_SCHEMA = [
   { name: "users", selector: { entity: { domain: ["person", "device_tracker"], multiple: true } } },
-  { name: "fullscreen_entity", selector: { entity: { domain: ["input_boolean"] } } },
-  { name: "sidebar_pages", selector: { boolean: {} } },
   { name: "topbar_tabs", selector: { boolean: {} } },
+  { name: "sidebar_pages", selector: { boolean: {} } },
   { name: "show_settings_button", selector: { boolean: {} } },
-  { name: "show_theme_button", selector: { boolean: {} } }
+  { name: "show_theme_button", selector: { boolean: {} } },
+  { name: "fullscreen_entity", selector: { entity: { domain: ["input_boolean"] } } }
 ];
 var PAGE_SCHEMA = [
   { name: "name", required: true, selector: { text: {} } },
@@ -1504,6 +1506,12 @@ var QUICK_ACTION_SCHEMA = [
   { name: "entity", selector: { entity: {} } },
   { name: "tap_action", selector: { ui_action: {} } }
 ];
+var TABS = [
+  ["appearance", "Aussehen"],
+  ["bars", "Leisten"],
+  ["pages", "Seiten"]
+];
+var LEVELS = ["page", "section", "card", "detail"];
 var STYLES2 = `
   :host { display: block; }
   * { box-sizing: border-box; }
@@ -1542,22 +1550,10 @@ var STYLES2 = `
   .add:hover { background: rgba(127,127,127,.08); }
   .add ha-icon { --mdc-icon-size: 18px; }
 
-  .grid-head { display: flex; align-items: center; gap: 8px; margin: 4px 0 2px; font-size: 13px; font-weight: 600; }
-  .grid-head .weight { flex: 1; font-weight: 400; color: var(--secondary-text-color); font-size: 11px; }
-
-  /* Nummerierte Reiter für die Karten eines Rasters – Vorbild ist HAs eigene
-     Raster-Karte. Alle Editoren untereinander wurden schnell unübersichtlich. */
-  .card-tabs {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 2px;
-    border-bottom: 1px solid var(--divider-color, rgba(127,127,127,.3));
-  }
-  .card-tab {
-    min-width: 36px; height: 36px; padding: 0 8px; border: 0; background: none; cursor: pointer;
-    font: inherit; font-size: 13px; color: var(--secondary-text-color);
-    border-bottom: 2px solid transparent; margin-bottom: -1px;
-  }
-  .card-tab:hover { color: var(--primary-text-color); }
-  .card-tab.active { color: var(--primary-color); border-bottom-color: var(--primary-color); font-weight: 600; }
+  /* Der offene Block hebt sich ab – bei vier Ebenen ist das die zweite
+     Orientierungshilfe neben der Pfadzeile. */
+  .block.is-open { border-color: var(--primary-color); }
+  .block.is-open > header { background: color-mix(in srgb, var(--primary-color) 10%, transparent); }
 
   .hint { margin: 0; font-size: 12px; line-height: 1.45; color: var(--secondary-text-color); }
   .empty { padding: 14px; text-align: center; font-size: 12px; color: var(--secondary-text-color); }
@@ -1620,9 +1616,9 @@ var HaOsShellEditor = class extends HTMLElement {
     this._config = null;
     this._hass = null;
     this._built = false;
-    this._tab = "general";
-    this._editingPageIndex = 0;
-    this._open = /* @__PURE__ */ new Set();
+    this._tab = "appearance";
+    this._openAt = /* @__PURE__ */ new Map();
+    this._openPicker = null;
     this._forms = /* @__PURE__ */ new Map();
   }
   setConfig(config) {
@@ -1655,7 +1651,7 @@ var HaOsShellEditor = class extends HTMLElement {
         badges: page.badges.length,
         cards: page.grids.map((grid) => grid.cards.map((card) => card.type))
       }))
-    ) + `|${config.quick_actions.length}|${this._tab}|${this._editingPageIndex}`;
+    ) + `|${config.quick_actions.length}|${this._tab}`;
   }
   _emit() {
     this.dispatchEvent(
@@ -1675,11 +1671,7 @@ var HaOsShellEditor = class extends HTMLElement {
     const style = document.createElement("style");
     style.textContent = STYLES2;
     this._tabBar = el2("div", "tabs");
-    [
-      ["general", "Allgemein"],
-      ["pages", "Seiten"],
-      ["cards", "Karten"]
-    ].forEach(([id, label]) => {
+    TABS.forEach(([id, label]) => {
       const tab = el2("button", "tab", label);
       tab.addEventListener("click", () => {
         this._tab = id;
@@ -1694,13 +1686,13 @@ var HaOsShellEditor = class extends HTMLElement {
   }
   _renderPanels() {
     [...this._tabBar.children].forEach((tab, index) => {
-      tab.classList.toggle("active", ["general", "pages", "cards"][index] === this._tab);
+      tab.classList.toggle("active", TABS[index][0] === this._tab);
     });
     this._forms.clear();
     this._panel.replaceChildren();
-    if (this._tab === "general") this._renderGeneral();
-    else if (this._tab === "pages") this._renderPages();
-    else this._renderCards();
+    if (this._tab === "appearance") this._renderAppearance();
+    else if (this._tab === "bars") this._renderBars();
+    else this._renderPages();
   }
   _refreshForms() {
     this._forms.forEach((form, key) => {
@@ -1711,7 +1703,7 @@ var HaOsShellEditor = class extends HTMLElement {
   /** Liefert die aktuellen Daten für ein gecachtes Formular. */
   _formData(key) {
     const [kind, a, b] = key.split(":");
-    if (kind === "general") return this._config;
+    if (kind === "general" || kind === "bars") return this._config;
     if (kind === "page") return this._config.pages[Number(a)];
     if (kind === "iframe") return this._config.pages[Number(a)];
     if (kind === "badge") return this._config.pages[Number(a)].badges[Number(b)];
@@ -1732,61 +1724,99 @@ var HaOsShellEditor = class extends HTMLElement {
     this._forms.set(key, form);
     return form;
   }
+  /** Ist auf dieser Ebene genau dieser Block offen? */
+  _isOpen(level, openKey) {
+    return this._openAt?.get(level) === openKey;
+  }
   /**
-   * @param alwaysOpen Für Blöcke, die ohnehin einzeln über Reiter gewählt
-   *   werden – dort wäre ein zusätzliches Aufklappen ein Klick zu viel.
+   * Oeffnet einen Block und schliesst alles Tiefere.
+   *
+   * Ohne das Schliessen der tieferen Ebenen bliebe beim Wechsel von Raster 1
+   * nach Raster 2 die Karte aus Raster 1 aufgeklappt stehen - man saehe
+   * Felder, die zu etwas anderem gehoeren.
    */
-  _block(labelText, subText, bodyBuilder, openKey, headerExtras = [], alwaysOpen = false) {
-    const block = el2("div", "block");
+  _toggleOpen(level, openKey) {
+    this._openAt = this._openAt || /* @__PURE__ */ new Map();
+    const wasOpen = this._openAt.get(level) === openKey;
+    const from = LEVELS.indexOf(level);
+    LEVELS.slice(from).forEach((deeper) => this._openAt.delete(deeper));
+    if (!wasOpen) this._openAt.set(level, openKey);
+    this._renderPanels();
+  }
+  /**
+   * Aufklappbarer Block.
+   *
+   * @param level Ebene aus LEVELS - bestimmt, was beim Oeffnen zuklappt.
+   * @param path  Pfadzeile wie "Home > Raster 1 > Karte 1". Bei vier Ebenen
+   *              ist sie das Einzige, woran man noch erkennt, wo man ist.
+   */
+  _block(labelText, path, bodyBuilder, openKey, headerExtras = [], level = "section") {
+    const open = this._isOpen(level, openKey);
+    const block = el2("div", `block${open ? " is-open" : ""}`);
     const header = document.createElement("header");
-    const label = el2("div", "label", labelText);
-    if (subText) {
-      const sub = el2("div", "sub", subText);
-      const wrap = el2("div");
-      wrap.style.cssText = "flex:1;min-width:0";
-      wrap.append(label, sub);
-      header.append(wrap);
-    } else {
-      header.append(label);
+    const text2 = el2("div");
+    text2.style.cssText = "flex:1;min-width:0";
+    text2.append(el2("div", "label", labelText));
+    if (path) text2.append(el2("div", "sub", path));
+    header.append(text2);
+    const toggle = miniButton(
+      open ? "mdi:chevron-up" : "mdi:chevron-down",
+      "Aufklappen",
+      () => this._toggleOpen(level, openKey)
+    );
+    header.append(...headerExtras, toggle);
+    header.style.cursor = "pointer";
+    header.addEventListener("click", (event) => {
+      if (event.target.closest("button")) return;
+      this._toggleOpen(level, openKey);
+    });
+    block.append(header);
+    if (open) {
+      const body = el2("div", "body");
+      body.append(bodyBuilder());
+      block.append(body);
     }
-    const body = el2("div", "body");
-    body.hidden = alwaysOpen ? false : !this._open.has(openKey);
-    if (alwaysOpen) {
-      header.append(...headerExtras);
-    } else {
-      const toggle = miniButton(body.hidden ? "mdi:chevron-down" : "mdi:chevron-up", "Aufklappen", () => {
-        const open = this._open.has(openKey);
-        if (open) this._open.delete(openKey);
-        else this._open.add(openKey);
-        body.hidden = open;
-        toggle.querySelector("ha-icon")?.setAttribute("icon", open ? "mdi:chevron-down" : "mdi:chevron-up");
-      });
-      header.append(...headerExtras, toggle);
-    }
-    block.append(header, body);
-    if (!body.hidden || true) body.append(bodyBuilder());
     return block;
   }
   // ---------------------------------------------------------------- Allgemein
-  _renderGeneral() {
+  _renderAppearance() {
     this._panel.append(
-      this._form("general", GENERAL_SCHEMA, this._config, (value) => {
+      el2("p", "hint", "Masse der Shell. Farben und Glas stehen in der internen Einstellungsseite.")
+    );
+    this._panel.append(
+      this._form("general", APPEARANCE_SCHEMA, this._config, (value) => {
+        this._config = normalizeShellConfig({ ...this._config, ...value });
+        this._emit();
+      })
+    );
+  }
+  _renderBars() {
+    this._panel.append(
+      el2("p", "hint", "Kopfzeile oben und Seitenleiste links – alles, was am Rand der Shell sitzt.")
+    );
+    this._panel.append(
+      this._form("bars", BARS_SCHEMA, this._config, (value) => {
         this._config = normalizeShellConfig({ ...this._config, ...value });
         this._emit();
       })
     );
     const actions = el2("div", "panel");
-    actions.append(el2("p", "hint", "Schnellaktionen erscheinen als Symbole oben in der Seitenleiste."));
+    actions.append(el2("p", "hint", "Schnellaktionen erscheinen als Symbole in der Seitenleiste."));
     this._config.quick_actions.forEach((action, index) => {
       const extras = [
         miniButton("mdi:arrow-up", "Nach oben", () => this._moveQuickAction(index, -1)),
         miniButton("mdi:arrow-down", "Nach unten", () => this._moveQuickAction(index, 1)),
-        miniButton("mdi:delete-outline", "Entfernen", () => this._mutate((draft) => draft.quick_actions.splice(index, 1), true), "mini danger")
+        miniButton(
+          "mdi:delete-outline",
+          "Entfernen",
+          () => this._mutate((draft) => draft.quick_actions.splice(index, 1), true),
+          "mini danger"
+        )
       ];
       actions.append(
         this._block(
           action.name || action.entity || `Aktion ${index + 1}`,
-          action.icon,
+          `Seitenleiste › Aktion ${index + 1}`,
           () => this._form(
             `action:${index}`,
             QUICK_ACTION_SCHEMA,
@@ -1794,7 +1824,8 @@ var HaOsShellEditor = class extends HTMLElement {
             (value) => this._mutate((draft) => Object.assign(draft.quick_actions[index], value))
           ),
           `action-${index}`,
-          extras
+          extras,
+          "page"
         )
       );
     });
@@ -1823,7 +1854,7 @@ var HaOsShellEditor = class extends HTMLElement {
       el2(
         "p",
         "hint",
-        "Die erste Seite ist immer Home. Jede weitere Seite erhält automatisch drei leere Raster, ein Symbol in der Seitenleiste und einen Reiter in der Kopfzeile – beides unter Allgemein abschaltbar."
+        "Alles zu einer Seite steckt in ihr drin: Name, Badges und die drei Raster mit ihren Karten. Ob Seiten in der Seitenleiste oder als Reiter oben erscheinen, steht unter Leisten."
       )
     );
     this._config.pages.forEach((page, index) => {
@@ -1841,7 +1872,8 @@ var HaOsShellEditor = class extends HTMLElement {
           index === 0 ? "Startseite" : page.kind === "iframe" ? "Externe Seite" : "Interne Seite",
           () => this._pageBody(page, index),
           `page-${index}`,
-          extras
+          extras,
+          "page"
         )
       );
     });
@@ -1956,61 +1988,107 @@ var HaOsShellEditor = class extends HTMLElement {
   _pageBody(page, index) {
     const wrap = el2("div");
     wrap.append(
-      this._form(
-        `page:${index}`,
-        PAGE_SCHEMA,
-        page,
-        (value) => this._mutate((draft) => Object.assign(draft.pages[index], value), value.kind !== page.kind)
+      this._block(
+        "Allgemein",
+        `${page.name} › Allgemein`,
+        () => {
+          const box = el2("div");
+          box.append(
+            this._form(
+              `page:${index}`,
+              PAGE_SCHEMA,
+              page,
+              (value) => this._mutate((draft) => Object.assign(draft.pages[index], value), value.kind !== page.kind)
+            )
+          );
+          if (page.kind === "iframe") {
+            box.append(
+              this._form(
+                `iframe:${index}`,
+                IFRAME_SCHEMA,
+                page,
+                (value) => this._mutate((draft) => Object.assign(draft.pages[index], value))
+              )
+            );
+          } else {
+            const widths = el2("div", "field");
+            widths.append(el2("label", null, "Spaltenbreiten (Verhältnis der drei Raster)"));
+            const row = el2("div", "widths");
+            page.grid_widths.forEach((width, columnIndex) => {
+              const input = el2("input", "plain");
+              input.type = "number";
+              input.min = "0.3";
+              input.max = "4";
+              input.step = "0.05";
+              input.value = width;
+              input.addEventListener(
+                "change",
+                () => this._mutate((draft) => {
+                  draft.pages[index].grid_widths[columnIndex] = Number(input.value);
+                })
+              );
+              row.append(input);
+            });
+            widths.append(row);
+            box.append(widths);
+          }
+          return box;
+        },
+        `page-${index}-general`,
+        [],
+        "section"
       )
     );
-    if (page.kind === "iframe") {
+    wrap.append(
+      this._block(
+        "Badges",
+        `${page.name} › Badges · ${page.badges.length}`,
+        () => this._badgeList(page, index),
+        `page-${index}-badges`,
+        [],
+        "section"
+      )
+    );
+    if (page.kind === "iframe") return wrap;
+    page.grids.forEach((grid, columnIndex) => {
       wrap.append(
-        this._form(
-          `iframe:${index}`,
-          IFRAME_SCHEMA,
-          page,
-          (value) => this._mutate((draft) => Object.assign(draft.pages[index], value))
+        this._block(
+          `Raster ${columnIndex + 1}`,
+          `${page.name} › Raster ${columnIndex + 1} · ${grid.cards.length} ${grid.cards.length === 1 ? "Karte" : "Karten"} · Breite ${page.grid_widths[columnIndex]}`,
+          () => this._gridBody(page, index, columnIndex, grid),
+          `page-${index}-grid-${columnIndex}`,
+          [],
+          "section"
         )
       );
-    } else {
-      const widths = el2("div", "field");
-      widths.append(el2("label", null, "Spaltenbreiten (Verhältnis der drei Raster)"));
-      const row = el2("div", "widths");
-      page.grid_widths.forEach((width, columnIndex) => {
-        const input = el2("input", "plain");
-        input.type = "number";
-        input.min = "0.3";
-        input.max = "4";
-        input.step = "0.05";
-        input.value = width;
-        input.addEventListener(
-          "change",
-          () => this._mutate((draft) => {
-            draft.pages[index].grid_widths[columnIndex] = Number(input.value);
-          })
-        );
-        row.append(input);
-      });
-      widths.append(row);
-      wrap.append(widths);
-    }
+    });
+    return wrap;
+  }
+  _badgeList(page, index) {
+    const wrap = el2("div");
     wrap.append(el2("p", "hint", "Badges stehen oben in der Kopfzeile dieser Seite."));
     page.badges.forEach((badge, badgeIndex) => {
       const extras = [
-        miniButton("mdi:delete-outline", "Badge entfernen", () => this._mutate((draft) => draft.pages[index].badges.splice(badgeIndex, 1), true), "mini danger")
+        miniButton(
+          "mdi:delete-outline",
+          "Badge entfernen",
+          () => this._mutate((draft) => draft.pages[index].badges.splice(badgeIndex, 1), true),
+          "mini danger"
+        )
       ];
       wrap.append(
         this._block(
           badge.name || badge.entity || `Badge ${badgeIndex + 1}`,
-          "",
+          `${page.name} › Badges › ${badgeIndex + 1}`,
           () => this._form(
             `badge:${index}:${badgeIndex}`,
             BADGE_SCHEMA,
             badge,
             (value) => this._mutate((draft) => Object.assign(draft.pages[index].badges[badgeIndex], value))
           ),
-          `badge-${index}-${badgeIndex}`,
-          extras
+          `page-${index}-badge-${badgeIndex}`,
+          extras,
+          "card"
         )
       );
     });
@@ -2025,123 +2103,83 @@ var HaOsShellEditor = class extends HTMLElement {
     wrap.append(addRow);
     return wrap;
   }
-  // ---------------------------------------------------------------- Karten
-  _renderCards() {
-    const pageIndex = Math.min(this._editingPageIndex, this._config.pages.length - 1);
-    const page = this._config.pages[pageIndex];
-    const picker = el2("div", "field");
-    picker.append(el2("label", null, "Seite"));
-    const select = el2("select", "plain");
-    this._config.pages.forEach((entry, index) => {
-      const option = document.createElement("option");
-      option.value = String(index);
-      option.textContent = entry.name;
-      if (index === pageIndex) option.selected = true;
-      select.append(option);
+  /** Ebene 3: die Karten eines Rasters, jede wiederum aufklappbar. */
+  _gridBody(page, pageIndex, columnIndex, grid) {
+    const wrap = el2("div");
+    if (!grid.cards.length) {
+      wrap.append(el2("div", "empty", "Noch keine Karte in diesem Raster."));
+    }
+    grid.cards.forEach((card, cardIndex) => {
+      const extras = [
+        miniButton("mdi:arrow-up", "Nach oben", () => this._moveCard(pageIndex, columnIndex, cardIndex, -1)),
+        miniButton("mdi:arrow-down", "Nach unten", () => this._moveCard(pageIndex, columnIndex, cardIndex, 1)),
+        miniButton(
+          "mdi:delete-outline",
+          "Karte entfernen",
+          () => this._mutate((draft) => draft.pages[pageIndex].grids[columnIndex].cards.splice(cardIndex, 1), true),
+          "mini danger"
+        )
+      ];
+      wrap.append(
+        this._block(
+          `Karte ${cardIndex + 1} · ${this._cardLabel(card)}`,
+          `${page.name} › Raster ${columnIndex + 1} › Karte ${cardIndex + 1}`,
+          () => this._cardBody(pageIndex, columnIndex, cardIndex, card),
+          `page-${pageIndex}-grid-${columnIndex}-card-${cardIndex}`,
+          extras,
+          "card"
+        )
+      );
     });
-    select.addEventListener("change", () => {
-      this._editingPageIndex = Number(select.value);
+    const addRow = el2("div", "add-row");
+    const addOwn = el2("button", "add");
+    addOwn.append(icon("mdi:plus"), el2("span", null, "HA-OS Karte"));
+    addOwn.addEventListener(
+      "click",
+      () => this._mutate((draft) => {
+        draft.pages[pageIndex].grids[columnIndex].cards.push({
+          type: "custom:ha-os-card",
+          card_type: "button",
+          haos_weight: 1
+        });
+      }, true)
+    );
+    const addGrid = el2("button", "add");
+    addGrid.append(icon("mdi:view-grid-outline"), el2("span", null, "2×2-Raster"));
+    addGrid.addEventListener(
+      "click",
+      () => this._mutate((draft) => {
+        draft.pages[pageIndex].grids[columnIndex].cards.push({
+          type: "custom:ha-os-grid",
+          column_widths: [1, 1],
+          gap: 12,
+          cards: [],
+          haos_weight: 2
+        });
+      }, true)
+    );
+    const addOther = el2("button", "add");
+    addOther.append(icon("mdi:view-dashboard-outline"), el2("span", null, "Andere Karte wählen"));
+    addOther.addEventListener("click", () => {
+      const key = `picker-${pageIndex}-${columnIndex}`;
+      this._openPicker = this._openPicker === key ? null : key;
       this._renderPanels();
     });
-    picker.append(select);
-    this._panel.append(picker);
-    if (page.kind === "iframe") {
-      this._panel.append(el2("div", "empty", "Externe Seiten haben keine Raster."));
-      return;
+    addRow.append(addOwn, addGrid, addOther);
+    wrap.append(addRow);
+    if (this._openPicker === `picker-${pageIndex}-${columnIndex}`) {
+      wrap.append(
+        this._cardPicker(async (type) => {
+          const card = await stubConfigFor(type);
+          this._openPicker = null;
+          this._mutate((draft) => {
+            draft.pages[pageIndex].grids[columnIndex].cards.push({ ...card, haos_weight: 1 });
+          }, true);
+        })
+      );
     }
-    page.grids.forEach((grid, columnIndex) => {
-      const head = el2("div", "grid-head");
-      head.append(
-        el2("span", null, `Raster ${columnIndex + 1}`),
-        el2("span", "weight", `Breite ${page.grid_widths[columnIndex]}`)
-      );
-      this._panel.append(head);
-      if (!grid.cards.length) {
-        this._panel.append(el2("div", "empty", "Noch keine Karte in diesem Raster."));
-      }
-      const tabKey = `${pageIndex}-${columnIndex}`;
-      this._gridTab = this._gridTab || {};
-      const openTab = Math.min(this._gridTab[tabKey] ?? 0, Math.max(grid.cards.length - 1, 0));
-      if (grid.cards.length) {
-        const tabs = el2("div", "card-tabs");
-        grid.cards.forEach((card2, cardIndex) => {
-          const tab = el2("button", `card-tab${cardIndex === openTab ? " active" : ""}`, String(cardIndex + 1));
-          tab.title = this._cardLabel(card2);
-          tab.addEventListener("click", () => {
-            this._gridTab[tabKey] = cardIndex;
-            this._renderPanels();
-          });
-          tabs.append(tab);
-        });
-        this._panel.append(tabs);
-        const card = grid.cards[openTab];
-        const extras = [
-          miniButton("mdi:arrow-up", "Nach oben", () => this._moveCard(pageIndex, columnIndex, openTab, -1)),
-          miniButton("mdi:arrow-down", "Nach unten", () => this._moveCard(pageIndex, columnIndex, openTab, 1)),
-          miniButton(
-            "mdi:delete-outline",
-            "Karte entfernen",
-            () => {
-              this._gridTab[tabKey] = Math.max(openTab - 1, 0);
-              this._mutate((draft) => draft.pages[pageIndex].grids[columnIndex].cards.splice(openTab, 1), true);
-            },
-            "mini danger"
-          )
-        ];
-        this._panel.append(
-          this._block(
-            this._cardLabel(card),
-            `Karte ${openTab + 1} von ${grid.cards.length} · ${card.type}`,
-            () => this._cardBody(pageIndex, columnIndex, openTab, card),
-            `card-${pageIndex}-${columnIndex}-${openTab}`,
-            extras,
-            true
-          )
-        );
-      }
-      const addRow = el2("div", "add-row");
-      const addOwn = el2("button", "add");
-      addOwn.append(icon("mdi:plus"), el2("span", null, "HA-OS Karte"));
-      addOwn.addEventListener(
-        "click",
-        () => this._mutate((draft) => {
-          draft.pages[pageIndex].grids[columnIndex].cards.push({
-            type: "custom:ha-os-card",
-            card_type: "button",
-            haos_weight: 1
-          });
-        }, true)
-      );
-      const addOther = el2("button", "add");
-      addOther.append(icon("mdi:view-dashboard-outline"), el2("span", null, "Andere Karte wählen"));
-      addOther.addEventListener("click", () => {
-        const key = `picker-${pageIndex}-${columnIndex}`;
-        this._openPicker = this._openPicker === key ? null : key;
-        this._renderPanels();
-      });
-      addRow.append(addOwn, addOther);
-      this._panel.append(addRow);
-      if (this._openPicker === `picker-${pageIndex}-${columnIndex}`) {
-        this._panel.append(
-          this._cardPicker(async (type) => {
-            const card = await stubConfigFor(type);
-            this._openPicker = null;
-            this._mutate((draft) => {
-              draft.pages[pageIndex].grids[columnIndex].cards.push({ ...card, haos_weight: 1 });
-            }, true);
-          })
-        );
-      }
-    });
+    return wrap;
   }
-  /**
-   * Auswahlliste aller installierten Karten.
-   *
-   * Eigenbau, weil `hui-card-picker` sich von außen nicht zuverlässig laden
-   * lässt – er kommt erst, wenn der Anwender in Home Assistant selbst auf
-   * "Karte hinzufügen" tippt. `window.customCards` dagegen ist immer da:
-   * dort trägt sich jede installierte Fremdkarte beim Laden selbst ein.
-   */
   _cardPicker(onPick) {
     const wrap = el2("div", "picker");
     const search = document.createElement("input");
@@ -4111,7 +4149,7 @@ var HaOsGridEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG5)) customElements.define(EDITOR_TAG5, HaOsGridEditor);
 
 // src/ha-os.js
-var VERSION = "0.5.1";
+var VERSION = "0.6.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

@@ -335,68 +335,72 @@ document.body.append(shellEditor);
 shellEditor.hass = makeHass(baseStates);
 shellEditor.setConfig(shellConfig);
 check("Shell-Editor hat drei Reiter", shellEditor.shadowRoot.querySelectorAll(".tab").length === 3);
-// Der Karten-Reiter wird hier nur kurz besucht und danach zurückgeschaltet –
-// die folgende Prüfung erwartet wieder das Allgemein-Formular.
-//
-// Es genügt NICHT zu prüfen, dass die Reiter da sind: beim ersten Versuch
-// riefen sie eine Methode auf, die es im Shell-Editor gar nicht gibt. Die
-// Reiter waren sichtbar und taten nichts. Deshalb wird hier geklickt.
-const kartenReiter = (() => {
-  const editorTabs = [...shellEditor.shadowRoot.querySelectorAll(".tab")];
-  const cardsTab = editorTabs.find((t) => t.textContent.includes("Karten"));
-  if (!cardsTab) return { anzahl: 0, wechselt: false };
-
-  cardsTab.click();
-
-  // Auf ein einzelnes Raster zielen – über alle drei hinweg gäbe es mehrere
-  // aktive Reiter gleichzeitig, einen pro Raster.
-  const gruppe = [...shellEditor.shadowRoot.querySelectorAll(".card-tabs")].find(
-    (g) => g.querySelectorAll(".card-tab").length > 1
+// Verschachtelte Aufklapp-Struktur: Seite -> Raster -> Karte.
+// Es genuegt NICHT zu pruefen, dass die Bloecke da sind – beim ersten Versuch
+// riefen die Kartenreiter eine Methode auf, die es gar nicht gibt. Sie waren
+// sichtbar und taten nichts. Deshalb wird hier durchgeklickt.
+const oeffne = (text) => {
+  const treffer = [...shellEditor.shadowRoot.querySelectorAll(".block > header")].find((h) =>
+    h.querySelector(".label")?.textContent.includes(text)
   );
-  const anzahl = gruppe ? gruppe.querySelectorAll(".card-tab").length : 0;
-  let wechselt = false;
+  treffer?.click();
+  return Boolean(treffer);
+};
+// Bewusst ueber das erste Kind statt eines Selektors: ".block.is-open .label"
+// wuerde auch die Beschriftungen der verschachtelten Bloecke INNERHALB eines
+// offenen Blocks mitliefern.
+const kopfText = (block, sel) => block.firstElementChild?.querySelector(sel)?.textContent;
+const offeneBloecke = () =>
+  [...shellEditor.shadowRoot.querySelectorAll(".block.is-open")].map((b) => kopfText(b, ".label"));
 
-  if (anzahl > 1) {
-    const vorher = shellEditor.shadowRoot.querySelector(".block .sub")?.textContent;
-    [...gruppe.querySelectorAll(".card-tab")][1].click();
-    const nachher = shellEditor.shadowRoot.querySelector(".block .sub")?.textContent;
-    const neueGruppe = [...shellEditor.shadowRoot.querySelectorAll(".card-tabs")].find(
-      (g) => g.querySelectorAll(".card-tab").length > 1
-    );
-    const aktiv = [...neueGruppe.querySelectorAll(".card-tab")].findIndex((t) =>
-      t.classList.contains("active")
-    );
-    wechselt = aktiv === 1 && Boolean(vorher) && vorher !== nachher;
-  }
+const reiter = [...shellEditor.shadowRoot.querySelectorAll(".tab")];
+check("drei Reiter heissen Aussehen, Leisten, Seiten",
+  reiter.map((t) => t.textContent).join("|") === "Aussehen|Leisten|Seiten",
+  reiter.map((t) => t.textContent).join("|"));
 
-  editorTabs[0].click();
-  return { anzahl, wechselt };
-})();
-check("Shell-Editor zeigt nummerierte Kartenreiter", kartenReiter.anzahl > 1, `${kartenReiter.anzahl}`);
-check("Klick auf Reiter 2 wechselt die Karte", kartenReiter.wechselt);
-// Seiten-Reiter: Auswahl zwischen eigener Seite und vorhandenem Programm.
-const seitenAuswahl = (() => {
-  const editorTabs = [...shellEditor.shadowRoot.querySelectorAll(".tab")];
-  const pagesTab = editorTabs.find((t) => t.textContent.includes("Seiten"));
-  if (!pagesTab) return { beide: false, programme: 0 };
+reiter.find((t) => t.textContent === "Seiten").click();
 
-  pagesTab.click();
-  const knoepfe = [...shellEditor.shadowRoot.querySelectorAll(".add")].map((b) => b.textContent);
-  const beide = knoepfe.some((t) => t.includes("Neue Seite")) && knoepfe.some((t) => t.includes("Programm"));
+check("Seite laesst sich aufklappen", oeffne("Wohnzimmer") && offeneBloecke().includes("Wohnzimmer"));
+check("aufgeklappte Seite zeigt Raster 1", Boolean(
+  [...shellEditor.shadowRoot.querySelectorAll(".label")].find((l) => l.textContent === "Raster 1")
+));
 
-  const programmKnopf = [...shellEditor.shadowRoot.querySelectorAll(".add")].find((b) =>
-    b.textContent.includes("Programm")
-  );
-  programmKnopf?.click();
-  const programme = shellEditor.shadowRoot.querySelectorAll(".picker-item").length;
-  programmKnopf?.click();
+check("Raster laesst sich aufklappen", oeffne("Raster 1") && offeneBloecke().includes("Raster 1"));
+check("Seite bleibt dabei offen", offeneBloecke().includes("Wohnzimmer"));
 
-  editorTabs[0].click();
-  return { beide, programme };
-})();
-check("Seiten-Reiter bietet Seite und Programm zur Wahl", seitenAuswahl.beide);
-check("Programmliste zeigt HAs eigene Einträge", seitenAuswahl.programme > 1, `${seitenAuswahl.programme} Einträge`);
+const kartenBloecke = [...shellEditor.shadowRoot.querySelectorAll(".label")].filter((l) =>
+  l.textContent.startsWith("Karte ")
+);
+check("Raster zeigt seine Karten", kartenBloecke.length === 2, `${kartenBloecke.length}`);
 
+check("Karte laesst sich aufklappen", oeffne("Karte 1"));
+const kartePfad = [...shellEditor.shadowRoot.querySelectorAll(".block.is-open")].map((b) =>
+  kopfText(b, ".sub")
+);
+check("Pfadzeile nennt Seite, Raster und Karte",
+  kartePfad.some((t) => t?.includes("Wohnzimmer") && t.includes("Raster 1") && t.includes("Karte 1")),
+  kartePfad.join(" | "));
+
+// Zweite Karte oeffnen – die erste muss zuklappen, die Ebenen darueber nicht.
+oeffne("Karte 2");
+const nachWechsel = offeneBloecke();
+check("nur eine Karte gleichzeitig offen",
+  nachWechsel.filter((t) => t.startsWith("Karte ")).length === 1, nachWechsel.join(" | "));
+check("Raster und Seite bleiben offen",
+  nachWechsel.includes("Raster 1") && nachWechsel.includes("Wohnzimmer"), nachWechsel.join(" | "));
+
+// Raster 2 oeffnen – die Karte darunter muss mit zuklappen.
+oeffne("Raster 2");
+const nachRasterwechsel = offeneBloecke();
+check("Rasterwechsel schliesst die offene Karte",
+  !nachRasterwechsel.some((t) => t.startsWith("Karte ")), nachRasterwechsel.join(" | "));
+
+const knoepfe = [...shellEditor.shadowRoot.querySelectorAll(".add")].map((b) => b.textContent);
+check("drei Knoepfe zum Hinzufuegen im Raster",
+  ["HA-OS Karte", "2×2", "Andere Karte"].every((t) => knoepfe.some((k) => k.includes(t))),
+  knoepfe.join(" | "));
+
+reiter[0].click();
 check("Shell-Editor zeigt Allgemein-Formular", Boolean(shellEditor.shadowRoot.querySelector("ha-form")));
 
 // ---------------------------------------------------------------- Grösse

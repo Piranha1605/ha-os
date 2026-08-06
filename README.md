@@ -4,7 +4,7 @@ Dashboard-Grundgerüst für Home Assistant im Glassmorphism-Stil. Eine grosse
 Glasfläche mit Seitenleiste, Kopfzeile und drei frei gewichteten Rastern – in
 die jede installierte Lovelace-Karte passt.
 
-Version 0.5.1
+Version 0.6.0
 
 ---
 
@@ -23,7 +23,7 @@ Version 0.5.1
 
 5. Browser hart neu laden (Cmd+Shift+R bzw. Strg+F5)
 
-**Prüfen, ob es geladen hat:** In der Browserkonsole muss `HA-OS 0.5.1` stehen.
+**Prüfen, ob es geladen hat:** In der Browserkonsole muss `HA-OS 0.6.0` stehen.
 
 ---
 
@@ -217,12 +217,35 @@ bei vielen Seiten läuft die Kopfzeile sonst über, dann reicht die Leiste.
 Neue Seiten legt man im Editor unter *Seiten* an. Jede bekommt automatisch
 drei leere Raster.
 
-## Karten in den Rastern
+## Aufbau des Editors
 
-Die Karten eines Rasters liegen hinter nummerierten Reitern `1 2 3 …`, wie in
-Home Assistants eigener Raster-Karte. Es ist immer genau eine Karte
-aufgeklappt. Untereinander gestapelt wurde die Liste ab drei Karten
-unübersichtlich.
+Drei Reiter:
+
+**Aussehen** – die Maße der Shell, Abstand und Kartenhöhe.
+
+**Leisten** – alles am Rand: Benutzer in der Kopfzeile, ob Seiten als Reiter
+oben und/oder als Symbole in der Seitenleiste erscheinen, die Systemknöpfe und
+die Schnellaktionen.
+
+**Seiten** – die ganze Struktur, vier Ebenen tief:
+
+```
+Seite  ▸  Allgemein · Badges · Raster 1 · Raster 2 · Raster 3
+          Raster  ▸  Karte 1 · Karte 2 · …
+                     Karte  ▸  Felder
+```
+
+Überall dieselbe Geste: anklicken klappt auf. **Pro Ebene ist immer nur ein
+Block offen** – öffnet man Raster 2, schließt Raster 1 samt der Karte darin.
+Sonst wächst die Liste bei vier Ebenen so weit, dass man beim Scrollen die
+Orientierung verliert.
+
+Jeder offene Block trägt eine Pfadzeile wie `Wohnzimmer › Raster 1 › Karte 1`.
+
+Vorher lagen Seiten und Karten in getrennten Reitern und man musste dieselbe
+Seite zweimal auswählen. Ein Zwischenstand mit nummerierten Reitern `1 2 3`
+wurde wieder verworfen: die Nummer allein sagt nicht, in welchem Raster
+welcher Seite man steckt.
 
 ## Noch offen
 
