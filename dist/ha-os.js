@@ -1,4 +1,4 @@
-/* HA-OS 0.12.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.12.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -4730,6 +4730,15 @@ var isLocked = (state) => {
   if (value === "0" || value === "3") return false;
   return value === "locked" || value === "lock" || value === "on";
 };
+var windowLabel = (state) => {
+  if (!state || ["unavailable", "unknown", ""].includes(String(state.state))) return { text: "–", tone: "" };
+  const value = String(state.state).toLowerCase();
+  if (value === "2" || value === "closed" || value === "off") return { text: "geschlossen", tone: "good" };
+  if (value === "1" || value === "open" || value === "on") return { text: "offen", tone: "bad" };
+  if (value === "0") return { text: "unbekannt", tone: "" };
+  if (value === "3" || value === "4") return { text: "Lüftungsstellung", tone: "bad" };
+  return { text: state.state, tone: "" };
+};
 var formatNumber = (value, digits = 0) => value === null ? "–" : value.toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 var HaOsVehicleCard = class extends HTMLElement {
   constructor() {
@@ -5110,13 +5119,8 @@ var HaOsVehicleCard = class extends HTMLElement {
     );
     ["front_left", "front_right", "rear_left", "rear_right"].forEach((side) => {
       const state = stateOf(`window_${side}`);
-      if (!state || ["unavailable", "unknown"].includes(state.state)) {
-        this._setRow(`st_window_${side}`, "–");
-        return;
-      }
-      const value = String(state.state).toLowerCase();
-      const closed = value === "0" || value === "closed" || value === "off";
-      this._setRow(`st_window_${side}`, closed ? "geschlossen" : "offen", closed ? "good" : "bad");
+      const { text: text2, tone } = windowLabel(state);
+      this._setRow(`st_window_${side}`, text2, tone);
     });
     const warnRow = (key, pattern) => {
       const state = this._hass?.states?.[pattern.replace("{id}", id)];
@@ -5483,7 +5487,7 @@ var HaOsVehicleEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG7)) customElements.define(EDITOR_TAG7, HaOsVehicleEditor);
 
 // src/ha-os.js
-var VERSION = "0.12.0";
+var VERSION = "0.12.1";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

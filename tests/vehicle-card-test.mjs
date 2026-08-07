@@ -220,14 +220,15 @@ console.log("\n12b. Die vier weiteren Bereiche");
 const voll = build({}, makeHass({
   [`binary_sensor.${ID}_park_brake_status`]: state(`binary_sensor.${ID}_park_brake_status`, "on"),
   // Fensterkontakte mit Geraetenamen davor – fallen aus dem Namensmuster.
+  // Echte Werte aus der Anlage: 2 heisst geschlossen, 1 offen.
   [`sensor.garage_aussen_${ID}_window_status_front_left`]:
-    state(`sensor.garage_aussen_${ID}_window_status_front_left`, "0"),
+    state(`sensor.garage_aussen_${ID}_window_status_front_left`, "2"),
   [`sensor.garage_aussen_${ID}_window_status_front_right`]:
-    state(`sensor.garage_aussen_${ID}_window_status_front_right`, "2"),
+    state(`sensor.garage_aussen_${ID}_window_status_front_right`, "1"),
   [`sensor.garage_aussen_${ID}_window_status_rear_left`]:
-    state(`sensor.garage_aussen_${ID}_window_status_rear_left`, "0"),
+    state(`sensor.garage_aussen_${ID}_window_status_rear_left`, "2"),
   [`sensor.garage_aussen_${ID}_window_status_rear_right`]:
-    state(`sensor.garage_aussen_${ID}_window_status_rear_right`, "0"),
+    state(`sensor.garage_aussen_${ID}_window_status_rear_right`, "2"),
   [`sensor.${ID}_distance_start`]: state(`sensor.${ID}_distance_start`, "12.4", { unit_of_measurement: "km" }),
   [`sensor.${ID}_distance_reset`]: state(`sensor.${ID}_distance_reset`, "845", { unit_of_measurement: "km" }),
   [`sensor.${ID}_average_speed_start`]: state(`sensor.${ID}_average_speed_start`, "38.2", { unit_of_measurement: "km/h" }),
@@ -253,7 +254,24 @@ check("Verriegelung in der Liste", rowValue("Verriegelung") === "verriegelt", ro
 check("Parkbremse angezogen", rowValue("Parkbremse") === "angezogen", rowValue("Parkbremse"));
 check("Fenster mit Geraetenamen gefunden", rowValue("Fenster vorn links") === "geschlossen",
   rowValue("Fenster vorn links"));
-check("offenes Fenster erkannt", rowValue("Fenster vorn rechts") === "offen", rowValue("Fenster vorn rechts"));
+check("2 heisst geschlossen", rowValue("Fenster hinten links") === "geschlossen", rowValue("Fenster hinten links"));
+check("1 heisst offen", rowValue("Fenster vorn rechts") === "offen", rowValue("Fenster vorn rechts"));
+
+// Die Zaehlung stand in 0.12.0 falsch herum: geschlossene Fenster meldeten
+// „offen". Belegt am Fahrzeug – alle vier auf 2, windows_closed auf on.
+const fenster = (value) => {
+  const karte2 = build({}, makeHass({
+    [`sensor.garage_aussen_${ID}_window_status_front_left`]:
+      state(`sensor.garage_aussen_${ID}_window_status_front_left`, value),
+  }));
+  sr(karte2).querySelectorAll(".rail button")[2].click();
+  return [...sr(karte2).querySelectorAll(".row")]
+    .find((r) => r.querySelector(".row-label").textContent === "Fenster vorn links")
+    ?.querySelector(".row-value").textContent;
+};
+check("0 wird nicht geraten", fenster("0") === "unbekannt", fenster("0"));
+check("3 ist Lueftungsstellung", fenster("3") === "Lüftungsstellung", fenster("3"));
+check("unbekannter Wert wird roh gezeigt", fenster("9") === "9", fenster("9"));
 check("Warnleuchten einzeln", rowValue("Motorkontrollleuchte") === "ok", rowValue("Motorkontrollleuchte"));
 
 klick(3);

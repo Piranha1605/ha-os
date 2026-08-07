@@ -273,6 +273,31 @@ const isLocked = (state) => {
   return value === "locked" || value === "lock" || value === "on";
 };
 
+/**
+ * Fensterstellung.
+ *
+ * `windowstatus*` von Mercedes zählt **2 = geschlossen** und 1 = offen. Das
+ * ist gegenüber der Verriegelung genau umgekehrt herum und war in 0.12.0
+ * falsch eingebaut: geschlossene Fenster meldeten „offen".
+ *
+ * Belegt am laufenden Fahrzeug: alle vier Einzelsensoren standen auf `2`,
+ * während der Sammelsensor `windows_closed` gleichzeitig `on` meldete — und
+ * die Fenster tatsächlich zu waren. Dieser Sammelsensor führt die vier Werte
+ * auch als Attribute mit, was die Zuordnung zusätzlich bestätigt.
+ *
+ * Unbekannte Werte werden **nicht geraten**, sondern roh angezeigt. Lieber
+ * eine unverständliche Zahl als eine falsche Aussage.
+ */
+export const windowLabel = (state) => {
+  if (!state || ["unavailable", "unknown", ""].includes(String(state.state))) return { text: "–", tone: "" };
+  const value = String(state.state).toLowerCase();
+  if (value === "2" || value === "closed" || value === "off") return { text: "geschlossen", tone: "good" };
+  if (value === "1" || value === "open" || value === "on") return { text: "offen", tone: "bad" };
+  if (value === "0") return { text: "unbekannt", tone: "" };
+  if (value === "3" || value === "4") return { text: "Lüftungsstellung", tone: "bad" };
+  return { text: state.state, tone: "" };
+};
+
 const formatNumber = (value, digits = 0) =>
   value === null ? "–" : value.toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
@@ -715,17 +740,10 @@ class HaOsVehicleCard extends HTMLElement {
       battery && battery.state !== "unavailable" ? (batteryOk ? "good" : "bad") : ""
     );
 
-    // Fensterzustände sind Zahlen: 0 = geschlossen, alles darüber offen.
-    // Textzustände kommen ebenfalls vor, deshalb beides prüfen.
     ["front_left", "front_right", "rear_left", "rear_right"].forEach((side) => {
       const state = stateOf(`window_${side}`);
-      if (!state || ["unavailable", "unknown"].includes(state.state)) {
-        this._setRow(`st_window_${side}`, "–");
-        return;
-      }
-      const value = String(state.state).toLowerCase();
-      const closed = value === "0" || value === "closed" || value === "off";
-      this._setRow(`st_window_${side}`, closed ? "geschlossen" : "offen", closed ? "good" : "bad");
+      const { text, tone } = windowLabel(state);
+      this._setRow(`st_window_${side}`, text, tone);
     });
 
     const warnRow = (key, pattern) => {
