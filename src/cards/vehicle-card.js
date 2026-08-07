@@ -40,6 +40,21 @@ export const DERIVED = {
   tire_front_right: "sensor.{id}_tire_pressure_front_right",
   tire_rear_left: "sensor.{id}_tire_pressure_rear_left",
   tire_rear_right: "sensor.{id}_tire_pressure_rear_right",
+  park_brake: "binary_sensor.{id}_park_brake_status",
+  window_front_left: "sensor.{id}_window_status_front_left",
+  window_front_right: "sensor.{id}_window_status_front_right",
+  window_rear_left: "sensor.{id}_window_status_rear_left",
+  window_rear_right: "sensor.{id}_window_status_rear_right",
+  distance_start: "sensor.{id}_distance_start",
+  distance_reset: "sensor.{id}_distance_reset",
+  speed_start: "sensor.{id}_average_speed_start",
+  speed_reset: "sensor.{id}_average_speed_reset",
+  consumption_start: "sensor.{id}_liquid_consumption_start",
+  consumption_reset: "sensor.{id}_liquid_consumption_reset",
+  eco_acceleration: "sensor.{id}_eco_score_acceleration",
+  eco_constant: "sensor.{id}_eco_score_constant",
+  eco_free_wheel: "sensor.{id}_eco_score_free_wheel",
+  eco_bonus_range: "sensor.{id}_eco_score_bonus_range",
 };
 
 /**
@@ -62,11 +77,34 @@ export const WARNINGS = [
  */
 export const vehicleId = (entityId) => String(entityId || "").split(".")[1]?.split("_")[0] || "";
 
-/** Ausdrücklich gesetztes Feld schlägt die Ableitung. */
-export const resolveEntity = (config, key) => {
+/**
+ * Findet die Entität zu einem Messwert. Drei Stufen, in dieser Reihenfolge:
+ *
+ * 1. Ausdrücklich im Editor gesetzt – schlägt immer alles andere.
+ * 2. Das Muster `sensor.<kennung>_<messwert>`.
+ * 3. Suche in den vorhandenen Zuständen nach einer Entität, deren Name auf
+ *    `<kennung>_<messwert>` **endet**.
+ *
+ * Stufe 3 gibt es wegen der Fensterkontakte: die heissen bei manchen Anlagen
+ * `sensor.garage_aussen_clpef165_window_status_front_left`, tragen also den
+ * Gerätenamen vor der Kennung und fallen aus dem Muster. Ohne die Suche
+ * müsste man vier Felder von Hand ausfüllen.
+ */
+export const resolveEntity = (config, key, hass) => {
   if (config?.[`entity_${key}`]) return config[`entity_${key}`];
+
   const id = vehicleId(config?.entity);
-  return id && DERIVED[key] ? DERIVED[key].replace("{id}", id) : "";
+  if (!id || !DERIVED[key]) return "";
+
+  const guess = DERIVED[key].replace("{id}", id);
+  if (!hass?.states || hass.states[guess]) return guess;
+
+  const [domain, objectId] = guess.split(".");
+  const tail = `_${objectId}`;
+  const found = Object.keys(hass.states).find(
+    (candidate) => candidate.startsWith(`${domain}.`) && candidate.endsWith(tail)
+  );
+  return found || guess;
 };
 
 const el = (tag, className, text) => {
@@ -163,6 +201,45 @@ const STYLES = `
   .tile-value.good { color: var(--haos-good, #7ee0b0); }
   .tile-value.bad { color: var(--haos-bad, #ff6b6b); }
 
+  /* --- Tafeln --- */
+  .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; scrollbar-width: none; }
+  .panel::-webkit-scrollbar { display: none; }
+  .panel[hidden] { display: none; }
+  .panel.rows { gap: 0; }
+  .panel-note { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
+
+  .row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 7px 2px; font-size: 13px;
+    border-bottom: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .07);
+  }
+  .row:last-child { border-bottom: 0; }
+  .row-label { color: rgba(var(--haos-text-rgb, 255,255,255), .6); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-value { font-weight: var(--haos-font-weight-medium, 500); flex: 0 0 auto; }
+  .row-value.good { color: var(--haos-good, #7ee0b0); }
+  .row-value.bad { color: var(--haos-bad, #ff6b6b); }
+
+  /* Reifen im Grundriss: vorn oben, hinten unten. */
+  .tire-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tire {
+    border-radius: 12px; padding: 10px; display: grid; place-content: center; text-align: center;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+  }
+  .tire-value { font-size: 19px; font-weight: var(--haos-font-weight-medium, 500); }
+  .tire-value.bad { color: var(--haos-bad, #ff6b6b); }
+  .tire-label { font-size: 11px; margin-top: 2px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
+
+  .trip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+  .trip-col { min-width: 0; }
+  .trip-head {
+    font-size: 11px; padding-bottom: 6px; text-transform: uppercase; letter-spacing: .06em;
+    color: rgba(var(--haos-text-rgb, 255,255,255), .45);
+  }
+
+  .eco-item { display: flex; flex-direction: column; gap: 6px; }
+  .eco-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: rgba(var(--haos-text-rgb, 255,255,255), .7); }
+  .eco-value { font-weight: var(--haos-font-weight-medium, 500); color: var(--haos-text, #fff); }
+
   .placeholder { flex: 1; display: grid; place-content: center; text-align: center; gap: 6px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
   .error { display: grid; place-content: center; height: 100%; text-align: center; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
 `;
@@ -243,7 +320,7 @@ class HaOsVehicleCard extends HTMLElement {
   }
 
   _watchedEntities() {
-    const keys = Object.keys(DERIVED).map((key) => resolveEntity(this._config, key));
+    const keys = Object.keys(DERIVED).map((key) => resolveEntity(this._config, key, this._hass));
     const id = vehicleId(this._config?.entity);
     const warnings = id ? WARNINGS.map(([pattern]) => pattern.replace("{id}", id)) : [];
     return [...keys, ...warnings].filter(Boolean);
@@ -273,9 +350,6 @@ class HaOsVehicleCard extends HTMLElement {
       button.append(icon(iconName));
       button.title = label;
       button.setAttribute("aria-label", label);
-      // Stufe 1 füllt nur die Übersicht. Die übrigen bleiben sichtbar, damit
-      // erkennbar ist, was noch kommt – aber sie führen ins Leere.
-      if (key !== "overview") button.disabled = true;
       button.addEventListener("click", () => {
         if (button.disabled) return;
         this._section = key;
@@ -333,7 +407,109 @@ class HaOsVehicleCard extends HTMLElement {
       return { key, tile, label, value };
     });
 
-    main.append(head, hero, tiles);
+    const overview = el("div", "panel");
+    overview.append(hero, tiles);
+
+    // Zeilenweise Tafeln. `rows` sammelt die Wertfelder, damit `_update` sie
+    // ohne erneutes Suchen im DOM erreicht.
+    const rows = {};
+    const rowPanel = (entries) => {
+      const panel = el("div", "panel rows");
+      entries.forEach(([key, label]) => {
+        const row = el("div", "row");
+        const name = el("span", "row-label", label);
+        const value = el("span", "row-value", "–");
+        row.append(name, value);
+        panel.append(row);
+        rows[key] = { row, value };
+      });
+      return panel;
+    };
+
+    const status = rowPanel([
+      ["st_lock", "Verriegelung"],
+      ["st_ignition", "Zündung"],
+      ["st_park_brake", "Parkbremse"],
+      ["st_battery", "Starterbatterie"],
+      ["st_window_front_left", "Fenster vorn links"],
+      ["st_window_front_right", "Fenster vorn rechts"],
+      ["st_window_rear_left", "Fenster hinten links"],
+      ["st_window_rear_right", "Fenster hinten rechts"],
+      ["st_engine", "Motorkontrollleuchte"],
+      ["st_brake_fluid", "Bremsflüssigkeit"],
+      ["st_coolant", "Kühlmittel"],
+      ["st_wash_water", "Wischwasser"],
+    ]);
+
+    // Reifen im Grundriss des Wagens: vorn oben, hinten unten.
+    const tires = el("div", "panel");
+    const tireGrid = el("div", "tire-grid");
+    const tireNodes = {};
+    [
+      ["tire_front_left", "vorn links"],
+      ["tire_front_right", "vorn rechts"],
+      ["tire_rear_left", "hinten links"],
+      ["tire_rear_right", "hinten rechts"],
+    ].forEach(([key, label]) => {
+      const box = el("div", "tire");
+      const value = el("div", "tire-value", "–");
+      box.append(value, el("div", "tire-label", label));
+      tireGrid.append(box);
+      tireNodes[key] = value;
+    });
+    const tireNote = el("div", "panel-note");
+    tires.append(tireGrid, tireNote);
+
+    const trip = el("div", "panel");
+    const tripGrid = el("div", "trip-grid");
+    const tripNodes = {};
+    [
+      ["start", "Seit Start"],
+      ["reset", "Seit Zurücksetzen"],
+    ].forEach(([scope, heading]) => {
+      const column = el("div", "trip-col");
+      column.append(el("div", "trip-head", heading));
+      [
+        ["distance", "Strecke"],
+        ["speed", "Ø Tempo"],
+        ["consumption", "Verbrauch"],
+      ].forEach(([what, label]) => {
+        const row = el("div", "row");
+        row.append(el("span", "row-label", label));
+        const value = el("span", "row-value", "–");
+        row.append(value);
+        column.append(row);
+        tripNodes[`${what}_${scope}`] = value;
+      });
+      tripGrid.append(column);
+    });
+    trip.append(tripGrid);
+
+    const eco = el("div", "panel");
+    const ecoNodes = {};
+    [
+      ["eco_acceleration", "Beschleunigung"],
+      ["eco_constant", "Gleichmäßigkeit"],
+      ["eco_free_wheel", "Ausrollen"],
+    ].forEach(([key, label]) => {
+      const item = el("div", "eco-item");
+      const head2 = el("div", "eco-head");
+      const value = el("span", "eco-value", "–");
+      head2.append(el("span", null, label), value);
+      const bar2 = el("div", "bar");
+      const fill = el("span");
+      bar2.append(fill);
+      item.append(head2, bar2);
+      eco.append(item);
+      ecoNodes[key] = { value, fill };
+    });
+    const ecoBonus = el("div", "panel-note");
+    eco.append(ecoBonus);
+
+    const panels = { overview, trip, status, tires, eco };
+    Object.values(panels).forEach((panel) => main.append(panel));
+
+    main.prepend(head);
     card.append(rail, main);
 
     this._nodes = {
@@ -342,6 +518,7 @@ class HaOsVehicleCard extends HTMLElement {
       windowPill, windowIcon, windowText,
       heroValue, barFill, footLeft, footRight, heroImage,
       tiles: tileNodes,
+      panels, rows, tireNodes, tireNote, tripNodes, ecoNodes, ecoBonus,
     };
 
     this.shadowRoot.replaceChildren(style, card);
@@ -354,8 +531,11 @@ class HaOsVehicleCard extends HTMLElement {
     const hass = this._hass;
 
     nodes.buttons.forEach((button, key) => button.classList.toggle("active", key === this._section));
+    Object.entries(nodes.panels).forEach(([key, panel]) => {
+      panel.hidden = key !== this._section;
+    });
 
-    const stateOf = (key) => hass?.states?.[resolveEntity(config, key)];
+    const stateOf = (key) => hass?.states?.[resolveEntity(config, key, hass)];
 
     const carState = hass?.states?.[config.entity];
 
@@ -490,8 +670,140 @@ class HaOsVehicleCard extends HTMLElement {
       if (values[key].tone) value.classList.add(values[key].tone);
     });
 
+    this._updateStatus(stateOf, id);
+    this._updateTires(stateOf);
+    this._updateTrip(stateOf);
+    this._updateEco(stateOf);
+
     nodes.card.classList.remove("is-on", "is-off", "is-unavailable");
     if (carState) nodes.card.classList.add(statusClass(carState));
+  }
+
+  /** Setzt eine Zeile auf Text und Färbung. */
+  _setRow(key, text, tone = "") {
+    const row = this._nodes.rows[key];
+    if (!row) return;
+    row.value.textContent = text;
+    row.value.classList.remove("good", "bad");
+    if (tone) row.value.classList.add(tone);
+  }
+
+  _updateStatus(stateOf, id) {
+    const lock = stateOf("lock");
+    if (lock && lock.state !== "unavailable") {
+      const locked = isLocked(lock);
+      this._setRow("st_lock", locked ? "verriegelt" : "offen", locked ? "good" : "bad");
+    } else this._setRow("st_lock", "–");
+
+    const ignition = stateOf("ignition");
+    const ignitionOn = !["0", "off", "unknown", "unavailable", ""].includes(
+      String(ignition?.state ?? "").toLowerCase()
+    );
+    this._setRow("st_ignition", ignition ? (ignitionOn ? "an" : "aus") : "–");
+
+    const brake = stateOf("park_brake");
+    this._setRow(
+      "st_park_brake",
+      brake && brake.state !== "unavailable" ? (brake.state === "on" ? "angezogen" : "gelöst") : "–"
+    );
+
+    const battery = stateOf("battery");
+    const batteryOk = ["ok", "0", "normal", "good", "green"].includes(String(battery?.state ?? "").toLowerCase());
+    this._setRow(
+      "st_battery",
+      battery && battery.state !== "unavailable" ? (batteryOk ? "ok" : battery.state) : "–",
+      battery && battery.state !== "unavailable" ? (batteryOk ? "good" : "bad") : ""
+    );
+
+    // Fensterzustände sind Zahlen: 0 = geschlossen, alles darüber offen.
+    // Textzustände kommen ebenfalls vor, deshalb beides prüfen.
+    ["front_left", "front_right", "rear_left", "rear_right"].forEach((side) => {
+      const state = stateOf(`window_${side}`);
+      if (!state || ["unavailable", "unknown"].includes(state.state)) {
+        this._setRow(`st_window_${side}`, "–");
+        return;
+      }
+      const value = String(state.state).toLowerCase();
+      const closed = value === "0" || value === "closed" || value === "off";
+      this._setRow(`st_window_${side}`, closed ? "geschlossen" : "offen", closed ? "good" : "bad");
+    });
+
+    const warnRow = (key, pattern) => {
+      const state = this._hass?.states?.[pattern.replace("{id}", id)];
+      if (!state || ["unavailable", "unknown"].includes(state.state)) {
+        this._setRow(key, "–");
+        return;
+      }
+      const bad = state.state === "on";
+      this._setRow(key, bad ? "Warnung" : "ok", bad ? "bad" : "good");
+    };
+    warnRow("st_engine", "binary_sensor.{id}_engine_light_warning");
+    warnRow("st_brake_fluid", "binary_sensor.{id}_low_brake_fluid_warning");
+    warnRow("st_coolant", "binary_sensor.{id}_low_coolant_level_warning");
+    warnRow("st_wash_water", "binary_sensor.{id}_low_wash_water_warning");
+  }
+
+  _updateTires(stateOf) {
+    const values = [];
+    ["tire_front_left", "tire_front_right", "tire_rear_left", "tire_rear_right"].forEach((key) => {
+      const state = stateOf(key);
+      const value = numberOf(state);
+      values.push(value);
+      this._nodes.tireNodes[key].textContent =
+        value === null ? "–" : `${formatNumber(value, 1)} ${unitOf(state) || "bar"}`;
+    });
+
+    // Ein einzelner Ausreisser faellt in vier Zahlen leicht durch. Deshalb
+    // wird der niedrigste Wert hervorgehoben, sobald er spuerbar abfaellt.
+    const known = values.filter((value) => value !== null);
+    const low = known.length ? Math.min(...known) : null;
+    const high = known.length ? Math.max(...known) : null;
+    Object.values(this._nodes.tireNodes).forEach((node) => node.classList.remove("bad"));
+    if (low !== null && high !== null && high - low > 0.2) {
+      ["tire_front_left", "tire_front_right", "tire_rear_left", "tire_rear_right"].forEach((key, index) => {
+        if (values[index] === low) this._nodes.tireNodes[key].classList.add("bad");
+      });
+    }
+
+    const warning = stateOf("tire_warning");
+    const rdk = stateOf("tire_state");
+    const parts = [];
+    if (warning && !["unavailable", "unknown"].includes(warning.state)) {
+      parts.push(warning.state === "on" ? "Reifenwarnung aktiv" : "keine Reifenwarnung");
+    }
+    if (rdk && !["unavailable", "unknown"].includes(rdk.state)) {
+      const ok = ["0", "ok", "normal", "no_warning"].includes(String(rdk.state).toLowerCase());
+      parts.push(ok ? "Kontrollsystem meldet nichts" : `Kontrollsystem: ${rdk.state}`);
+    }
+    this._nodes.tireNote.textContent = parts.join(" · ");
+  }
+
+  _updateTrip(stateOf) {
+    const put = (key, state, digits = 1) => {
+      const value = numberOf(state);
+      this._nodes.tripNodes[key].textContent =
+        value === null ? "–" : `${formatNumber(value, digits)} ${unitOf(state)}`.trim();
+    };
+    put("distance_start", stateOf("distance_start"));
+    put("distance_reset", stateOf("distance_reset"));
+    put("speed_start", stateOf("speed_start"));
+    put("speed_reset", stateOf("speed_reset"));
+    put("consumption_start", stateOf("consumption_start"));
+    put("consumption_reset", stateOf("consumption_reset"));
+  }
+
+  _updateEco(stateOf) {
+    Object.entries(this._nodes.ecoNodes).forEach(([key, { value, fill }]) => {
+      const state = stateOf(key);
+      const number = numberOf(state);
+      value.textContent = number === null ? "–" : `${formatNumber(number)} %`;
+      fill.style.width = number === null ? "0%" : `${Math.max(0, Math.min(100, number))}%`;
+    });
+
+    const bonus = stateOf("eco_bonus_range");
+    const number = numberOf(bonus);
+    this._nodes.ecoBonus.textContent =
+      number === null ? "" : `Bonusreichweite ${formatNumber(number, 1)} ${unitOf(bonus) || "km"}`;
   }
 }
 

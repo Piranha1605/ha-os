@@ -70,6 +70,7 @@ const makeHass = (overrides = {}) => ({
     [`binary_sensor.${ID}_low_coolant_level_warning`]: state(`binary_sensor.${ID}_low_coolant_level_warning`, "off"),
     [`binary_sensor.${ID}_low_wash_water_warning`]: state(`binary_sensor.${ID}_low_wash_water_warning`, "off"),
     [`binary_sensor.${ID}_tire_warning`]: state(`binary_sensor.${ID}_tire_warning`, "off"),
+    [`sensor.${ID}_tires_rdk_state`]: state(`sensor.${ID}_tires_rdk_state`, "0"),
     ...overrides,
   },
   callService: () => Promise.resolve(),
@@ -206,12 +207,98 @@ check("Kilometerstand ist mitgelaufen", text(stabil, ".hero-foot span:last-child
 console.log("\n11. Symbolleiste");
 check("fuenf Bereiche", sr(karte).querySelectorAll(".rail button").length === 5);
 check("Uebersicht ist aktiv", sr(karte).querySelector(".rail button").classList.contains("active"));
-check("die uebrigen vier sind noch gesperrt",
-  [...sr(karte).querySelectorAll(".rail button")].filter((b) => b.disabled).length === 4);
+check("kein Bereich mehr gesperrt",
+  [...sr(karte).querySelectorAll(".rail button")].every((b) => !b.disabled));
+check("nur eine Tafel sichtbar",
+  [...sr(karte).querySelectorAll(".panel")].filter((p) => !p.hidden).length === 1);
 
 console.log("\n12. Ohne Fahrzeug");
 const leer = build({ entity: "" }, makeHass());
 check("Hinweis statt leerer Kacheln", text(leer, ".subtitle").includes("Editor"), `"${text(leer, ".subtitle")}"`);
+
+console.log("\n12b. Die vier weiteren Bereiche");
+const voll = build({}, makeHass({
+  [`binary_sensor.${ID}_park_brake_status`]: state(`binary_sensor.${ID}_park_brake_status`, "on"),
+  // Fensterkontakte mit Geraetenamen davor – fallen aus dem Namensmuster.
+  [`sensor.garage_aussen_${ID}_window_status_front_left`]:
+    state(`sensor.garage_aussen_${ID}_window_status_front_left`, "0"),
+  [`sensor.garage_aussen_${ID}_window_status_front_right`]:
+    state(`sensor.garage_aussen_${ID}_window_status_front_right`, "2"),
+  [`sensor.garage_aussen_${ID}_window_status_rear_left`]:
+    state(`sensor.garage_aussen_${ID}_window_status_rear_left`, "0"),
+  [`sensor.garage_aussen_${ID}_window_status_rear_right`]:
+    state(`sensor.garage_aussen_${ID}_window_status_rear_right`, "0"),
+  [`sensor.${ID}_distance_start`]: state(`sensor.${ID}_distance_start`, "12.4", { unit_of_measurement: "km" }),
+  [`sensor.${ID}_distance_reset`]: state(`sensor.${ID}_distance_reset`, "845", { unit_of_measurement: "km" }),
+  [`sensor.${ID}_average_speed_start`]: state(`sensor.${ID}_average_speed_start`, "38.2", { unit_of_measurement: "km/h" }),
+  [`sensor.${ID}_average_speed_reset`]: state(`sensor.${ID}_average_speed_reset`, "52", { unit_of_measurement: "km/h" }),
+  [`sensor.${ID}_liquid_consumption_start`]: state(`sensor.${ID}_liquid_consumption_start`, "8.1", { unit_of_measurement: "l/100km" }),
+  [`sensor.${ID}_liquid_consumption_reset`]: state(`sensor.${ID}_liquid_consumption_reset`, "7.4", { unit_of_measurement: "l/100km" }),
+  [`sensor.${ID}_eco_score_acceleration`]: state(`sensor.${ID}_eco_score_acceleration`, "82", { unit_of_measurement: "%" }),
+  [`sensor.${ID}_eco_score_constant`]: state(`sensor.${ID}_eco_score_constant`, "64", { unit_of_measurement: "%" }),
+  [`sensor.${ID}_eco_score_free_wheel`]: state(`sensor.${ID}_eco_score_free_wheel`, "45", { unit_of_measurement: "%" }),
+  [`sensor.${ID}_eco_score_bonus_range`]: state(`sensor.${ID}_eco_score_bonus_range`, "5.2", { unit_of_measurement: "km" }),
+}));
+
+const panel = (name) => sr(voll).querySelectorAll(".panel")[["overview", "trip", "status", "tires", "eco"].indexOf(name)];
+const rowValue = (label) =>
+  [...sr(voll).querySelectorAll(".row")].find((r) => r.querySelector(".row-label").textContent === label)
+    ?.querySelector(".row-value").textContent;
+
+const klick = (index) => { sr(voll).querySelectorAll(".rail button")[index].click(); };
+
+klick(2);
+check("Status ist sichtbar", !panel("status").hidden && panel("overview").hidden);
+check("Verriegelung in der Liste", rowValue("Verriegelung") === "verriegelt", rowValue("Verriegelung"));
+check("Parkbremse angezogen", rowValue("Parkbremse") === "angezogen", rowValue("Parkbremse"));
+check("Fenster mit Geraetenamen gefunden", rowValue("Fenster vorn links") === "geschlossen",
+  rowValue("Fenster vorn links"));
+check("offenes Fenster erkannt", rowValue("Fenster vorn rechts") === "offen", rowValue("Fenster vorn rechts"));
+check("Warnleuchten einzeln", rowValue("Motorkontrollleuchte") === "ok", rowValue("Motorkontrollleuchte"));
+
+klick(3);
+check("Reifen ist sichtbar", !panel("tires").hidden && panel("status").hidden);
+check("vier Druecke", sr(voll).querySelectorAll(".tire-value").length === 4);
+check("Druck mit Einheit", sr(voll).querySelector(".tire-value").textContent === "2,4 bar",
+  sr(voll).querySelector(".tire-value").textContent);
+check("Hinweiszeile nennt das Kontrollsystem",
+  panel("tires").querySelector(".panel-note").textContent.includes("Kontrollsystem"),
+  panel("tires").querySelector(".panel-note").textContent);
+
+const schief = build({}, makeHass({
+  [`sensor.${ID}_tire_pressure_rear_right`]: state(`sensor.${ID}_tire_pressure_rear_right`, "1.9"),
+}));
+sr(schief).querySelectorAll(".rail button")[3].click();
+check("Ausreisser wird hervorgehoben",
+  [...sr(schief).querySelectorAll(".tire-value")].filter((n) => n.classList.contains("bad")).length === 1);
+
+klick(1);
+check("Fahrt ist sichtbar", !panel("trip").hidden);
+check("zwei Spalten", sr(voll).querySelectorAll(".trip-col").length === 2);
+check("Strecke seit Start", rowValue("Strecke") === "12,4 km", rowValue("Strecke"));
+check("Verbrauch mit Einheit",
+  [...sr(voll).querySelectorAll(".row")].filter((r) => r.querySelector(".row-label").textContent === "Verbrauch")
+    .map((r) => r.querySelector(".row-value").textContent).join(" | ") === "8,1 l/100km | 7,4 l/100km",
+  [...sr(voll).querySelectorAll(".row")].filter((r) => r.querySelector(".row-label").textContent === "Verbrauch")
+    .map((r) => r.querySelector(".row-value").textContent).join(" | "));
+
+klick(4);
+check("Eco ist sichtbar", !panel("eco").hidden);
+check("drei Balken", sr(voll).querySelectorAll(".eco-item").length === 3);
+check("erster Wert", sr(voll).querySelector(".eco-value").textContent === "82 %",
+  sr(voll).querySelector(".eco-value").textContent);
+check("Balken auf 82 %", panel("eco").querySelector(".bar span").style.width === "82%",
+  panel("eco").querySelector(".bar span").style.width);
+check("Bonusreichweite als Fussnote",
+  panel("eco").querySelector(".panel-note").textContent.includes("5,2 km"),
+  panel("eco").querySelector(".panel-note").textContent);
+
+console.log("\n12c. Bereichswechsel baut nichts neu");
+const vorherTafeln = sr(voll).querySelectorAll(".panel").length;
+const ersteTafel = sr(voll).querySelector(".panel");
+klick(0); klick(3); klick(0);
+check("gleiche Anzahl Tafeln", sr(voll).querySelectorAll(".panel").length === vorherTafeln);
+check("dieselbe erste Tafel", sr(voll).querySelector(".panel") === ersteTafel);
 
 console.log("\n13. Editor: das Bildfeld ist wirklich da");
 // Anlass: als `{ name: "image", selector: { image: {} } }` im Formularschema

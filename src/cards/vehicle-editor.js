@@ -116,7 +116,7 @@ class HaOsVehicleEditor extends HTMLElement {
       return;
     }
     const keys = Object.keys(DERIVED);
-    const found = keys.filter((key) => this._hass.states?.[resolveEntity(this._config, key)]).length;
+    const found = keys.filter((key) => this._hass.states?.[resolveEntity(this._config, key, this._hass)]).length;
     this._hint.textContent =
       found === keys.length
         ? `Kennung ${id} – alle ${keys.length} Werte gefunden.`
