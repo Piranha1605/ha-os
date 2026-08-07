@@ -21,6 +21,9 @@ const LABELS = {
   name: "Name",
   image: "Bild des Fahrzeugs",
   ueberschreiben: "Entitäten überschreiben",
+  entity_oil: "Ölstand",
+  entity_tire_warning: "Reifenwarnung",
+  entity_tire_state: "Reifendruck-Zustand",
   entity_range: "Reichweite",
   entity_fuel: "Tankfüllung",
   entity_odometer: "Kilometerstand",
@@ -38,7 +41,7 @@ const HELPERS = {
   entity:
     "Eine beliebige Entität des Fahrzeugs, etwa der Kilometerstand. Aus ihrer Kennung findet die Karte die übrigen Werte selbst.",
   name: "Leer lassen für den Namen aus Home Assistant.",
-  image: "Pfad innerhalb dieser Installation, etwa /local/auto.png. Ohne Bild steht ein Symbol da.",
+  image: "Hochladen oder ein Bild aus dieser Installation wählen, etwa /local/auto.png. Ohne Bild steht ein Symbol da.",
   ueberschreiben:
     "Nur nötig, wenn eine Entität aus dem Namensmuster fällt – Fensterkontakte tragen oft den Gerätenamen davor.",
 };
@@ -52,10 +55,20 @@ const OVERRIDES = {
   schema: Object.keys(DERIVED).map((key) => ({ name: `entity_${key}`, selector: { entity: {} } })),
 };
 
-const SCHEMA = [
+/**
+ * Für das Bild HAs eigene Bildablage mit Upload-Knopf (`selector: { image }`).
+ * Eine Lovelace-Karte darf nicht selbst nach `config/www/` schreiben – dafür
+ * gibt es keine Schnittstelle. Hochgeladene Bilder liegen danach unter
+ * `/api/image/serve/…`. Kennt die Home-Assistant-Version den Auswähler nicht,
+ * fällt das Feld auf eine schlichte Pfadeingabe zurück.
+ */
+const imageField = () =>
+  customElements.get("ha-selector") ? { name: "image", selector: { image: {} } } : { name: "image", selector: { text: {} } };
+
+const buildSchema = () => [
   { name: "entity", required: true, selector: { entity: { integration: "mbapi2020" } } },
   { name: "name", selector: { text: {} } },
-  { name: "image", selector: { text: {} } },
+  imageField(),
   OVERRIDES,
 ];
 
@@ -127,7 +140,7 @@ class HaOsVehicleEditor extends HTMLElement {
     const form = document.createElement("ha-form");
     form.hass = this._hass;
     form.data = this._config;
-    form.schema = SCHEMA;
+    form.schema = buildSchema();
     form.computeLabel = (field) => LABELS[field.name] || field.name;
     form.computeHelper = (field) => HELPERS[field.name] || "";
 

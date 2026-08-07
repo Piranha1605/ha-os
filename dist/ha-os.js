@@ -1,4 +1,4 @@
-/* HA-OS 0.10.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.10.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -4542,6 +4542,9 @@ var DERIVED = {
   ignition: "sensor.{id}_ignition_state",
   windows: "binary_sensor.{id}_windows_closed",
   battery: "sensor.{id}_starter_battery_state",
+  oil: "sensor.{id}_oil_level",
+  tire_warning: "binary_sensor.{id}_tire_warning",
+  tire_state: "sensor.{id}_tires_rdk_state",
   tire_front_left: "sensor.{id}_tire_pressure_front_left",
   tire_front_right: "sensor.{id}_tire_pressure_front_right",
   tire_rear_left: "sensor.{id}_tire_pressure_rear_left",
@@ -4551,8 +4554,7 @@ var WARNINGS = [
   ["binary_sensor.{id}_engine_light_warning", "Motorkontrollleuchte"],
   ["binary_sensor.{id}_low_brake_fluid_warning", "Bremsflüssigkeit"],
   ["binary_sensor.{id}_low_coolant_level_warning", "Kühlmittel"],
-  ["binary_sensor.{id}_low_wash_water_warning", "Wischwasser"],
-  ["binary_sensor.{id}_tire_warning", "Reifendruck"]
+  ["binary_sensor.{id}_low_wash_water_warning", "Wischwasser"]
 ];
 var vehicleId = (entityId) => String(entityId || "").split(".")[1]?.split("_")[0] || "";
 var resolveEntity = (config, key) => {
@@ -4765,7 +4767,7 @@ var HaOsVehicleCard = class extends HTMLElement {
     heroImage.append(icon4("mdi:car-side"));
     hero.append(heroMain, heroImage);
     const tiles = el5("div", "tiles");
-    const tileNodes = ["front", "rear", "warnings", "battery"].map((key) => {
+    const tileNodes = ["tires", "oil", "warnings", "battery"].map((key) => {
       const tile = el5("div", "tile");
       const label = el5("div", "tile-label");
       const value = el5("div", "tile-value");
@@ -4857,18 +4859,34 @@ var HaOsVehicleCard = class extends HTMLElement {
       }
       nodes.heroImage.firstElementChild.src = config.image;
     }
-    const tirePair = (a, b) => {
-      const left = numberOf(stateOf(a));
-      const right = numberOf(stateOf(b));
-      if (left === null && right === null) return "–";
-      return `${formatNumber(left, 1)} · ${formatNumber(right, 1)}`;
+    const tireTile = () => {
+      const warning = stateOf("tire_warning");
+      const rdk = stateOf("tire_state");
+      if (warning && warning.state !== "unavailable" && warning.state !== "unknown") {
+        const bad = warning.state === "on";
+        return { value: bad ? "Warnung" : "ok", tone: bad ? "bad" : "good" };
+      }
+      if (rdk && !["unavailable", "unknown"].includes(rdk.state)) {
+        const ok = ["0", "ok", "normal", "no_warning"].includes(String(rdk.state).toLowerCase());
+        return { value: ok ? "ok" : rdk.state, tone: ok ? "good" : "bad" };
+      }
+      const pressures = ["tire_front_left", "tire_front_right", "tire_rear_left", "tire_rear_right"].map((key) => numberOf(stateOf(key))).filter((value) => value !== null);
+      if (!pressures.length) return { value: "–", tone: "" };
+      const low = Math.min(...pressures);
+      return { value: `${formatNumber(low, 1)} bar min.`, tone: "" };
+    };
+    const oilTile = () => {
+      const oil = stateOf("oil");
+      const value = numberOf(oil);
+      if (value === null) return { value: "–", tone: "" };
+      return { value: `${formatNumber(value)} ${unitOf(oil) || "%"}`, tone: value < 15 ? "bad" : "" };
     };
     const active2 = WARNINGS.filter(([pattern]) => hass?.states?.[pattern.replace("{id}", id)]?.state === "on");
     const battery = stateOf("battery");
     const batteryOk = ["ok", "0", "normal", "good"].includes(String(battery?.state ?? "").toLowerCase());
     const values = {
-      front: { label: "Reifen vorn", value: tirePair("tire_front_left", "tire_front_right"), tone: "" },
-      rear: { label: "Reifen hinten", value: tirePair("tire_rear_left", "tire_rear_right"), tone: "" },
+      tires: { label: "Reifen", ...tireTile() },
+      oil: { label: "Ölstand", ...oilTile() },
       warnings: {
         label: "Warnungen",
         value: active2.length ? active2.map(([, label]) => label).join(", ") : "keine",
@@ -4916,6 +4934,9 @@ var LABELS3 = {
   name: "Name",
   image: "Bild des Fahrzeugs",
   ueberschreiben: "Entitäten überschreiben",
+  entity_oil: "Ölstand",
+  entity_tire_warning: "Reifenwarnung",
+  entity_tire_state: "Reifendruck-Zustand",
   entity_range: "Reichweite",
   entity_fuel: "Tankfüllung",
   entity_odometer: "Kilometerstand",
@@ -4931,7 +4952,7 @@ var LABELS3 = {
 var HELPERS3 = {
   entity: "Eine beliebige Entität des Fahrzeugs, etwa der Kilometerstand. Aus ihrer Kennung findet die Karte die übrigen Werte selbst.",
   name: "Leer lassen für den Namen aus Home Assistant.",
-  image: "Pfad innerhalb dieser Installation, etwa /local/auto.png. Ohne Bild steht ein Symbol da.",
+  image: "Hochladen oder ein Bild aus dieser Installation wählen, etwa /local/auto.png. Ohne Bild steht ein Symbol da.",
   ueberschreiben: "Nur nötig, wenn eine Entität aus dem Namensmuster fällt – Fensterkontakte tragen oft den Gerätenamen davor."
 };
 var OVERRIDES = {
@@ -4941,10 +4962,11 @@ var OVERRIDES = {
   iconPath: "M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5Z",
   schema: Object.keys(DERIVED).map((key) => ({ name: `entity_${key}`, selector: { entity: {} } }))
 };
-var SCHEMA = [
+var imageField = () => customElements.get("ha-selector") ? { name: "image", selector: { image: {} } } : { name: "image", selector: { text: {} } };
+var buildSchema = () => [
   { name: "entity", required: true, selector: { entity: { integration: "mbapi2020" } } },
   { name: "name", selector: { text: {} } },
-  { name: "image", selector: { text: {} } },
+  imageField(),
   OVERRIDES
 ];
 var HaOsVehicleEditor = class extends HTMLElement {
@@ -5005,7 +5027,7 @@ var HaOsVehicleEditor = class extends HTMLElement {
     const form = document.createElement("ha-form");
     form.hass = this._hass;
     form.data = this._config;
-    form.schema = SCHEMA;
+    form.schema = buildSchema();
     form.computeLabel = (field) => LABELS3[field.name] || field.name;
     form.computeHelper = (field) => HELPERS3[field.name] || "";
     form.addEventListener("value-changed", (event) => {
@@ -5026,7 +5048,7 @@ var HaOsVehicleEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG7)) customElements.define(EDITOR_TAG7, HaOsVehicleEditor);
 
 // src/ha-os.js
-var VERSION = "0.10.0";
+var VERSION = "0.10.1";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

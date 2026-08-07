@@ -33,19 +33,26 @@ export const DERIVED = {
   ignition: "sensor.{id}_ignition_state",
   windows: "binary_sensor.{id}_windows_closed",
   battery: "sensor.{id}_starter_battery_state",
+  oil: "sensor.{id}_oil_level",
+  tire_warning: "binary_sensor.{id}_tire_warning",
+  tire_state: "sensor.{id}_tires_rdk_state",
   tire_front_left: "sensor.{id}_tire_pressure_front_left",
   tire_front_right: "sensor.{id}_tire_pressure_front_right",
   tire_rear_left: "sensor.{id}_tire_pressure_rear_left",
   tire_rear_right: "sensor.{id}_tire_pressure_rear_right",
 };
 
-/** Warnleuchten. Zeigt die Karte gesammelt als eine Kachel. */
+/**
+ * Warnleuchten, gesammelt in einer Kachel.
+ *
+ * Die Reifenwarnung fehlt hier bewusst: sie hat eine eigene Kachel. Stünde sie
+ * in beiden, meldete ein platter Reifen zweimal dasselbe.
+ */
 export const WARNINGS = [
   ["binary_sensor.{id}_engine_light_warning", "Motorkontrollleuchte"],
   ["binary_sensor.{id}_low_brake_fluid_warning", "Bremsflüssigkeit"],
   ["binary_sensor.{id}_low_coolant_level_warning", "Kühlmittel"],
   ["binary_sensor.{id}_low_wash_water_warning", "Wischwasser"],
-  ["binary_sensor.{id}_tire_warning", "Reifendruck"],
 ];
 
 /**
@@ -303,7 +310,7 @@ class HaOsVehicleCard extends HTMLElement {
     hero.append(heroMain, heroImage);
 
     const tiles = el("div", "tiles");
-    const tileNodes = ["front", "rear", "warnings", "battery"].map((key) => {
+    const tileNodes = ["tires", "oil", "warnings", "battery"].map((key) => {
       const tile = el("div", "tile");
       const label = el("div", "tile-label");
       const value = el("div", "tile-value");
@@ -408,11 +415,37 @@ class HaOsVehicleCard extends HTMLElement {
     }
 
     // --- Kacheln
-    const tirePair = (a, b) => {
-      const left = numberOf(stateOf(a));
-      const right = numberOf(stateOf(b));
-      if (left === null && right === null) return "–";
-      return `${formatNumber(left, 1)} · ${formatNumber(right, 1)}`;
+    /**
+     * Reifen als eine Aussage statt vier Zahlen. Die Einzeldrücke bleiben in
+     * der Konfiguration – sie tragen später den Bereich „Reifen".
+     */
+    const tireTile = () => {
+      const warning = stateOf("tire_warning");
+      const rdk = stateOf("tire_state");
+      if (warning && warning.state !== "unavailable" && warning.state !== "unknown") {
+        const bad = warning.state === "on";
+        return { value: bad ? "Warnung" : "ok", tone: bad ? "bad" : "good" };
+      }
+      // Ohne Warnmelder hilft der RDK-Zustand weiter.
+      if (rdk && !["unavailable", "unknown"].includes(rdk.state)) {
+        const ok = ["0", "ok", "normal", "no_warning"].includes(String(rdk.state).toLowerCase());
+        return { value: ok ? "ok" : rdk.state, tone: ok ? "good" : "bad" };
+      }
+      // Letzter Ausweg: aus den Einzeldrücken lässt sich immerhin sagen, ob
+      // überhaupt Werte ankommen.
+      const pressures = ["tire_front_left", "tire_front_right", "tire_rear_left", "tire_rear_right"]
+        .map((key) => numberOf(stateOf(key)))
+        .filter((value) => value !== null);
+      if (!pressures.length) return { value: "–", tone: "" };
+      const low = Math.min(...pressures);
+      return { value: `${formatNumber(low, 1)} bar min.`, tone: "" };
+    };
+
+    const oilTile = () => {
+      const oil = stateOf("oil");
+      const value = numberOf(oil);
+      if (value === null) return { value: "–", tone: "" };
+      return { value: `${formatNumber(value)} ${unitOf(oil) || "%"}`, tone: value < 15 ? "bad" : "" };
     };
 
     const active = WARNINGS.filter(([pattern]) => hass?.states?.[pattern.replace("{id}", id)]?.state === "on");
@@ -421,8 +454,8 @@ class HaOsVehicleCard extends HTMLElement {
     const batteryOk = ["ok", "0", "normal", "good"].includes(String(battery?.state ?? "").toLowerCase());
 
     const values = {
-      front: { label: "Reifen vorn", value: tirePair("tire_front_left", "tire_front_right"), tone: "" },
-      rear: { label: "Reifen hinten", value: tirePair("tire_rear_left", "tire_rear_right"), tone: "" },
+      tires: { label: "Reifen", ...tireTile() },
+      oil: { label: "Ölstand", ...oilTile() },
       warnings: {
         label: "Warnungen",
         value: active.length ? active.map(([, label]) => label).join(", ") : "keine",

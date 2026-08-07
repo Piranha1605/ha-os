@@ -111,21 +111,43 @@ check("Fenster zu erkannt", sr(karte).querySelectorAll(".pill span")[1].textCont
 check("Zuendung aus in der Unterzeile", text(karte, ".subtitle").includes("Zündung aus"), `"${text(karte, ".subtitle")}"`);
 
 console.log("\n3. Kacheln");
-check("Reifen vorn als Paar", tile(karte, 0).value === "2,4 · 2,4", tile(karte, 0).value);
-check("Reifen hinten als Paar", tile(karte, 1).value === "2,5 · 2,5", tile(karte, 1).value);
+check("Reifen sagen nur ok", tile(karte, 0).label === "Reifen" && tile(karte, 0).value === "ok",
+  `${tile(karte, 0).label}: ${tile(karte, 0).value}`);
+check("Reifenkachel ist gruen", sr(karte).querySelectorAll(".tile-value")[0].classList.contains("good"));
+check("Oelstand-Kachel vorhanden", tile(karte, 1).label === "Ölstand", tile(karte, 1).label);
 check("keine Warnungen", tile(karte, 2).value === "keine", tile(karte, 2).value);
 check("Warnungskachel ist gruen", sr(karte).querySelectorAll(".tile-value")[2].classList.contains("good"));
 check("Starterbatterie ok", tile(karte, 3).value === "ok", tile(karte, 3).value);
 
-console.log("\n4. Warnung schlaegt durch");
-const gewarnt = build({}, makeHass({
+console.log("\n4. Reifenwarnung");
+const platt = build({}, makeHass({
   [`binary_sensor.${ID}_tire_warning`]: state(`binary_sensor.${ID}_tire_warning`, "on"),
-  [`binary_sensor.${ID}_low_wash_water_warning`]: state(`binary_sensor.${ID}_low_wash_water_warning`, "on"),
 }));
-check("beide Warnungen benannt", tile(gewarnt, 2).value === "Wischwasser, Reifendruck", tile(gewarnt, 2).value);
+check("Reifen melden Warnung", tile(platt, 0).value === "Warnung", tile(platt, 0).value);
+check("Reifenkachel ist rot", sr(platt).querySelectorAll(".tile-value")[0].classList.contains("bad"));
+check("Reifen tauchen NICHT zusaetzlich bei den Warnungen auf", tile(platt, 2).value === "keine",
+  tile(platt, 2).value);
+
+console.log("\n5. Sonstige Warnungen");
+const gewarnt = build({}, makeHass({
+  [`binary_sensor.${ID}_low_wash_water_warning`]: state(`binary_sensor.${ID}_low_wash_water_warning`, "on"),
+  [`binary_sensor.${ID}_engine_light_warning`]: state(`binary_sensor.${ID}_engine_light_warning`, "on"),
+}));
+check("beide Warnungen benannt", tile(gewarnt, 2).value === "Motorkontrollleuchte, Wischwasser", tile(gewarnt, 2).value);
 check("Warnungskachel ist rot", sr(gewarnt).querySelectorAll(".tile-value")[2].classList.contains("bad"));
 
-console.log("\n5. Offenes Fahrzeug");
+console.log("\n6. Ölstand");
+check("ohne Entitaet ein Strich", tile(karte, 1).value === "–", tile(karte, 1).value);
+const mitOel = build({}, makeHass({
+  [`sensor.${ID}_oil_level`]: state(`sensor.${ID}_oil_level`, "80", { unit_of_measurement: "%" }),
+}));
+check("Wert wird angezeigt", tile(mitOel, 1).value === "80 %", tile(mitOel, 1).value);
+const wenigOel = build({}, makeHass({
+  [`sensor.${ID}_oil_level`]: state(`sensor.${ID}_oil_level`, "8", { unit_of_measurement: "%" }),
+}));
+check("niedriger Stand ist rot", sr(wenigOel).querySelectorAll(".tile-value")[1].classList.contains("bad"));
+
+console.log("\n7. Offenes Fahrzeug");
 const offen = build({}, makeHass({
   [`sensor.${ID}_lock`]: state(`sensor.${ID}_lock`, "1"),
   [`binary_sensor.${ID}_windows_closed`]: state(`binary_sensor.${ID}_windows_closed`, "off"),
@@ -134,17 +156,21 @@ check("Offen erkannt", text(offen, ".pill span") === "Offen", `"${text(offen, ".
 check("Offen ist rot", sr(offen).querySelector(".pill").classList.contains("bad"));
 check("Fenster offen erkannt", sr(offen).querySelectorAll(".pill span")[1].textContent === "Fenster offen");
 
-console.log("\n6. Fehlende Werte werden nicht zu Null");
+console.log("\n8. Fehlende Werte werden nicht zu Null");
 const luecken = build({}, makeHass({
   [`sensor.${ID}_range_liquid`]: state(`sensor.${ID}_range_liquid`, "unknown"),
+  [`binary_sensor.${ID}_tire_warning`]: state(`binary_sensor.${ID}_tire_warning`, "unavailable"),
+  [`sensor.${ID}_tires_rdk_state`]: state(`sensor.${ID}_tires_rdk_state`, "unavailable"),
   [`sensor.${ID}_tire_pressure_front_left`]: state(`sensor.${ID}_tire_pressure_front_left`, "unavailable"),
   [`sensor.${ID}_tire_pressure_front_right`]: state(`sensor.${ID}_tire_pressure_front_right`, "unavailable"),
+  [`sensor.${ID}_tire_pressure_rear_left`]: state(`sensor.${ID}_tire_pressure_rear_left`, "unavailable"),
+  [`sensor.${ID}_tire_pressure_rear_right`]: state(`sensor.${ID}_tire_pressure_rear_right`, "unavailable"),
 }));
 check("Reichweite zeigt einen Strich, keine 0", text(luecken, ".hero-value") === "–", `"${text(luecken, ".hero-value")}"`);
-check("Reifen ohne Werte zeigen einen Strich", tile(luecken, 0).value === "–", tile(luecken, 0).value);
+check("Reifen ohne jede Quelle zeigen einen Strich", tile(luecken, 0).value === "–", tile(luecken, 0).value);
 check("Balken bleibt auf 62 %", sr(luecken).querySelector(".bar span").style.width === "62%");
 
-console.log("\n7. Ueberschreiben schlaegt die Ableitung");
+console.log("\n9. Ueberschreiben schlaegt die Ableitung");
 const eigen = build({
   entity_windows: "binary_sensor.garage_aussen_windows",
 }, makeHass({
@@ -154,7 +180,7 @@ check("eigene Fensterentitaet wird benutzt",
   sr(eigen).querySelectorAll(".pill span")[1].textContent === "Fenster offen",
   sr(eigen).querySelectorAll(".pill span")[1].textContent);
 
-console.log("\n8. Kein Neuaufbau bei hass-Updates");
+console.log("\n10. Kein Neuaufbau bei hass-Updates");
 const stabil = build();
 const vorher = sr(stabil).querySelector(".hero-value");
 const railVorher = sr(stabil).querySelectorAll(".rail button").length;
@@ -168,13 +194,13 @@ check("Symbolleiste nicht neu gebaut", sr(stabil).querySelectorAll(".rail button
 check("Kilometerstand ist mitgelaufen", text(stabil, ".hero-foot span:last-child").startsWith("48.259"),
   text(stabil, ".hero-foot span:last-child"));
 
-console.log("\n9. Symbolleiste");
+console.log("\n11. Symbolleiste");
 check("fuenf Bereiche", sr(karte).querySelectorAll(".rail button").length === 5);
 check("Uebersicht ist aktiv", sr(karte).querySelector(".rail button").classList.contains("active"));
 check("die uebrigen vier sind noch gesperrt",
   [...sr(karte).querySelectorAll(".rail button")].filter((b) => b.disabled).length === 4);
 
-console.log("\n10. Ohne Fahrzeug");
+console.log("\n12. Ohne Fahrzeug");
 const leer = build({ entity: "" }, makeHass());
 check("Hinweis statt leerer Kacheln", text(leer, ".subtitle").includes("Editor"), `"${text(leer, ".subtitle")}"`);
 
