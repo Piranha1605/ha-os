@@ -227,10 +227,14 @@ check("Bildfeld vorhanden", Boolean(feld));
 check("Beschriftung nennt das Bild", feld?.querySelector(".image-label")?.textContent.includes("Bild"),
   feld?.querySelector(".image-label")?.textContent || "");
 check("Pfadeingabe als Rueckfallebene", Boolean(feld?.querySelector("input.path")));
-// Der Auswähler muss auch dann im DOM liegen, wenn ha-selector noch nicht
-// registriert ist – sonst fehlt der Upload-Knopf dauerhaft, wie in 0.10.2.
-check("Auswaehler wird angelegt, obwohl ha-selector fehlt",
-  Boolean(feld?.querySelector("ha-selector")));
+// Der Knopf darf an keinem Element von Home Assistant haengen. In 0.10.1 bis
+// 0.10.3 fehlte er, weil er ha-selector brauchte - das blieb im Kartendialog
+// leer. Hier ist bewusst kein einziges ha-* Element im Spiel.
+check("Knopf zum Hochladen vorhanden", feld?.querySelector("button.upload")?.textContent === "Bild hochladen",
+  feld?.querySelector("button.upload")?.textContent || "keiner");
+check("Dateiauswahl vorhanden", feld?.querySelector("input.file")?.type === "file");
+check("Vorschau vorhanden", Boolean(feld?.querySelector(".preview")));
+check("haengt an keinem ha-Element", !feld?.querySelector("ha-selector, ha-picture-upload"));
 check("Bild steht NICHT im Formularschema",
   !editor.shadowRoot.querySelector("ha-form")?.schema?.some((f) => f.name === "image"));
 
@@ -245,7 +249,46 @@ pfad.value = "";
 pfad.dispatchEvent(new dom.window.Event("change"));
 check("leerer Pfad entfernt den Schluessel", gemeldet && !("image" in gemeldet), JSON.stringify(gemeldet));
 
-console.log("\n14. Bild landet in der Karte");
+console.log("\n14. Upload gegen HAs Bildablage");
+const editor2 = document.createElement("ha-os-vehicle-editor");
+editor2.setConfig({ type: "custom:ha-os-vehicle", entity: `sensor.${ID}_odometer` });
+document.body.append(editor2);
+editor2.hass = { ...makeHass(), auth: { data: { access_token: "TOKEN123" } } };
+
+let anfrage = null;
+globalThis.fetch = async (url, options) => {
+  anfrage = { url, options };
+  return { ok: true, status: 200, json: async () => ({ id: "abc123" }) };
+};
+globalThis.FormData = dom.window.FormData;
+globalThis.File = dom.window.File;
+
+let neu = null;
+editor2.addEventListener("config-changed", (event) => { neu = event.detail.config; });
+
+const upload = await editor2._upload(new dom.window.File(["x"], "auto.png", { type: "image/png" }));
+check("richtige Adresse", anfrage?.url === "/api/image/upload", anfrage?.url || "keine Anfrage");
+check("Methode POST", anfrage?.options?.method === "POST", anfrage?.options?.method || "");
+check("Token wird mitgeschickt", anfrage?.options?.headers?.Authorization === "Bearer TOKEN123",
+  anfrage?.options?.headers?.Authorization || "keiner");
+check("liefert die Serve-Adresse", upload === "/api/image/serve/abc123/original", upload);
+
+globalThis.fetch = async () => ({ ok: false, status: 401, statusText: "Unauthorized" });
+let fehler = "";
+try { await editor2._upload(new dom.window.File(["x"], "auto.png", { type: "image/png" })); }
+catch (error) { fehler = error.message; }
+check("Fehler wird durchgereicht statt verschluckt", fehler === "401 Unauthorized", fehler);
+
+const ohneToken = document.createElement("ha-os-vehicle-editor");
+ohneToken.setConfig({ type: "custom:ha-os-vehicle", entity: `sensor.${ID}_odometer` });
+document.body.append(ohneToken);
+ohneToken.hass = makeHass();
+let tokenFehler = "";
+try { await ohneToken._upload(new dom.window.File(["x"], "a.png", { type: "image/png" })); }
+catch (error) { tokenFehler = error.message; }
+check("ohne Token klare Meldung", tokenFehler.includes("Zugangstoken"), tokenFehler);
+
+console.log("\n15. Bild landet in der Karte");
 const mitBild = build({ image: "/local/auto.png" });
 const bild = sr(mitBild).querySelector(".hero-image img");
 check("Bild wird angezeigt", bild?.getAttribute("src") === "/local/auto.png", bild?.getAttribute("src") || "kein img");
