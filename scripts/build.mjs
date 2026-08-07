@@ -58,6 +58,8 @@ const required = [
   "ha-os-card-editor",
   "ha-os-grid",
   "ha-os-grid-editor",
+  "ha-os-vehicle",
+  "ha-os-vehicle-editor",
 ];
 const missing = required.filter((tag) => !built.includes(tag));
 

@@ -1,4 +1,4 @@
-/* HA-OS 0.9.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.10.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -745,9 +745,9 @@ var el = (tag, className, text2) => {
   if (text2 !== void 0) node.textContent = text2;
   return node;
 };
-var iconEl = (icon4) => {
+var iconEl = (icon5) => {
   const node = document.createElement("ha-icon");
-  node.setAttribute("icon", icon4);
+  node.setAttribute("icon", icon5);
   return node;
 };
 var HaOsShell = class extends HTMLElement {
@@ -1169,8 +1169,8 @@ var HaOsShell = class extends HTMLElement {
     this._badges.clear();
     badges.forEach((badge) => {
       const root = el("button", "badge");
-      const icon4 = iconEl(badge.icon || "mdi:circle-outline");
-      root.append(icon4);
+      const icon5 = iconEl(badge.icon || "mdi:circle-outline");
+      root.append(icon5);
       let name = null;
       let state = null;
       if (badge.show_state || badge.name) {
@@ -1186,13 +1186,13 @@ var HaOsShell = class extends HTMLElement {
         root.classList.add("icon-only");
       }
       root.addEventListener("click", () => handleAction(this, this._hass, badge.tap_action, badge.entity));
-      this._badges.set(badge.id, { root, icon: icon4, name, state, badge });
+      this._badges.set(badge.id, { root, icon: icon5, name, state, badge });
       this._badgeList.append(root);
     });
     this._updateBadgeStates();
   }
   _updateBadgeStates() {
-    this._badges.forEach(({ root, icon: icon4, name, state, badge }) => {
+    this._badges.forEach(({ root, icon: icon5, name, state, badge }) => {
       if (badge.kind === "link") {
         root.classList.remove("is-on", "is-off", "is-unavailable");
         if (name) name.textContent = badge.name || "Link";
@@ -1204,7 +1204,7 @@ var HaOsShell = class extends HTMLElement {
       const label = badge.name || friendlyName(badge.entity, entityState);
       root.classList.remove("is-on", "is-off", "is-unavailable");
       root.classList.add(statusClass(entityState));
-      icon4.setAttribute("icon", badge.icon || domainIcon(badge.entity, entityState));
+      icon5.setAttribute("icon", badge.icon || domainIcon(badge.entity, entityState));
       if (name) name.textContent = label;
       if (state) state.textContent = formatState(this._hass, badge.entity);
       root.title = label;
@@ -1539,15 +1539,15 @@ var createHaCardEditor = ({ hass, value, onChange }) => {
   });
   return editor;
 };
-var createCardEditorWithCode = ({ hass, value, onChange, codeMode, onToggleCode, el: el5 }) => {
-  const wrap = el5("div");
+var createCardEditorWithCode = ({ hass, value, onChange, codeMode, onToggleCode, el: el6 }) => {
+  const wrap = el6("div");
   const gui = codeMode ? null : createHaCardEditor({ hass, value, onChange });
   if (gui) {
     wrap.append(gui);
   } else {
     if (!codeMode) {
       wrap.append(
-        el5(
+        el6(
           "p",
           "hint",
           "Der Karteneditor von Home Assistant steht hier nicht zur Verfuegung - Konfiguration als YAML."
@@ -1563,7 +1563,7 @@ var createCardEditorWithCode = ({ hass, value, onChange, codeMode, onToggleCode,
     });
     wrap.append(yaml);
   }
-  const toggle = el5("button", "linkish", codeMode ? "Eingabemaske anzeigen" : "Code-Editor anzeigen");
+  const toggle = el6("button", "linkish", codeMode ? "Eingabemaske anzeigen" : "Code-Editor anzeigen");
   toggle.addEventListener("click", onToggleCode);
   wrap.append(toggle);
   return wrap;
@@ -4531,8 +4531,502 @@ var HaOsGridEditor = class extends HTMLElement {
 };
 if (!customElements.get(EDITOR_TAG5)) customElements.define(EDITOR_TAG5, HaOsGridEditor);
 
+// src/cards/vehicle-card.js
+var TAG4 = "ha-os-vehicle";
+var EDITOR_TAG6 = "ha-os-vehicle-editor";
+var DERIVED = {
+  range: "sensor.{id}_range_liquid",
+  fuel: "sensor.{id}_fuel_level",
+  odometer: "sensor.{id}_odometer",
+  lock: "sensor.{id}_lock",
+  ignition: "sensor.{id}_ignition_state",
+  windows: "binary_sensor.{id}_windows_closed",
+  battery: "sensor.{id}_starter_battery_state",
+  tire_front_left: "sensor.{id}_tire_pressure_front_left",
+  tire_front_right: "sensor.{id}_tire_pressure_front_right",
+  tire_rear_left: "sensor.{id}_tire_pressure_rear_left",
+  tire_rear_right: "sensor.{id}_tire_pressure_rear_right"
+};
+var WARNINGS = [
+  ["binary_sensor.{id}_engine_light_warning", "Motorkontrollleuchte"],
+  ["binary_sensor.{id}_low_brake_fluid_warning", "Bremsflüssigkeit"],
+  ["binary_sensor.{id}_low_coolant_level_warning", "Kühlmittel"],
+  ["binary_sensor.{id}_low_wash_water_warning", "Wischwasser"],
+  ["binary_sensor.{id}_tire_warning", "Reifendruck"]
+];
+var vehicleId = (entityId) => String(entityId || "").split(".")[1]?.split("_")[0] || "";
+var resolveEntity = (config, key) => {
+  if (config?.[`entity_${key}`]) return config[`entity_${key}`];
+  const id = vehicleId(config?.entity);
+  return id && DERIVED[key] ? DERIVED[key].replace("{id}", id) : "";
+};
+var el5 = (tag, className, text2) => {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text2 !== void 0) node.textContent = text2;
+  return node;
+};
+var icon4 = (name) => {
+  const node = document.createElement("ha-icon");
+  node.icon = name;
+  return node;
+};
+var SECTIONS = [
+  ["overview", "mdi:car", "Übersicht"],
+  ["trip", "mdi:map-marker-path", "Fahrt"],
+  ["status", "mdi:shield-check", "Status"],
+  ["tires", "mdi:car-tire-alert", "Reifen"],
+  ["eco", "mdi:leaf", "Eco"]
+];
+var STYLES6 = `
+  :host { display: block; height: 100%; }
+  * { box-sizing: border-box; }
+
+  .card {
+    height: 100%; padding: 10px; display: flex; gap: 10px; overflow: hidden;
+    color: var(--haos-text, #fff);
+    font-family: var(--haos-font-family);
+    ${CARD_SURFACE_CSS}
+  }
+
+  /* --- Symbolleiste links, Vorbild CarPlay --- */
+  .rail {
+    width: 56px; flex: 0 0 56px; border-radius: 14px; padding: 8px 0;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .07);
+  }
+  .rail button {
+    width: 38px; height: 38px; border-radius: 11px; border: 0; padding: 0;
+    display: grid; place-items: center; cursor: pointer;
+    background: none; color: rgba(var(--haos-text-rgb, 255,255,255), .45);
+    transition: background .16s ease, color .16s ease;
+  }
+  .rail button.active { background: rgba(var(--haos-text-rgb, 255,255,255), .16); color: var(--haos-text, #fff); }
+  .rail button[disabled] { opacity: .3; cursor: default; }
+  .rail ha-icon { --mdc-icon-size: 19px; }
+
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+
+  /* --- Kopfzeile --- */
+  .head { display: flex; align-items: center; gap: 8px; }
+  .head-text { flex: 1; min-width: 0; }
+  .title { font-size: 15px; font-weight: var(--haos-font-weight-medium, 500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .subtitle { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pill {
+    display: flex; align-items: center; gap: 5px; flex: 0 0 auto;
+    border-radius: 999px; padding: 5px 10px; font-size: 12px;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+    color: rgba(var(--haos-text-rgb, 255,255,255), .85);
+  }
+  .pill[hidden] { display: none; }
+  .pill.good { color: var(--haos-good, #7ee0b0); }
+  .pill.bad { color: var(--haos-bad, #ff6b6b); }
+  .pill ha-icon { --mdc-icon-size: 14px; }
+
+  /* --- Reichweite --- */
+  .hero {
+    border-radius: 14px; padding: 14px; display: flex; align-items: center; gap: 16px;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+  }
+  .hero-main { flex: 1; min-width: 0; }
+  .hero-label { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
+  .hero-value { font-size: 30px; font-weight: var(--haos-font-weight-medium, 500); line-height: 1.15; }
+  .bar { height: 6px; border-radius: 99px; margin-top: 10px; overflow: hidden; background: rgba(var(--haos-text-rgb, 255,255,255), .14); }
+  .bar span { display: block; height: 100%; width: 0; background: var(--haos-accent, #0a84ff); transition: width .3s ease; }
+  .hero-foot { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; margin-top: 5px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
+  .hero-image {
+    width: 132px; flex: 0 0 132px; height: 74px; border-radius: 11px;
+    display: grid; place-items: center; overflow: hidden;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .07);
+    color: rgba(var(--haos-text-rgb, 255,255,255), .35);
+  }
+  .hero-image img { width: 100%; height: 100%; object-fit: contain; }
+  .hero-image ha-icon { --mdc-icon-size: 40px; }
+
+  /* --- Kacheln --- */
+  .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .tile { border-radius: 12px; padding: 10px; min-width: 0; background: rgba(var(--haos-text-rgb, 255,255,255), .10); }
+  .tile-label { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tile-value { font-size: 14px; font-weight: var(--haos-font-weight-medium, 500); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tile-value.good { color: var(--haos-good, #7ee0b0); }
+  .tile-value.bad { color: var(--haos-bad, #ff6b6b); }
+
+  .placeholder { flex: 1; display: grid; place-content: center; text-align: center; gap: 6px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
+  .error { display: grid; place-content: center; height: 100%; text-align: center; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
+`;
+var numberOf = (state) => {
+  if (!state || state.state === "unknown" || state.state === "unavailable" || state.state === "") return null;
+  const value = Number(state.state);
+  return Number.isFinite(value) ? value : null;
+};
+var unitOf = (state) => state?.attributes?.unit_of_measurement || "";
+var isLocked = (state) => {
+  const value = String(state?.state ?? "").toLowerCase();
+  return value === "0" || value === "locked" || value === "lock" || value === "off";
+};
+var formatNumber = (value, digits = 0) => value === null ? "–" : value.toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+var HaOsVehicleCard = class extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = null;
+    this._hass = null;
+    this._nodes = null;
+    this._section = "overview";
+    this._lastStates = null;
+  }
+  static getConfigElement() {
+    return document.createElement(EDITOR_TAG6);
+  }
+  static getStubConfig() {
+    return { type: `custom:${TAG4}`, entity: "" };
+  }
+  setConfig(config) {
+    if (!config || typeof config !== "object") throw new Error("Ungültige Konfiguration.");
+    this._config = { ...config };
+    if (!this._nodes) this._build();
+    this._update();
+  }
+  set hass(hass) {
+    const first = !this._hass;
+    this._hass = hass;
+    if (first || this._watchedChanged(hass)) this._update();
+  }
+  getCardSize() {
+    return 4;
+  }
+  getGridOptions() {
+    return { columns: "full", min_rows: 3 };
+  }
+  _watchedEntities() {
+    const keys = Object.keys(DERIVED).map((key) => resolveEntity(this._config, key));
+    const id = vehicleId(this._config?.entity);
+    const warnings = id ? WARNINGS.map(([pattern]) => pattern.replace("{id}", id)) : [];
+    return [...keys, ...warnings].filter(Boolean);
+  }
+  _watchedChanged(hass) {
+    const watched = this._watchedEntities();
+    if (!watched.length) return false;
+    const previous = this._lastStates;
+    const current = new Map(watched.map((id) => [id, hass?.states?.[id]]));
+    this._lastStates = current;
+    if (!previous || previous.size !== current.size) return true;
+    for (const [id, state] of current) if (previous.get(id) !== state) return true;
+    return false;
+  }
+  _build() {
+    const style = document.createElement("style");
+    style.textContent = STYLES6;
+    const card = el5("div", "card");
+    const rail = el5("div", "rail");
+    const buttons = /* @__PURE__ */ new Map();
+    SECTIONS.forEach(([key, iconName, label]) => {
+      const button = el5("button");
+      button.append(icon4(iconName));
+      button.title = label;
+      button.setAttribute("aria-label", label);
+      if (key !== "overview") button.disabled = true;
+      button.addEventListener("click", () => {
+        if (button.disabled) return;
+        this._section = key;
+        this._update();
+      });
+      buttons.set(key, button);
+      rail.append(button);
+    });
+    const main = el5("div", "main");
+    const head = el5("div", "head");
+    const headText = el5("div", "head-text");
+    const title = el5("div", "title");
+    const subtitle = el5("div", "subtitle");
+    headText.append(title, subtitle);
+    const lockPill = el5("div", "pill");
+    const lockIcon = icon4("mdi:lock");
+    const lockText = el5("span");
+    lockPill.append(lockIcon, lockText);
+    const windowPill = el5("div", "pill");
+    const windowIcon = icon4("mdi:car-door");
+    const windowText = el5("span");
+    windowPill.append(windowIcon, windowText);
+    head.append(headText, lockPill, windowPill);
+    const hero = el5("div", "hero");
+    const heroMain = el5("div", "hero-main");
+    const heroLabel = el5("div", "hero-label", "Reichweite");
+    const heroValue = el5("div", "hero-value", "–");
+    const bar = el5("div", "bar");
+    const barFill = el5("span");
+    bar.append(barFill);
+    const heroFoot = el5("div", "hero-foot");
+    const footLeft = el5("span");
+    const footRight = el5("span");
+    heroFoot.append(footLeft, footRight);
+    heroMain.append(heroLabel, heroValue, bar, heroFoot);
+    const heroImage = el5("div", "hero-image");
+    heroImage.append(icon4("mdi:car-side"));
+    hero.append(heroMain, heroImage);
+    const tiles = el5("div", "tiles");
+    const tileNodes = ["front", "rear", "warnings", "battery"].map((key) => {
+      const tile = el5("div", "tile");
+      const label = el5("div", "tile-label");
+      const value = el5("div", "tile-value");
+      tile.append(label, value);
+      tiles.append(tile);
+      return { key, tile, label, value };
+    });
+    main.append(head, hero, tiles);
+    card.append(rail, main);
+    this._nodes = {
+      card,
+      rail,
+      buttons,
+      title,
+      subtitle,
+      lockPill,
+      lockIcon,
+      lockText,
+      windowPill,
+      windowIcon,
+      windowText,
+      heroValue,
+      barFill,
+      footLeft,
+      footRight,
+      heroImage,
+      tiles: tileNodes
+    };
+    this.shadowRoot.replaceChildren(style, card);
+  }
+  _update() {
+    if (!this._nodes) return;
+    const nodes = this._nodes;
+    const config = this._config || {};
+    const hass = this._hass;
+    nodes.buttons.forEach((button, key) => button.classList.toggle("active", key === this._section));
+    const stateOf = (key) => hass?.states?.[resolveEntity(config, key)];
+    const carState = hass?.states?.[config.entity];
+    const id = vehicleId(config.entity);
+    const carName = hass?.states?.[`sensor.${id}_car`]?.attributes?.friendly_name;
+    nodes.title.textContent = config.name || carName || (id ? id.toUpperCase() : "Fahrzeug");
+    if (!config.entity) {
+      nodes.subtitle.textContent = "Im Editor eine Fahrzeug-Entität wählen";
+      return;
+    }
+    const ignition = stateOf("ignition");
+    const ignitionOn = !["0", "off", "aus", "unknown", "unavailable"].includes(String(ignition?.state ?? "").toLowerCase());
+    const parts = [];
+    if (ignition && ignition.state !== "unavailable") parts.push(ignitionOn ? "Zündung an" : "Zündung aus");
+    const changed = carState?.last_changed || ignition?.last_changed;
+    if (changed) parts.push(relativeTime(changed));
+    nodes.subtitle.textContent = parts.join(" · ");
+    const lock = stateOf("lock");
+    if (lock && lock.state !== "unavailable") {
+      const locked = isLocked(lock);
+      nodes.lockPill.hidden = false;
+      nodes.lockPill.classList.toggle("good", locked);
+      nodes.lockPill.classList.toggle("bad", !locked);
+      nodes.lockIcon.icon = locked ? "mdi:lock" : "mdi:lock-open-variant";
+      nodes.lockText.textContent = locked ? "Verriegelt" : "Offen";
+    } else {
+      nodes.lockPill.hidden = true;
+    }
+    const windows = stateOf("windows");
+    if (windows && windows.state !== "unavailable") {
+      const closed = windows.state === "on" || windows.state === "closed";
+      nodes.windowPill.hidden = false;
+      nodes.windowPill.classList.toggle("good", closed);
+      nodes.windowPill.classList.toggle("bad", !closed);
+      nodes.windowIcon.icon = closed ? "mdi:car-door-lock" : "mdi:car-door";
+      nodes.windowText.textContent = closed ? "Fenster zu" : "Fenster offen";
+    } else {
+      nodes.windowPill.hidden = true;
+    }
+    const range = stateOf("range");
+    const rangeValue = numberOf(range);
+    nodes.heroValue.textContent = rangeValue === null ? "–" : `${formatNumber(rangeValue)} ${unitOf(range) || "km"}`;
+    const fuel = numberOf(stateOf("fuel"));
+    nodes.barFill.style.width = fuel === null ? "0%" : `${Math.max(0, Math.min(100, fuel))}%`;
+    nodes.footLeft.textContent = fuel === null ? "" : `${formatNumber(fuel)} % Tank`;
+    const odometer = stateOf("odometer");
+    const odometerValue = numberOf(odometer);
+    nodes.footRight.textContent = odometerValue === null ? "" : `${formatNumber(odometerValue)} ${unitOf(odometer) || "km"} gesamt`;
+    if (config.image) {
+      if (nodes.heroImage.firstElementChild?.tagName !== "IMG") {
+        const img = document.createElement("img");
+        img.alt = "";
+        nodes.heroImage.replaceChildren(img);
+      }
+      nodes.heroImage.firstElementChild.src = config.image;
+    }
+    const tirePair = (a, b) => {
+      const left = numberOf(stateOf(a));
+      const right = numberOf(stateOf(b));
+      if (left === null && right === null) return "–";
+      return `${formatNumber(left, 1)} · ${formatNumber(right, 1)}`;
+    };
+    const active2 = WARNINGS.filter(([pattern]) => hass?.states?.[pattern.replace("{id}", id)]?.state === "on");
+    const battery = stateOf("battery");
+    const batteryOk = ["ok", "0", "normal", "good"].includes(String(battery?.state ?? "").toLowerCase());
+    const values = {
+      front: { label: "Reifen vorn", value: tirePair("tire_front_left", "tire_front_right"), tone: "" },
+      rear: { label: "Reifen hinten", value: tirePair("tire_rear_left", "tire_rear_right"), tone: "" },
+      warnings: {
+        label: "Warnungen",
+        value: active2.length ? active2.map(([, label]) => label).join(", ") : "keine",
+        tone: active2.length ? "bad" : "good"
+      },
+      battery: {
+        label: "Starterbatterie",
+        value: battery && battery.state !== "unavailable" ? batteryOk ? "ok" : battery.state : "–",
+        tone: battery && battery.state !== "unavailable" ? batteryOk ? "good" : "bad" : ""
+      }
+    };
+    nodes.tiles.forEach(({ key, label, value }) => {
+      label.textContent = values[key].label;
+      value.textContent = values[key].value;
+      value.title = values[key].value;
+      value.classList.remove("good", "bad");
+      if (values[key].tone) value.classList.add(values[key].tone);
+    });
+    nodes.card.classList.remove("is-on", "is-off", "is-unavailable");
+    if (carState) nodes.card.classList.add(statusClass(carState));
+  }
+};
+var relativeTime = (isoString) => {
+  const then = new Date(isoString).getTime();
+  if (!Number.isFinite(then)) return "";
+  const minutes = Math.round((Date.now() - then) / 6e4);
+  if (minutes < 1) return "gerade eben";
+  if (minutes < 60) return `vor ${minutes} Minuten`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `vor ${hours} Stunden`;
+  return `vor ${Math.round(hours / 24)} Tagen`;
+};
+if (!customElements.get(TAG4)) customElements.define(TAG4, HaOsVehicleCard);
+registerCard({
+  type: TAG4,
+  name: "HA-OS Fahrzeug",
+  description: "Fahrzeugübersicht für Mercedes (mbapi2020) – Reichweite, Tank, Verriegelung, Reifen und Warnungen.",
+  preview: false
+});
+
+// src/cards/vehicle-editor.js
+var EDITOR_TAG7 = EDITOR_TAG6;
+var LABELS3 = {
+  entity: "Fahrzeug",
+  name: "Name",
+  image: "Bild des Fahrzeugs",
+  ueberschreiben: "Entitäten überschreiben",
+  entity_range: "Reichweite",
+  entity_fuel: "Tankfüllung",
+  entity_odometer: "Kilometerstand",
+  entity_lock: "Verriegelung",
+  entity_ignition: "Zündung",
+  entity_windows: "Fenster geschlossen",
+  entity_battery: "Starterbatterie",
+  entity_tire_front_left: "Reifen vorn links",
+  entity_tire_front_right: "Reifen vorn rechts",
+  entity_tire_rear_left: "Reifen hinten links",
+  entity_tire_rear_right: "Reifen hinten rechts"
+};
+var HELPERS3 = {
+  entity: "Eine beliebige Entität des Fahrzeugs, etwa der Kilometerstand. Aus ihrer Kennung findet die Karte die übrigen Werte selbst.",
+  name: "Leer lassen für den Namen aus Home Assistant.",
+  image: "Pfad innerhalb dieser Installation, etwa /local/auto.png. Ohne Bild steht ein Symbol da.",
+  ueberschreiben: "Nur nötig, wenn eine Entität aus dem Namensmuster fällt – Fensterkontakte tragen oft den Gerätenamen davor."
+};
+var OVERRIDES = {
+  name: "ueberschreiben",
+  type: "expandable",
+  flatten: true,
+  iconPath: "M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5Z",
+  schema: Object.keys(DERIVED).map((key) => ({ name: `entity_${key}`, selector: { entity: {} } }))
+};
+var SCHEMA = [
+  { name: "entity", required: true, selector: { entity: { integration: "mbapi2020" } } },
+  { name: "name", selector: { text: {} } },
+  { name: "image", selector: { text: {} } },
+  OVERRIDES
+];
+var HaOsVehicleEditor = class extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = {};
+    this._hass = null;
+    this._form = null;
+    this._hint = null;
+  }
+  setConfig(config) {
+    const next = { ...config };
+    if (isEqualConfig(next, this._config) && this._form) return;
+    this._config = next;
+    if (!this._form) {
+      this._build();
+      return;
+    }
+    this._form.data = this._config;
+    this._paintHint();
+  }
+  set hass(hass) {
+    this._hass = hass;
+    if (this._form) this._form.hass = hass;
+    this._paintHint();
+  }
+  get hass() {
+    return this._hass;
+  }
+  /**
+   * Sagt geradeheraus, wie viele der abgeleiteten Entitäten es wirklich gibt.
+   * Ohne das merkt man einen Tippfehler in der Kennung erst an leeren Kacheln.
+   */
+  _paintHint() {
+    if (!this._hint) return;
+    const id = vehicleId(this._config?.entity);
+    if (!id) {
+      this._hint.textContent = "Ein Fahrzeug wählen – die übrigen Werte findet die Karte selbst.";
+      return;
+    }
+    if (!this._hass) {
+      this._hint.textContent = `Kennung ${id}.`;
+      return;
+    }
+    const keys = Object.keys(DERIVED);
+    const found = keys.filter((key) => this._hass.states?.[resolveEntity(this._config, key)]).length;
+    this._hint.textContent = found === keys.length ? `Kennung ${id} – alle ${keys.length} Werte gefunden.` : `Kennung ${id} – ${found} von ${keys.length} Werten gefunden. Fehlende unten überschreiben.`;
+  }
+  _build() {
+    const style = document.createElement("style");
+    style.textContent = `
+      :host { display: block; }
+      .hint { margin: 0 0 12px; font-size: 12px; line-height: 1.45; color: var(--secondary-text-color); }
+    `;
+    this._hint = document.createElement("p");
+    this._hint.className = "hint";
+    const form = document.createElement("ha-form");
+    form.hass = this._hass;
+    form.data = this._config;
+    form.schema = SCHEMA;
+    form.computeLabel = (field) => LABELS3[field.name] || field.name;
+    form.computeHelper = (field) => HELPERS3[field.name] || "";
+    form.addEventListener("value-changed", (event) => {
+      event.stopPropagation();
+      const value = { ...event.detail.value };
+      Object.keys(value).forEach((key) => {
+        if (value[key] === "" || value[key] === void 0) delete value[key];
+      });
+      this._config = value;
+      this._paintHint();
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: value }, bubbles: true, composed: true }));
+    });
+    this._form = form;
+    this.shadowRoot.replaceChildren(style, this._hint, form);
+    this._paintHint();
+  }
+};
+if (!customElements.get(EDITOR_TAG7)) customElements.define(EDITOR_TAG7, HaOsVehicleEditor);
+
 // src/ha-os.js
-var VERSION = "0.9.0";
+var VERSION = "0.10.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",
