@@ -55,20 +55,9 @@ const OVERRIDES = {
   schema: Object.keys(DERIVED).map((key) => ({ name: `entity_${key}`, selector: { entity: {} } })),
 };
 
-/**
- * Für das Bild HAs eigene Bildablage mit Upload-Knopf (`selector: { image }`).
- * Eine Lovelace-Karte darf nicht selbst nach `config/www/` schreiben – dafür
- * gibt es keine Schnittstelle. Hochgeladene Bilder liegen danach unter
- * `/api/image/serve/…`. Kennt die Home-Assistant-Version den Auswähler nicht,
- * fällt das Feld auf eine schlichte Pfadeingabe zurück.
- */
-const imageField = () =>
-  customElements.get("ha-selector") ? { name: "image", selector: { image: {} } } : { name: "image", selector: { text: {} } };
-
 const buildSchema = () => [
   { name: "entity", required: true, selector: { entity: { integration: "mbapi2020" } } },
   { name: "name", selector: { text: {} } },
-  imageField(),
   OVERRIDES,
 ];
 
@@ -80,6 +69,8 @@ class HaOsVehicleEditor extends HTMLElement {
     this._hass = null;
     this._form = null;
     this._hint = null;
+    this._imageSelector = null;
+    this._pathInput = null;
   }
 
   setConfig(config) {
@@ -91,12 +82,17 @@ class HaOsVehicleEditor extends HTMLElement {
       return;
     }
     this._form.data = this._config;
+    // Das Bildfeld steht ausserhalb des Formulars und muss von Hand
+    // nachgezogen werden, sonst zeigt es nach einem Rueckgaengig alte Werte.
+    if (this._pathInput) this._pathInput.value = this._config.image || "";
+    if (this._imageSelector) this._imageSelector.value = this._config.image || "";
     this._paintHint();
   }
 
   set hass(hass) {
     this._hass = hass;
     if (this._form) this._form.hass = hass;
+    if (this._imageSelector) this._imageSelector.hass = hass;
     this._paintHint();
   }
 
@@ -127,11 +123,81 @@ class HaOsVehicleEditor extends HTMLElement {
         : `Kennung ${id} – ${found} von ${keys.length} Werten gefunden. Fehlende unten überschreiben.`;
   }
 
+  /**
+   * Bildauswahl mit Upload – bewusst NICHT über `ha-form`.
+   *
+   * Ein Feld mit `selector: { image: {} }` im Formularschema wurde von
+   * `ha-form` stillschweigend weggelassen: kein Feld, keine Meldung. Direkt
+   * erzeugtes `ha-selector` funktioniert dagegen, so macht es auch die
+   * Einstellungsseite der Shell für das Hintergrundbild.
+   *
+   * Darunter bleibt eine Pfadeingabe – für Bilder, die jemand selbst nach
+   * `config/www/` gelegt hat, und als Rückfallebene, falls `ha-selector`
+   * fehlt.
+   */
+  _buildImageField() {
+    const wrap = document.createElement("div");
+    wrap.className = "image-field";
+
+    const label = document.createElement("span");
+    label.className = "image-label";
+    label.textContent = LABELS.image;
+    wrap.append(label);
+
+    const write = (value) => {
+      const next = { ...this._config };
+      if (value) next.image = value;
+      else delete next.image;
+      this._config = next;
+      this._pathInput.value = next.image || "";
+      if (this._imageSelector) this._imageSelector.value = next.image || "";
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next }, bubbles: true, composed: true }));
+    };
+
+    if (customElements.get("ha-selector")) {
+      const selector = document.createElement("ha-selector");
+      selector.hass = this._hass;
+      selector.selector = { image: {} };
+      selector.value = this._config.image || "";
+      selector.addEventListener("value-changed", (event) => {
+        event.stopPropagation();
+        write(event.detail.value || "");
+      });
+      this._imageSelector = selector;
+      wrap.append(selector);
+    }
+
+    const pathInput = document.createElement("input");
+    pathInput.type = "text";
+    pathInput.className = "path";
+    pathInput.placeholder = "/local/auto.png";
+    pathInput.value = this._config.image || "";
+    pathInput.addEventListener("change", () => write(pathInput.value.trim()));
+    this._pathInput = pathInput;
+    wrap.append(pathInput);
+
+    const helper = document.createElement("span");
+    helper.className = "image-helper";
+    helper.textContent = HELPERS.image;
+    wrap.append(helper);
+
+    return wrap;
+  }
+
   _build() {
     const style = document.createElement("style");
     style.textContent = `
       :host { display: block; }
       .hint { margin: 0 0 12px; font-size: 12px; line-height: 1.45; color: var(--secondary-text-color); }
+      .image-field { display: flex; flex-direction: column; gap: 8px; margin: 16px 0 8px; }
+      .image-label { font-size: 14px; color: var(--primary-text-color); }
+      .image-helper { font-size: 12px; line-height: 1.45; color: var(--secondary-text-color); }
+      .path {
+        width: 100%; padding: 10px 12px; border-radius: 8px; font: inherit;
+        color: var(--primary-text-color);
+        background: var(--secondary-background-color, rgba(127,127,127,.12));
+        border: 1px solid var(--divider-color, rgba(127,127,127,.3));
+      }
     `;
 
     this._hint = document.createElement("p");
@@ -156,7 +222,7 @@ class HaOsVehicleEditor extends HTMLElement {
     });
 
     this._form = form;
-    this.shadowRoot.replaceChildren(style, this._hint, form);
+    this.shadowRoot.replaceChildren(style, this._hint, form, this._buildImageField());
     this._paintHint();
   }
 }

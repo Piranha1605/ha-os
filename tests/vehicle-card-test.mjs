@@ -204,5 +204,39 @@ console.log("\n12. Ohne Fahrzeug");
 const leer = build({ entity: "" }, makeHass());
 check("Hinweis statt leerer Kacheln", text(leer, ".subtitle").includes("Editor"), `"${text(leer, ".subtitle")}"`);
 
+console.log("\n13. Editor: das Bildfeld ist wirklich da");
+// Anlass: als `{ name: "image", selector: { image: {} } }` im Formularschema
+// liess ha-form das Feld stillschweigend weg – kein Feld, keine Meldung.
+// Deshalb steht es ausserhalb des Formulars und wird hier nachgeprueft.
+const editor = document.createElement("ha-os-vehicle-editor");
+editor.setConfig({ type: "custom:ha-os-vehicle", entity: `sensor.${ID}_odometer` });
+document.body.append(editor);
+editor.hass = makeHass();
+
+const feld = editor.shadowRoot.querySelector(".image-field");
+check("Bildfeld vorhanden", Boolean(feld));
+check("Beschriftung nennt das Bild", feld?.querySelector(".image-label")?.textContent.includes("Bild"),
+  feld?.querySelector(".image-label")?.textContent || "");
+check("Pfadeingabe als Rueckfallebene", Boolean(feld?.querySelector("input.path")));
+check("Bild steht NICHT im Formularschema",
+  !editor.shadowRoot.querySelector("ha-form")?.schema?.some((f) => f.name === "image"));
+
+let gemeldet = null;
+editor.addEventListener("config-changed", (event) => { gemeldet = event.detail.config; });
+const pfad = feld.querySelector("input.path");
+pfad.value = "/local/auto.png";
+pfad.dispatchEvent(new dom.window.Event("change"));
+check("Pfad wird uebernommen", gemeldet?.image === "/local/auto.png", JSON.stringify(gemeldet));
+
+pfad.value = "";
+pfad.dispatchEvent(new dom.window.Event("change"));
+check("leerer Pfad entfernt den Schluessel", gemeldet && !("image" in gemeldet), JSON.stringify(gemeldet));
+
+console.log("\n14. Bild landet in der Karte");
+const mitBild = build({ image: "/local/auto.png" });
+const bild = sr(mitBild).querySelector(".hero-image img");
+check("Bild wird angezeigt", bild?.getAttribute("src") === "/local/auto.png", bild?.getAttribute("src") || "kein img");
+check("ohne Bild steht ein Symbol", !sr(karte).querySelector(".hero-image img"));
+
 console.log(failures === 0 ? "\nAlle Prüfungen bestanden.\n" : `\n${failures} Prüfung(en) fehlgeschlagen.\n`);
 process.exit(failures === 0 ? 0 : 1);
