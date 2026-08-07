@@ -39,6 +39,7 @@ export const CARD_TYPES = [
   { value: "calendar", label: "Kalender", icon: "mdi:calendar" },
   { value: "select", label: "Auswahl", icon: "mdi:form-dropdown" },
   { value: "clock", label: "Uhr", icon: "mdi:clock-outline" },
+  { value: "camera", label: "Kamera", icon: "mdi:cctv" },
 ];
 
 const el = (tag, className, text) => {
@@ -236,6 +237,23 @@ const STYLES = `
   .clock { flex: 1; display: grid; place-content: center; text-align: center; }
   .clock-time { font-size: 44px; font-weight: 300; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
   .clock-date { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
+
+  /* --- Kamera ---
+     Das Bild füllt die Karte randlos. Die 16 px Polsterung der Karte werden
+     über negative Ränder zurückgenommen, damit die Glaskante sauber bleibt. */
+  .camera { position: relative; flex: 1; min-height: 0; margin: -16px; border-radius: inherit; overflow: hidden; background: rgba(0, 0, 0, .35); }
+  .camera-image { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .camera-image[hidden] { display: none; }
+  .camera-label {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 14px 10px;
+    display: flex; align-items: center; gap: 7px; font-size: 13px;
+    background: linear-gradient(to top, rgba(0, 0, 0, .55), transparent);
+    pointer-events: none;
+  }
+  .camera-label[hidden] { display: none; }
+  .camera-live { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #ff453a; }
+  .camera-note { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 6px; padding: 12px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
+  .camera-note[hidden] { display: none; }
 
   .error { display: grid; place-content: center; height: 100%; text-align: center; gap: 6px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
 `;
@@ -1329,6 +1347,160 @@ const renderers = {
 
       if (ctx.nodes.select && ctx.nodes.select.value !== state?.state) ctx.nodes.select.value = state?.state ?? "";
       ctx.nodes.optionButtons?.forEach((button, option) => button.classList.toggle("active", option === state?.state));
+    },
+  },
+
+  // ------------------------------------------------------------- Kamera
+  /**
+   * Zwei Betriebsarten, im Editor je Karte wählbar:
+   *
+   * - **Standbild**: holt `entity_picture` neu, im eingestellten Takt. Das ist
+   *   genau ein Bild pro Intervall, sonst schweigt die Leitung.
+   * - **Livebild**: `/api/camera_proxy_stream/` liefert MJPEG. Das läuft in
+   *   einem schlichten <img> und braucht kein nachgeladenes HA-Element —
+   *   `ha-camera-stream` ist von außen nicht zuverlässig zu bekommen, dieselbe
+   *   Falle wie beim Kartenwähler. Dafür überträgt MJPEG dauerhaft.
+   *
+   * Warum der IntersectionObserver: Die Shell blendet Seiten nur mit
+   * `display: none` aus, die Karten bleiben am Leben. Ohne die Prüfung liefe
+   * ein Livebild auf einer längst verlassenen Seite endlos weiter.
+   */
+  camera: {
+    build(ctx) {
+      const root = el("div", "camera");
+
+      ctx.nodes.image = el("img", "camera-image");
+      ctx.nodes.image.alt = "";
+      ctx.nodes.image.decoding = "async";
+      ctx.nodes.note = el("div", "camera-note");
+      ctx.nodes.label = el("div", "camera-label");
+      ctx.nodes.liveDot = el("span", "camera-live");
+      ctx.nodes.labelText = el("span", null, "");
+      ctx.nodes.label.append(ctx.nodes.liveDot, ctx.nodes.labelText);
+      root.append(ctx.nodes.image, ctx.nodes.note, ctx.nodes.label);
+
+      ctx.nodes.visible = true;
+      ctx.nodes.failed = false;
+
+      ctx.nodes.image.addEventListener("error", () => {
+        // Ein abgelaufenes Token oder eine schlafende Kamera. Beim nächsten
+        // Takt liegt ein frisches entity_picture vor, deshalb kein Dauerfehler.
+        ctx.nodes.failed = true;
+        renderers.camera._paint(ctx);
+      });
+      ctx.nodes.image.addEventListener("load", () => {
+        if (!ctx.nodes.failed) return;
+        ctx.nodes.failed = false;
+        renderers.camera._paint(ctx);
+      });
+
+      // Tippen öffnet standardmäßig HAs Kameradialog – dort läuft der echte
+      // Stream, auch wenn die Karte selbst nur ein Standbild zeigt.
+      ctx.card.classList.add("interactive");
+      root.addEventListener("click", () =>
+        handleAction(ctx.host, ctx.hass, ctx.config.tap_action || { action: "more-info" }, ctx.config.entity)
+      );
+
+      // Fehlt die Schnittstelle (ältere Browser, Testumgebung), gilt die Karte
+      // durchgehend als sichtbar. Dann läuft ein Livebild wie früher weiter –
+      // unschön, aber immer noch besser als eine Karte, die gar nicht baut.
+      if (typeof IntersectionObserver === "function") {
+        ctx.nodes.observer = new IntersectionObserver((entries) => {
+          const visible = entries.some((entry) => entry.isIntersecting);
+          if (visible === ctx.nodes.visible) return;
+          ctx.nodes.visible = visible;
+          if (visible) renderers.camera.reconnect(ctx);
+          else renderers.camera._stop(ctx);
+        });
+        ctx.nodes.observer.observe(ctx.host);
+      }
+
+      return root;
+    },
+
+    update(ctx) {
+      const wanted = renderers.camera._interval(ctx);
+      const modeChanged = ctx.nodes.mode !== renderers.camera._mode(ctx);
+      if (modeChanged || ctx.nodes.interval !== wanted) renderers.camera.reconnect(ctx);
+      else renderers.camera._paint(ctx);
+    },
+
+    reconnect(ctx) {
+      if (!ctx.nodes.image) return;
+      renderers.camera._stop(ctx);
+      if (!ctx.nodes.visible) return;
+
+      ctx.nodes.mode = renderers.camera._mode(ctx);
+      ctx.nodes.interval = renderers.camera._interval(ctx);
+      renderers.camera._paint(ctx);
+
+      // Nur das Standbild braucht einen Takt. Der Livestream läuft von selbst.
+      if (ctx.nodes.mode === "still") {
+        ctx.nodes.timer = setInterval(() => renderers.camera._paint(ctx), ctx.nodes.interval);
+      }
+    },
+
+    disconnect(ctx) {
+      renderers.camera._stop(ctx);
+      ctx.nodes.observer?.disconnect();
+      ctx.nodes.observer = null;
+    },
+
+    /** Hält den Takt an und kappt eine laufende MJPEG-Verbindung. */
+    _stop(ctx) {
+      clearInterval(ctx.nodes.timer);
+      ctx.nodes.timer = null;
+      // Ein leeres src beendet den Stream. Ohne das lädt der Browser weiter,
+      // auch wenn die Karte niemand sieht.
+      if (ctx.nodes.image?.getAttribute("src")) ctx.nodes.image.removeAttribute("src");
+    },
+
+    _mode(ctx) {
+      return ctx.config.camera_mode === "live" ? "live" : "still";
+    },
+
+    _interval(ctx) {
+      return clampNumber(ctx.config.refresh_interval, 1, 300, 10) * 1000;
+    },
+
+    _paint(ctx) {
+      const state = ctx.hass?.states?.[ctx.config.entity];
+      const picture = state?.attributes?.entity_picture;
+      const unavailable = !state || state.state === "unavailable" || !picture;
+
+      const note = ctx.nodes.note;
+      if (unavailable) {
+        renderers.camera._stop(ctx);
+        note.textContent = !ctx.config.entity
+          ? "Keine Kamera gewählt."
+          : !state
+            ? `Unbekannte Entität: ${ctx.config.entity}`
+            : "Kamera nicht erreichbar.";
+        note.hidden = false;
+        ctx.nodes.image.hidden = true;
+        ctx.nodes.label.hidden = true;
+        return;
+      }
+
+      if (ctx.nodes.failed) {
+        note.textContent = "Bild konnte nicht geladen werden.";
+        note.hidden = false;
+      } else {
+        note.hidden = true;
+      }
+
+      ctx.nodes.image.hidden = false;
+      ctx.nodes.image.src =
+        ctx.nodes.mode === "live"
+          ? picture.replace("/api/camera_proxy/", "/api/camera_proxy_stream/")
+          // Ohne den Zeitstempel liefert der Browser das zwischengespeicherte
+          // Bild aus und die Kamera stünde still.
+          : `${picture}${picture.includes("?") ? "&" : "?"}_=${Date.now()}`;
+
+      const name = ctx.config.name || state.attributes.friendly_name || "";
+      ctx.nodes.labelText.textContent = name;
+      ctx.nodes.liveDot.hidden = ctx.nodes.mode !== "live";
+      ctx.nodes.label.hidden = !name && ctx.nodes.mode !== "live";
     },
   },
 

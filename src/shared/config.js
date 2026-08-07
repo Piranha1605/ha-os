@@ -80,7 +80,9 @@ const normalizeQuickAction = (source, index, used) => {
 /** Karten-Slot: normale HA-Kartenkonfiguration plus haos_weight für die Höhe. */
 const normalizeCard = (card) => {
   const config = card && typeof card === "object" ? { ...card } : { type: "" };
-  config.haos_weight = clampNumber(config.haos_weight, 0.5, 6, 1);
+  // Untergrenze 0.1, damit flache Fremdkarten (Mushroom u. a.) nicht zu hoch
+  // gerendert werden. Bei row_height 125 sind das 13 px.
+  config.haos_weight = clampNumber(config.haos_weight, 0.1, 6, 1);
   return config;
 };
 

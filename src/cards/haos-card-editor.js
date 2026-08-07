@@ -109,6 +109,24 @@ const SCHEMAS = {
       },
     },
   ],
+  camera: [
+    entityField(["camera"]),
+    APPEARANCE,
+    {
+      name: "camera_mode",
+      selector: {
+        select: {
+          mode: "dropdown",
+          options: [
+            { value: "still", label: "Standbild" },
+            { value: "live", label: "Livebild" },
+          ],
+        },
+      },
+    },
+    number("refresh_interval", 1, 300),
+    ACTION,
+  ],
   clock: [
     text("name"),
     {
@@ -153,10 +171,15 @@ const LABELS = {
   show_date: "Datum anzeigen",
   time_zone: "Zeitzone",
   haos_weight: "Höhenfaktor",
+  camera_mode: "Bildart",
+  refresh_interval: "Auffrischung in Sekunden",
 };
 
 const HELPERS = {
-  haos_weight: "1 entspricht der Standard-Kartenhöhe der Shell. 2 ist doppelt so hoch.",
+  haos_weight: "1 entspricht der Standard-Kartenhöhe der Shell. 2 ist doppelt so hoch, 0,4 knapp die Hälfte — für flache Fremdkarten.",
+  camera_mode:
+    "Standbild holt in festem Takt ein einzelnes Bild und schont die Leitung. Livebild überträgt dauerhaft – auf einem Wandtablet mit mehreren Kameras spürbar. Tippen öffnet in beiden Fällen den großen Kameradialog.",
+  refresh_interval: "Nur beim Standbild. Wie oft ein neues Bild geholt wird.",
   time_zone: "Leer lassen für die Zeitzone des Browsers, z. B. Europe/Berlin.",
   days: "Zeitraum, der geladen wird.",
   show_graph: "Temperaturverlauf über der Vorhersagezeile. Standardmäßig an.",
@@ -208,7 +231,7 @@ class HaOsCardEditor extends HTMLElement {
   }
 
   _schema() {
-    return [TYPE_FIELD, ...(SCHEMAS[this._config.card_type] || []), { name: "haos_weight", selector: { number: { min: 0.5, max: 6, step: 0.25, mode: "box" } } }];
+    return [TYPE_FIELD, ...(SCHEMAS[this._config.card_type] || []), { name: "haos_weight", selector: { number: { min: 0.1, max: 6, step: 0.05, mode: "box" } } }];
   }
 
   _build() {

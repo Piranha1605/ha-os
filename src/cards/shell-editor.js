@@ -990,9 +990,9 @@ class HaOsShellEditor extends HTMLElement {
     weight.append(el("label", null, "Höhenfaktor (1 = Standardhöhe)"));
     const input = el("input", "plain");
     input.type = "number";
-    input.min = "0.5";
+    input.min = "0.1";
     input.max = "6";
-    input.step = "0.25";
+    input.step = "0.05";
     input.value = card.haos_weight ?? 1;
     input.addEventListener("change", () => write({ ...card, haos_weight: Number(input.value) }));
     weight.append(input);
