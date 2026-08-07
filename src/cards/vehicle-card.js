@@ -176,10 +176,24 @@ const numberOf = (state) => {
 
 const unitOf = (state) => state?.attributes?.unit_of_measurement || "";
 
-/** Verriegelt sind bei mbapi2020 die Zustände 0 und "locked". */
+/**
+ * Verriegelt oder nicht.
+ *
+ * `doorlockstatusvehicle` von Mercedes zählt:
+ *   0 = entriegelt · 1 = innen verriegelt · 2 = aussen verriegelt ·
+ *   3 = teilentriegelt
+ *
+ * Verriegelt sind also **1 und 2**, nicht die 0. Das war in 0.10.0 bis 0.10.2
+ * andersherum eingebaut: ein offenes Auto meldete „Verriegelt". Aufgefallen
+ * ist es nur im Vergleich mit einer zweiten Karte am selben Fahrzeug.
+ *
+ * Liefert die Entität Text statt Zahlen, gilt das Wort.
+ */
 const isLocked = (state) => {
   const value = String(state?.state ?? "").toLowerCase();
-  return value === "0" || value === "locked" || value === "lock" || value === "off";
+  if (value === "1" || value === "2") return true;
+  if (value === "0" || value === "3") return false;
+  return value === "locked" || value === "lock" || value === "on";
 };
 
 const formatNumber = (value, digits = 0) =>

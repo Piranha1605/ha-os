@@ -70,6 +70,7 @@ class HaOsVehicleEditor extends HTMLElement {
     this._form = null;
     this._hint = null;
     this._imageSelector = null;
+    this._selectorReady = false;
     this._pathInput = null;
   }
 
@@ -85,14 +86,14 @@ class HaOsVehicleEditor extends HTMLElement {
     // Das Bildfeld steht ausserhalb des Formulars und muss von Hand
     // nachgezogen werden, sonst zeigt es nach einem Rueckgaengig alte Werte.
     if (this._pathInput) this._pathInput.value = this._config.image || "";
-    if (this._imageSelector) this._imageSelector.value = this._config.image || "";
+    if (this._selectorReady) this._imageSelector.value = this._config.image || "";
     this._paintHint();
   }
 
   set hass(hass) {
     this._hass = hass;
     if (this._form) this._form.hass = hass;
-    if (this._imageSelector) this._imageSelector.hass = hass;
+    if (this._selectorReady) this._imageSelector.hass = hass;
     this._paintHint();
   }
 
@@ -154,17 +155,34 @@ class HaOsVehicleEditor extends HTMLElement {
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next }, bubbles: true, composed: true }));
     };
 
-    if (customElements.get("ha-selector")) {
-      const selector = document.createElement("ha-selector");
+    // `ha-selector` wird von Home Assistant nachgeladen. Wer beim Bauen des
+    // Editors `customElements.get` fragt, bekommt oft noch nichts zurück und
+    // liesse den Auswähler dauerhaft weg – genau das ist in 0.10.2 passiert.
+    // Deshalb das Element immer anlegen und die Eigenschaften erst setzen,
+    // wenn die Klasse da ist. Vorher gesetzte Eigenschaften würden beim
+    // Aufrücken von den Klassenfeldern überschrieben.
+    const selector = document.createElement("ha-selector");
+    selector.addEventListener("value-changed", (event) => {
+      event.stopPropagation();
+      write(event.detail.value || "");
+    });
+    this._imageSelector = selector;
+    wrap.append(selector);
+
+    const applySelector = () => {
       selector.hass = this._hass;
       selector.selector = { image: {} };
       selector.value = this._config.image || "";
-      selector.addEventListener("value-changed", (event) => {
-        event.stopPropagation();
-        write(event.detail.value || "");
+      this._selectorReady = true;
+    };
+
+    if (customElements.get("ha-selector")) {
+      applySelector();
+    } else {
+      customElements.whenDefined("ha-selector").then(() => {
+        customElements.upgrade(selector);
+        applySelector();
       });
-      this._imageSelector = selector;
-      wrap.append(selector);
     }
 
     const pathInput = document.createElement("input");

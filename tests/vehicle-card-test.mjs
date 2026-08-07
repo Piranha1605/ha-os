@@ -57,7 +57,7 @@ const makeHass = (overrides = {}) => ({
     [`sensor.${ID}_range_liquid`]: state(`sensor.${ID}_range_liquid`, "520", { unit_of_measurement: "km" }),
     [`sensor.${ID}_fuel_level`]: state(`sensor.${ID}_fuel_level`, "62", { unit_of_measurement: "%" }),
     [`sensor.${ID}_odometer`]: state(`sensor.${ID}_odometer`, "48210", { unit_of_measurement: "km" }),
-    [`sensor.${ID}_lock`]: state(`sensor.${ID}_lock`, "0"),
+    [`sensor.${ID}_lock`]: state(`sensor.${ID}_lock`, "2"),
     [`sensor.${ID}_ignition_state`]: state(`sensor.${ID}_ignition_state`, "0"),
     [`binary_sensor.${ID}_windows_closed`]: state(`binary_sensor.${ID}_windows_closed`, "on"),
     [`sensor.${ID}_starter_battery_state`]: state(`sensor.${ID}_starter_battery_state`, "ok"),
@@ -149,12 +149,21 @@ check("niedriger Stand ist rot", sr(wenigOel).querySelectorAll(".tile-value")[1]
 
 console.log("\n7. Offenes Fahrzeug");
 const offen = build({}, makeHass({
-  [`sensor.${ID}_lock`]: state(`sensor.${ID}_lock`, "1"),
+  [`sensor.${ID}_lock`]: state(`sensor.${ID}_lock`, "0"),
   [`binary_sensor.${ID}_windows_closed`]: state(`binary_sensor.${ID}_windows_closed`, "off"),
 }));
 check("Offen erkannt", text(offen, ".pill span") === "Offen", `"${text(offen, ".pill span")}"`);
 check("Offen ist rot", sr(offen).querySelector(".pill").classList.contains("bad"));
 check("Fenster offen erkannt", sr(offen).querySelectorAll(".pill span")[1].textContent === "Fenster offen");
+
+// Die vier Zustaende von doorlockstatusvehicle einzeln. In 0.10.0 bis 0.10.2
+// galt 0 als verriegelt – ein offenes Auto meldete „Verriegelt".
+const lockLabel = (value) =>
+  text(build({}, makeHass({ [`sensor.${ID}_lock`]: state(`sensor.${ID}_lock`, value) })), ".pill span");
+check("0 = entriegelt", lockLabel("0") === "Offen", lockLabel("0"));
+check("1 = innen verriegelt", lockLabel("1") === "Verriegelt", lockLabel("1"));
+check("2 = aussen verriegelt", lockLabel("2") === "Verriegelt", lockLabel("2"));
+check("3 = teilentriegelt gilt als offen", lockLabel("3") === "Offen", lockLabel("3"));
 
 console.log("\n8. Fehlende Werte werden nicht zu Null");
 const luecken = build({}, makeHass({
@@ -218,6 +227,10 @@ check("Bildfeld vorhanden", Boolean(feld));
 check("Beschriftung nennt das Bild", feld?.querySelector(".image-label")?.textContent.includes("Bild"),
   feld?.querySelector(".image-label")?.textContent || "");
 check("Pfadeingabe als Rueckfallebene", Boolean(feld?.querySelector("input.path")));
+// Der Auswähler muss auch dann im DOM liegen, wenn ha-selector noch nicht
+// registriert ist – sonst fehlt der Upload-Knopf dauerhaft, wie in 0.10.2.
+check("Auswaehler wird angelegt, obwohl ha-selector fehlt",
+  Boolean(feld?.querySelector("ha-selector")));
 check("Bild steht NICHT im Formularschema",
   !editor.shadowRoot.querySelector("ha-form")?.schema?.some((f) => f.name === "image"));
 

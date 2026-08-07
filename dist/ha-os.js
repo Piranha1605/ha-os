@@ -1,4 +1,4 @@
-/* HA-OS 0.10.2 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.10.3 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -4664,7 +4664,9 @@ var numberOf = (state) => {
 var unitOf = (state) => state?.attributes?.unit_of_measurement || "";
 var isLocked = (state) => {
   const value = String(state?.state ?? "").toLowerCase();
-  return value === "0" || value === "locked" || value === "lock" || value === "off";
+  if (value === "1" || value === "2") return true;
+  if (value === "0" || value === "3") return false;
+  return value === "locked" || value === "lock" || value === "on";
 };
 var formatNumber = (value, digits = 0) => value === null ? "–" : value.toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 var HaOsVehicleCard = class extends HTMLElement {
@@ -4976,6 +4978,7 @@ var HaOsVehicleEditor = class extends HTMLElement {
     this._form = null;
     this._hint = null;
     this._imageSelector = null;
+    this._selectorReady = false;
     this._pathInput = null;
   }
   setConfig(config) {
@@ -4988,13 +4991,13 @@ var HaOsVehicleEditor = class extends HTMLElement {
     }
     this._form.data = this._config;
     if (this._pathInput) this._pathInput.value = this._config.image || "";
-    if (this._imageSelector) this._imageSelector.value = this._config.image || "";
+    if (this._selectorReady) this._imageSelector.value = this._config.image || "";
     this._paintHint();
   }
   set hass(hass) {
     this._hass = hass;
     if (this._form) this._form.hass = hass;
-    if (this._imageSelector) this._imageSelector.hass = hass;
+    if (this._selectorReady) this._imageSelector.hass = hass;
     this._paintHint();
   }
   get hass() {
@@ -5047,17 +5050,26 @@ var HaOsVehicleEditor = class extends HTMLElement {
       if (this._imageSelector) this._imageSelector.value = next.image || "";
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next }, bubbles: true, composed: true }));
     };
-    if (customElements.get("ha-selector")) {
-      const selector = document.createElement("ha-selector");
+    const selector = document.createElement("ha-selector");
+    selector.addEventListener("value-changed", (event) => {
+      event.stopPropagation();
+      write(event.detail.value || "");
+    });
+    this._imageSelector = selector;
+    wrap.append(selector);
+    const applySelector = () => {
       selector.hass = this._hass;
       selector.selector = { image: {} };
       selector.value = this._config.image || "";
-      selector.addEventListener("value-changed", (event) => {
-        event.stopPropagation();
-        write(event.detail.value || "");
+      this._selectorReady = true;
+    };
+    if (customElements.get("ha-selector")) {
+      applySelector();
+    } else {
+      customElements.whenDefined("ha-selector").then(() => {
+        customElements.upgrade(selector);
+        applySelector();
       });
-      this._imageSelector = selector;
-      wrap.append(selector);
     }
     const pathInput = document.createElement("input");
     pathInput.type = "text";
@@ -5114,7 +5126,7 @@ var HaOsVehicleEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG7)) customElements.define(EDITOR_TAG7, HaOsVehicleEditor);
 
 // src/ha-os.js
-var VERSION = "0.10.2";
+var VERSION = "0.10.3";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",
