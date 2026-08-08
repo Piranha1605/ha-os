@@ -90,7 +90,7 @@ const SCHEMAS = {
     bool("show_graph"),
   ],
   energy: [entityField(["sensor"]), APPEARANCE, number("days", 2, 31)],
-  media: [entityField(["media_player"]), APPEARANCE],
+  media: [entityField(["media_player"]), APPEARANCE, bool("glow")],
   members: [entityField(["person", "device_tracker"], true), text("name")],
   calendar: [entityField(["calendar"], true), text("name"), number("days", 1, 31), number("max_events", 1, 20)],
   select: [
@@ -181,6 +181,7 @@ const LABELS = {
   forecast_type: "Vorhersage",
   forecast_count: "Anzahl Vorhersagen",
   show_graph: "Verlaufskurve anzeigen",
+  glow: "Farbschleier im Hintergrund",
   days: "Zeitraum in Tagen",
   max_events: "Maximale Termine",
   display: "Anzeigeart",
@@ -206,6 +207,7 @@ const HELPERS = {
   time_zone: "Leer lassen für die Zeitzone des Browsers, z. B. Europe/Berlin.",
   days: "Zeitraum, der geladen wird.",
   show_graph: "Temperaturverlauf über der Vorhersagezeile. Standardmäßig an.",
+  glow: "Weiche Farbflächen hinter dem Glas, gefärbt aus dem Titelbild. Standardmäßig an.",
   press_icon: "Nur bei Tasten, Szenen und Skripten. Standard ist ein Finger.",
   show_toggle:
     "Die Form richtet sich nach der Entität: Umschalter, Taster oder Auf/Stopp/Zu.",

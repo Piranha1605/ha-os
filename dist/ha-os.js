@@ -1,4 +1,4 @@
-/* HA-OS 0.22.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.23.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -152,6 +152,9 @@ var apply = (settings) => {
   const entityBorderOpacity = light ? Math.max(t.entityBorderOpacity, 38) : t.entityBorderOpacity;
   const values = {
     "--haos-color-scheme": t.mode,
+    // Die Zahlen einzeln – fuer rgba(...)-Abstufungen, etwa den Farbschleier
+    // des Medienspielers, wenn sich aus dem Titelbild nichts lesen laesst.
+    "--haos-accent-rgb": hexToRgb(t.accent),
     "--haos-text": light ? t.textLight : t.textDark,
     "--haos-text-rgb": hexToRgb(light ? t.textLight : t.textDark),
     "--haos-text-inverse": light ? t.textDark : t.textLight,
@@ -3242,6 +3245,22 @@ var STYLES3 = `
 
   /* --- Media --- */
   .media-head { display: flex; gap: 12px; align-items: center; }
+  /* --- Farbschleier hinter dem Medienspieler ---
+     Drei weiche Kreise, gefaerbt aus dem Titelbild. Sie liegen im
+     Karteninneren und werden vom Glas darueber aufgenommen. */
+  .media-body { position: relative; flex: 1; min-height: 0; display: flex; }
+  .media-stack { position: relative; z-index: 1; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 9px; justify-content: center; }
+  .media-glow {
+    position: absolute; inset: -18px; z-index: 0; pointer-events: none;
+    border-radius: inherit;
+    transition: background .6s ease;
+    background:
+      radial-gradient(circle at 18% 22%, rgba(var(--glow-a, var(--haos-accent-rgb, 10,132,255)), .38), transparent 42%),
+      radial-gradient(circle at 82% 30%, rgba(var(--glow-b, var(--haos-accent-rgb, 10,132,255)), .30), transparent 44%),
+      radial-gradient(circle at 50% 104%, rgba(var(--glow-a, var(--haos-accent-rgb, 10,132,255)), .22), transparent 52%);
+  }
+  .media-glow[hidden] { display: none; }
+
   .media-art { width: 52px; height: 52px; flex: 0 0 52px; border-radius: 10px; overflow: hidden; background: rgba(var(--haos-text-rgb, 255,255,255), .1); display: grid; place-items: center; }
   .media-art img { width: 100%; height: 100%; object-fit: cover; }
   .progress { height: 3px; border-radius: 2px; background: rgba(var(--haos-text-rgb, 255,255,255), .18); overflow: hidden; }
@@ -3960,8 +3979,9 @@ var renderers = {
   // ------------------------------------------------------------- Media
   media: {
     build(ctx) {
-      const root = el3("div");
-      root.style.cssText = "display:flex;flex-direction:column;gap:9px;flex:1;min-height:0;justify-content:center";
+      const root = el3("div", "media-body");
+      ctx.nodes.glow = el3("div", "media-glow");
+      root.append(ctx.nodes.glow);
       const head = el3("div", "media-head");
       ctx.nodes.art = el3("div", "media-art");
       ctx.nodes.artIcon = icon2("mdi:music");
@@ -4047,12 +4067,67 @@ var renderers = {
         event.stopPropagation();
         call("select_source", { source: ctx.nodes.sourceSelect.value });
       });
-      root.append(head, ctx.nodes.progress, times, controls, volumeRow, ctx.nodes.sourceSelect);
+      const inhalt = el3("div", "media-stack");
+      inhalt.append(head, ctx.nodes.progress, times, controls, volumeRow, ctx.nodes.sourceSelect);
+      root.append(inhalt);
       return root;
+    },
+    /**
+     * Liest zwei kraeftige Farben aus dem Titelbild und faerbt damit die
+     * Schleier.
+     *
+     * Das Bild wird auf 12x12 verkleinert – mehr braucht es nicht, und ein
+     * grosses Bild Pixel fuer Pixel zu lesen kostet bei jedem Titelwechsel
+     * spuerbar Zeit. Blasse und sehr dunkle Punkte fallen raus, sonst
+     * gewinnt bei fast jedem Cover der schwarze Rand.
+     *
+     * Liegt das Bild auf einer fremden Adresse, verweigert der Browser das
+     * Auslesen (der Zeichenbereich gilt dann als "verunreinigt"). Dann bleibt
+     * es bei der Akzentfarbe – deshalb der try/catch.
+     */
+    _glowFromArt(ctx, img) {
+      const setzen = (a, b) => {
+        ctx.nodes.glow.style.setProperty("--glow-a", a);
+        ctx.nodes.glow.style.setProperty("--glow-b", b);
+      };
+      if (!img || ctx.config.glow === false) {
+        setzen("", "");
+        return;
+      }
+      try {
+        const size = 12;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        if (!context) return;
+        context.drawImage(img, 0, 0, size, size);
+        const { data } = context.getImageData(0, 0, size, size);
+        const kandidaten = [];
+        for (let i = 0; i < data.length; i += 4) {
+          const [r, g, b] = [data[i], data[i + 1], data[i + 2]];
+          const max = Math.max(r, g, b);
+          const min = Math.min(r, g, b);
+          const saettigung = max === 0 ? 0 : (max - min) / max;
+          if (max < 40 || saettigung < 0.18) continue;
+          kandidaten.push({ r, g, b, gewicht: saettigung * max });
+        }
+        if (!kandidaten.length) {
+          setzen("", "");
+          return;
+        }
+        kandidaten.sort((a, b) => b.gewicht - a.gewicht);
+        const erste = kandidaten[0];
+        const zweite = kandidaten[Math.floor(kandidaten.length * 0.6)] || erste;
+        setzen(`${erste.r}, ${erste.g}, ${erste.b}`, `${zweite.r}, ${zweite.g}, ${zweite.b}`);
+      } catch (_error) {
+        setzen("", "");
+      }
     },
     update(ctx) {
       const state = ctx.hass?.states?.[ctx.config.entity];
       const attributes = state?.attributes || {};
+      ctx.nodes.glow.hidden = ctx.config.glow === false;
       ctx.nodes.track.textContent = attributes.media_title || ctx.config.name || friendlyName(ctx.config.entity, state);
       ctx.nodes.artist.textContent = attributes.media_artist || attributes.media_series_title || state?.state || "";
       const picture = attributes.entity_picture || attributes.entity_picture_local || (attributes.media_image_remotely_accessible ? attributes.media_image_url : "") || "";
@@ -4066,10 +4141,14 @@ var renderers = {
             ctx.nodes.artUrl = "";
             ctx.nodes.art.replaceChildren(ctx.nodes.artIcon);
           });
+          img.addEventListener("load", () => {
+            if (ctx.nodes.artUrl === picture) renderers.media._glowFromArt(ctx, img);
+          });
           img.src = picture;
           ctx.nodes.art.replaceChildren(img);
         } else {
           ctx.nodes.art.replaceChildren(ctx.nodes.artIcon);
+          renderers.media._glowFromArt(ctx, null);
         }
       }
       const duration = Number(attributes.media_duration) || 0;
@@ -4681,7 +4760,7 @@ var SCHEMAS = {
     bool("show_graph")
   ],
   energy: [entityField(["sensor"]), APPEARANCE, number("days", 2, 31)],
-  media: [entityField(["media_player"]), APPEARANCE],
+  media: [entityField(["media_player"]), APPEARANCE, bool("glow")],
   members: [entityField(["person", "device_tracker"], true), text("name")],
   calendar: [entityField(["calendar"], true), text("name"), number("days", 1, 31), number("max_events", 1, 20)],
   select: [
@@ -4771,6 +4850,7 @@ var LABELS2 = {
   forecast_type: "Vorhersage",
   forecast_count: "Anzahl Vorhersagen",
   show_graph: "Verlaufskurve anzeigen",
+  glow: "Farbschleier im Hintergrund",
   days: "Zeitraum in Tagen",
   max_events: "Maximale Termine",
   display: "Anzeigeart",
@@ -4793,6 +4873,7 @@ var HELPERS2 = {
   time_zone: "Leer lassen für die Zeitzone des Browsers, z. B. Europe/Berlin.",
   days: "Zeitraum, der geladen wird.",
   show_graph: "Temperaturverlauf über der Vorhersagezeile. Standardmäßig an.",
+  glow: "Weiche Farbflächen hinter dem Glas, gefärbt aus dem Titelbild. Standardmäßig an.",
   press_icon: "Nur bei Tasten, Szenen und Skripten. Standard ist ein Finger.",
   show_toggle: "Die Form richtet sich nach der Entität: Umschalter, Taster oder Auf/Stopp/Zu.",
   state_entity: "Leer lassen, wenn die Entität selbst einen Zustand hat. Tasten (button) haben keinen – hier dann den Sensor eintragen, der den echten Zustand meldet, z. B. den Türkontakt."
@@ -7317,7 +7398,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.22.1";
+var VERSION = "0.23.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

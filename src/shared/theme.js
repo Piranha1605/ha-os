@@ -238,6 +238,9 @@ const apply = (settings) => {
 
   const values = {
     "--haos-color-scheme": t.mode,
+    // Die Zahlen einzeln – fuer rgba(...)-Abstufungen, etwa den Farbschleier
+    // des Medienspielers, wenn sich aus dem Titelbild nichts lesen laesst.
+    "--haos-accent-rgb": hexToRgb(t.accent),
     "--haos-text": light ? t.textLight : t.textDark,
     "--haos-text-rgb": hexToRgb(light ? t.textLight : t.textDark),
     "--haos-text-inverse": light ? t.textDark : t.textLight,

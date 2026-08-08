@@ -415,5 +415,39 @@ console.log("\n10. Lautstaerke, Stumm und Quelle");
     stumm.shadowRoot.querySelector(".volume-value").textContent);
 }
 
+console.log("\n11. Farbschleier im Medienspieler");
+{
+  const bauen = (config, attrs) => {
+    const zustaende = {
+      ...makeHass().states,
+      "media_player.glow": zustand("media_player.glow", "playing", {
+        friendly_name: "Glow", media_title: "Titel", supported_features: 1 | 16384, ...attrs,
+      }),
+    };
+    const karte = document.createElement("ha-os-card");
+    karte.setConfig({ type: "custom:ha-os-card", card_type: "media", entity: "media_player.glow", ...config });
+    document.body.append(karte);
+    karte.hass = { ...makeHass(), states: zustaende };
+    return karte;
+  };
+
+  const an = bauen({}, { entity_picture: "/api/bild.jpg" });
+  check("Schleier ist standardmaessig da", !an.shadowRoot.querySelector(".media-glow").hidden);
+  check("liegt hinter dem Inhalt",
+    an.shadowRoot.querySelector(".media-body > .media-glow") &&
+      an.shadowRoot.querySelector(".media-body > .media-stack"));
+
+  const aus = bauen({ glow: false }, { entity_picture: "/api/bild.jpg" });
+  check("abschaltbar", aus.shadowRoot.querySelector(".media-glow").hidden);
+
+  // Ohne lesbare Farben bleibt die Akzentfarbe – die Variablen bleiben leer,
+  // im CSS greift dann der Rueckfallwert.
+  const ohneBild = bauen({}, {});
+  const schleier = ohneBild.shadowRoot.querySelector(".media-glow");
+  check("ohne Titelbild keine erfundenen Farben",
+    !schleier.style.getPropertyValue("--glow-a"),
+    schleier.style.getPropertyValue("--glow-a") || "(leer)");
+}
+
 console.log(failures === 0 ? "\nAlle Prüfungen bestanden.\n" : `\n${failures} Prüfung(en) fehlgeschlagen.\n`);
 process.exit(failures === 0 ? 0 : 1);

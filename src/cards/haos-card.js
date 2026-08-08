@@ -208,6 +208,22 @@ const STYLES = `
 
   /* --- Media --- */
   .media-head { display: flex; gap: 12px; align-items: center; }
+  /* --- Farbschleier hinter dem Medienspieler ---
+     Drei weiche Kreise, gefaerbt aus dem Titelbild. Sie liegen im
+     Karteninneren und werden vom Glas darueber aufgenommen. */
+  .media-body { position: relative; flex: 1; min-height: 0; display: flex; }
+  .media-stack { position: relative; z-index: 1; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 9px; justify-content: center; }
+  .media-glow {
+    position: absolute; inset: -18px; z-index: 0; pointer-events: none;
+    border-radius: inherit;
+    transition: background .6s ease;
+    background:
+      radial-gradient(circle at 18% 22%, rgba(var(--glow-a, var(--haos-accent-rgb, 10,132,255)), .38), transparent 42%),
+      radial-gradient(circle at 82% 30%, rgba(var(--glow-b, var(--haos-accent-rgb, 10,132,255)), .30), transparent 44%),
+      radial-gradient(circle at 50% 104%, rgba(var(--glow-a, var(--haos-accent-rgb, 10,132,255)), .22), transparent 52%);
+  }
+  .media-glow[hidden] { display: none; }
+
   .media-art { width: 52px; height: 52px; flex: 0 0 52px; border-radius: 10px; overflow: hidden; background: rgba(var(--haos-text-rgb, 255,255,255), .1); display: grid; place-items: center; }
   .media-art img { width: 100%; height: 100%; object-fit: cover; }
   .progress { height: 3px; border-radius: 2px; background: rgba(var(--haos-text-rgb, 255,255,255), .18); overflow: hidden; }
@@ -1106,8 +1122,20 @@ const renderers = {
   // ------------------------------------------------------------- Media
   media: {
     build(ctx) {
-      const root = el("div");
-      root.style.cssText = "display:flex;flex-direction:column;gap:9px;flex:1;min-height:0;justify-content:center";
+      const root = el("div", "media-body");
+
+      /*
+       * Farbschleier hinter dem Glas.
+       *
+       * Drei weiche Kreise, deren Farben aus dem Titelbild kommen – das Glas
+       * darueber nimmt sie auf. Ohne Bild oder ohne lesbare Farben bleibt es
+       * bei der Akzentfarbe.
+       *
+       * Die Schicht liegt IM Karteninneren, nicht dahinter: sie soll die
+       * Karte faerben, nicht das Dashboard.
+       */
+      ctx.nodes.glow = el("div", "media-glow");
+      root.append(ctx.nodes.glow);
 
       const head = el("div", "media-head");
       ctx.nodes.art = el("div", "media-art");
@@ -1230,12 +1258,79 @@ const renderers = {
         call("select_source", { source: ctx.nodes.sourceSelect.value });
       });
 
-      root.append(head, ctx.nodes.progress, times, controls, volumeRow, ctx.nodes.sourceSelect);
+      const inhalt = el("div", "media-stack");
+      inhalt.append(head, ctx.nodes.progress, times, controls, volumeRow, ctx.nodes.sourceSelect);
+      root.append(inhalt);
       return root;
     },
+    /**
+     * Liest zwei kraeftige Farben aus dem Titelbild und faerbt damit die
+     * Schleier.
+     *
+     * Das Bild wird auf 12x12 verkleinert – mehr braucht es nicht, und ein
+     * grosses Bild Pixel fuer Pixel zu lesen kostet bei jedem Titelwechsel
+     * spuerbar Zeit. Blasse und sehr dunkle Punkte fallen raus, sonst
+     * gewinnt bei fast jedem Cover der schwarze Rand.
+     *
+     * Liegt das Bild auf einer fremden Adresse, verweigert der Browser das
+     * Auslesen (der Zeichenbereich gilt dann als "verunreinigt"). Dann bleibt
+     * es bei der Akzentfarbe – deshalb der try/catch.
+     */
+    _glowFromArt(ctx, img) {
+      const setzen = (a, b) => {
+        ctx.nodes.glow.style.setProperty("--glow-a", a);
+        ctx.nodes.glow.style.setProperty("--glow-b", b);
+      };
+
+      if (!img || ctx.config.glow === false) {
+        setzen("", "");
+        return;
+      }
+
+      try {
+        const size = 12;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        if (!context) return;
+        context.drawImage(img, 0, 0, size, size);
+        const { data } = context.getImageData(0, 0, size, size);
+
+        const kandidaten = [];
+        for (let i = 0; i < data.length; i += 4) {
+          const [r, g, b] = [data[i], data[i + 1], data[i + 2]];
+          const max = Math.max(r, g, b);
+          const min = Math.min(r, g, b);
+          const saettigung = max === 0 ? 0 : (max - min) / max;
+          if (max < 40 || saettigung < 0.18) continue;
+          kandidaten.push({ r, g, b, gewicht: saettigung * max });
+        }
+
+        if (!kandidaten.length) {
+          setzen("", "");
+          return;
+        }
+
+        kandidaten.sort((a, b) => b.gewicht - a.gewicht);
+        const erste = kandidaten[0];
+        // Die zweite Farbe bewusst vom anderen Ende: zwei fast gleiche Toene
+        // ergeben keinen Verlauf, sondern eine Flaeche.
+        const zweite = kandidaten[Math.floor(kandidaten.length * 0.6)] || erste;
+        setzen(`${erste.r}, ${erste.g}, ${erste.b}`, `${zweite.r}, ${zweite.g}, ${zweite.b}`);
+      } catch (_error) {
+        // Fremde Adresse – Auslesen nicht erlaubt.
+        setzen("", "");
+      }
+    },
+
     update(ctx) {
       const state = ctx.hass?.states?.[ctx.config.entity];
       const attributes = state?.attributes || {};
+
+      // Standardmaessig an – das Leuchten ist der Grund, warum es die
+      // Schicht gibt. Wer es nicht mag, schaltet es im Editor ab.
+      ctx.nodes.glow.hidden = ctx.config.glow === false;
 
       ctx.nodes.track.textContent = attributes.media_title || ctx.config.name || friendlyName(ctx.config.entity, state);
       ctx.nodes.artist.textContent = attributes.media_artist || attributes.media_series_title || state?.state || "";
@@ -1276,10 +1371,14 @@ const renderers = {
             ctx.nodes.artUrl = "";
             ctx.nodes.art.replaceChildren(ctx.nodes.artIcon);
           });
+          img.addEventListener("load", () => {
+            if (ctx.nodes.artUrl === picture) renderers.media._glowFromArt(ctx, img);
+          });
           img.src = picture;
           ctx.nodes.art.replaceChildren(img);
         } else {
           ctx.nodes.art.replaceChildren(ctx.nodes.artIcon);
+          renderers.media._glowFromArt(ctx, null);
         }
       }
 
