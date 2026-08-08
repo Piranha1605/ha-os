@@ -14,7 +14,13 @@
  * (Seite/Karte hinzugefügt, entfernt, verschoben) – nicht beim Tippen.
  */
 
-import { normalizeShellConfig, createEmptyGrids, DEFAULT_GRID_WIDTHS } from "../shared/config.js";
+import {
+  normalizeShellConfig,
+  createEmptyGrids,
+  DEFAULT_GRID_WIDTHS,
+  MIN_GRIDS,
+  MAX_GRIDS,
+} from "../shared/config.js";
 import { isEqualConfig, deepClone } from "../shared/utils.js";
 import { cardCatalog, stubConfigFor, createCardEditorWithCode } from "../shared/card-catalog.js";
 
@@ -182,7 +188,9 @@ const STYLES = `
   }
   .field { display: grid; gap: 5px; margin-bottom: 10px; }
   .field > label { font-size: 12px; color: var(--secondary-text-color); }
-  .widths { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  /* Die Anzahl der Raster ist je Seite einstellbar – die Breitenfelder
+     verteilen sich deshalb automatisch, statt auf drei festgenagelt zu sein. */
+  .widths { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 8px; }
 
   /* --- Kartenauswahl --- */
   .picker { display: grid; gap: 8px; }
@@ -513,7 +521,7 @@ class HaOsShellEditor extends HTMLElement {
       el(
         "p",
         "hint",
-        "Alles zu einer Seite steckt in ihr drin: Name, Badges und die drei Raster mit ihren Karten. " +
+        "Alles zu einer Seite steckt in ihr drin: Name, Badges und die Raster mit ihren Karten. " +
           "Ob Seiten in der Seitenleiste oder als Reiter oben erscheinen, steht unter Leisten."
       )
     );
@@ -695,8 +703,37 @@ class HaOsShellEditor extends HTMLElement {
               )
             );
           } else {
+            // Anzahl der Raster. Beim Verkleinern verschwinden die hinteren
+            // samt ihrer Karten – deshalb steht das ausdrücklich dabei.
+            const count = el("div", "field");
+            const countLabel = el("label", null, `Anzahl der Raster: ${page.grids.length}`);
+            count.append(countLabel);
+            const countInput = el("input", "plain");
+            countInput.type = "range";
+            countInput.min = String(MIN_GRIDS);
+            countInput.max = String(MAX_GRIDS);
+            countInput.step = "1";
+            countInput.value = String(page.grids.length);
+            countInput.addEventListener("input", () => {
+              countLabel.textContent = `Anzahl der Raster: ${countInput.value}`;
+            });
+            countInput.addEventListener("change", () =>
+              this._mutate((draft) => {
+                draft.pages[index].grid_count = Number(countInput.value);
+              }, true)
+            );
+            count.append(countInput);
+            count.append(
+              el(
+                "small",
+                "hint",
+                "Weniger Raster entfernen die hinteren samt der Karten darin."
+              )
+            );
+            box.append(count);
+
             const widths = el("div", "field");
-            widths.append(el("label", null, "Spaltenbreiten (Verhältnis der drei Raster)"));
+            widths.append(el("label", null, `Spaltenbreiten (Verhältnis der ${page.grids.length} Raster)`));
             const row = el("div", "widths");
             page.grid_widths.forEach((width, columnIndex) => {
               const input = el("input", "plain");
@@ -737,7 +774,7 @@ class HaOsShellEditor extends HTMLElement {
 
     if (page.kind === "iframe") return wrap;
 
-    // Ebene 2: die drei Raster
+    // Ebene 2: die Raster – wie viele, steht in der Seite
     page.grids.forEach((grid, columnIndex) => {
       wrap.append(
         this._block(

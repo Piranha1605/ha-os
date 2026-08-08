@@ -1,4 +1,4 @@
-/* HA-OS 0.14.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.15.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -526,13 +526,22 @@ var normalizeGrid = (grid) => ({
   name: grid?.name || "",
   cards: Array.isArray(grid?.cards) ? grid.cards.map(normalizeCard) : []
 });
-var createEmptyGrids = () => [0, 1, 2].map((index) => ({ name: `Grid ${index + 1}`, cards: [] }));
-var normalizeGrids = (grids) => Array.from({ length: 3 }, (_, index) => normalizeGrid(grids?.[index] ?? { name: `Grid ${index + 1}` }));
+var MIN_GRIDS = 1;
+var MAX_GRIDS = 5;
+var DEFAULT_GRIDS = 3;
+var createEmptyGrids = (count = DEFAULT_GRIDS) => Array.from({ length: count }, (_, index) => ({ name: `Grid ${index + 1}`, cards: [] }));
+var normalizeGrids = (grids, count) => Array.from({ length: count }, (_, index) => normalizeGrid(grids?.[index] ?? { name: `Grid ${index + 1}` }));
 var normalizePage = (page, index, used) => {
   const raw = page || {};
   const isFirst = index === 0;
   const kind = raw.kind === "iframe" ? "iframe" : "page";
   const badgeIds = /* @__PURE__ */ new Set();
+  const gridCount = clampNumber(
+    raw.grid_count ?? (Array.isArray(raw.grids) && raw.grids.length ? raw.grids.length : DEFAULT_GRIDS),
+    MIN_GRIDS,
+    MAX_GRIDS,
+    DEFAULT_GRIDS
+  );
   return {
     id: isFirst ? "home" : uniqueId(raw.id || raw.name || `seite-${index + 1}`, used, `seite-${index + 1}`),
     name: raw.name || (isFirst ? "Home" : `Seite ${index + 1}`),
@@ -547,11 +556,14 @@ var normalizePage = (page, index, used) => {
     badges: (Array.isArray(raw.badges) ? raw.badges : []).map(
       (badge, badgeIndex) => normalizeBadge(badge, badgeIndex, badgeIds)
     ),
+    grid_count: gridCount,
+    // Über die dritte Spalte hinaus gibt es keine Vorgabe mehr – dort ist
+    // gleich breit die vernünftigste Annahme.
     grid_widths: Array.from(
-      { length: 3 },
-      (_, widthIndex) => clampNumber(raw.grid_widths?.[widthIndex], 0.3, 4, DEFAULT_GRID_WIDTHS[widthIndex])
+      { length: gridCount },
+      (_, widthIndex) => clampNumber(raw.grid_widths?.[widthIndex], 0.3, 4, DEFAULT_GRID_WIDTHS[widthIndex] ?? 1)
     ),
-    grids: normalizeGrids(raw.grids)
+    grids: normalizeGrids(raw.grids, gridCount)
   };
 };
 var normalizeShellConfig = (config = {}) => {
@@ -1114,12 +1126,14 @@ var HaOsShell = class extends HTMLElement {
       entry.entries = [];
       entry.kind = "page";
     }
-    if (!entry.columns.length) {
-      entry.columns = [0, 1, 2].map(() => {
-        const column = el("section", "grid-column");
-        entry.root.append(column);
-        return column;
-      });
+    const wantedColumns = page.grids.length;
+    while (entry.columns.length < wantedColumns) {
+      const column = el("section", "grid-column");
+      entry.root.append(column);
+      entry.columns.push(column);
+    }
+    while (entry.columns.length > wantedColumns) {
+      entry.columns.pop()?.remove();
     }
     entry.root.style.setProperty(
       "--haos-grid-template",
@@ -1820,7 +1834,9 @@ var STYLES2 = `
   }
   .field { display: grid; gap: 5px; margin-bottom: 10px; }
   .field > label { font-size: 12px; color: var(--secondary-text-color); }
-  .widths { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  /* Die Anzahl der Raster ist je Seite einstellbar – die Breitenfelder
+     verteilen sich deshalb automatisch, statt auf drei festgenagelt zu sein. */
+  .widths { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 8px; }
 
   /* --- Kartenauswahl --- */
   .picker { display: grid; gap: 8px; }
@@ -2109,7 +2125,7 @@ var HaOsShellEditor = class extends HTMLElement {
       el2(
         "p",
         "hint",
-        "Alles zu einer Seite steckt in ihr drin: Name, Badges und die drei Raster mit ihren Karten. Ob Seiten in der Seitenleiste oder als Reiter oben erscheinen, steht unter Leisten."
+        "Alles zu einer Seite steckt in ihr drin: Name, Badges und die Raster mit ihren Karten. Ob Seiten in der Seitenleiste oder als Reiter oben erscheinen, steht unter Leisten."
       )
     );
     this._config.pages.forEach((page, index) => {
@@ -2266,8 +2282,35 @@ var HaOsShellEditor = class extends HTMLElement {
               )
             );
           } else {
+            const count = el2("div", "field");
+            const countLabel = el2("label", null, `Anzahl der Raster: ${page.grids.length}`);
+            count.append(countLabel);
+            const countInput = el2("input", "plain");
+            countInput.type = "range";
+            countInput.min = String(MIN_GRIDS);
+            countInput.max = String(MAX_GRIDS);
+            countInput.step = "1";
+            countInput.value = String(page.grids.length);
+            countInput.addEventListener("input", () => {
+              countLabel.textContent = `Anzahl der Raster: ${countInput.value}`;
+            });
+            countInput.addEventListener(
+              "change",
+              () => this._mutate((draft) => {
+                draft.pages[index].grid_count = Number(countInput.value);
+              }, true)
+            );
+            count.append(countInput);
+            count.append(
+              el2(
+                "small",
+                "hint",
+                "Weniger Raster entfernen die hinteren samt der Karten darin."
+              )
+            );
+            box.append(count);
             const widths = el2("div", "field");
-            widths.append(el2("label", null, "Spaltenbreiten (Verhältnis der drei Raster)"));
+            widths.append(el2("label", null, `Spaltenbreiten (Verhältnis der ${page.grids.length} Raster)`));
             const row = el2("div", "widths");
             page.grid_widths.forEach((width, columnIndex) => {
               const input = el2("input", "plain");
@@ -5485,7 +5528,7 @@ var HaOsVehicleEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG7)) customElements.define(EDITOR_TAG7, HaOsVehicleEditor);
 
 // src/ha-os.js
-var VERSION = "0.14.0";
+var VERSION = "0.15.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

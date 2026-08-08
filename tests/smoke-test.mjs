@@ -295,6 +295,49 @@ check("Seite waechst nicht mit", Boolean(fest.closest(".frame-page")?.classList.
 shell.setConfig(shellConfig);
 await new Promise((resolve) => setTimeout(resolve, 20));
 
+// ---------------------------------------------------------------- Raster
+
+console.log("\n5b. Anzahl der Raster je Seite");
+
+// Die Shell baut bewusst nur die SICHTBARE Seite um – deshalb zuerst zurueck
+// auf Home, sonst prueft der Test eine Seite, die gar nicht drankommt.
+tabs[0].dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+await new Promise((resolve) => setTimeout(resolve, 20));
+
+const spalten = () => root.querySelectorAll('.page[data-page-id="home"] .grid-column').length;
+const template = () =>
+  root.querySelector('.page[data-page-id="home"]').style.getPropertyValue("--haos-grid-template");
+
+// Alte Konfigurationen nennen keine Anzahl. Sie muessen bei drei bleiben,
+// sonst verschwinden beim ersten Laden Karten.
+check("ohne Angabe bleiben es drei", spalten() === 3, `${spalten()}`);
+check("Vorlage nennt drei Breiten", template().split("minmax").length - 1 === 3, template());
+
+const fuenf = JSON.parse(JSON.stringify(shellConfig));
+fuenf.pages[0].grid_count = 5;
+shell.setConfig(fuenf);
+await new Promise((resolve) => setTimeout(resolve, 20));
+check("fuenf Raster moeglich", spalten() === 5, `${spalten()}`);
+check("neue Raster bekommen Breite 1", template().includes("minmax(0, 1fr)"), template());
+
+const eins = JSON.parse(JSON.stringify(shellConfig));
+eins.pages[0].grid_count = 1;
+shell.setConfig(eins);
+await new Promise((resolve) => setTimeout(resolve, 20));
+check("ein Raster moeglich", spalten() === 1, `${spalten()}`);
+
+const zuviel = JSON.parse(JSON.stringify(shellConfig));
+zuviel.pages[0].grid_count = 12;
+shell.setConfig(zuviel);
+await new Promise((resolve) => setTimeout(resolve, 20));
+check("mehr als fuenf werden gekappt", spalten() === 5, `${spalten()}`);
+
+shell.setConfig(shellConfig);
+await new Promise((resolve) => setTimeout(resolve, 20));
+check("zurueck auf drei", spalten() === 3, `${spalten()}`);
+check("Karten sind wieder da", root.querySelectorAll('.page[data-page-id="home"] .slot').length === 4,
+  `${root.querySelectorAll('.page[data-page-id="home"] .slot').length}`);
+
 // ---------------------------------------------------------------- Einstellungen
 
 console.log("\n6. Interne Einstellungsseite");

@@ -91,16 +91,37 @@ const normalizeGrid = (grid) => ({
   cards: Array.isArray(grid?.cards) ? grid.cards.map(normalizeCard) : [],
 });
 
-export const createEmptyGrids = () => [0, 1, 2].map((index) => ({ name: `Grid ${index + 1}`, cards: [] }));
+/** Wie viele Raster eine Seite haben kann. Drei ist die Vorgabe. */
+export const MIN_GRIDS = 1;
+export const MAX_GRIDS = 5;
+export const DEFAULT_GRIDS = 3;
 
-const normalizeGrids = (grids) =>
-  Array.from({ length: 3 }, (_, index) => normalizeGrid(grids?.[index] ?? { name: `Grid ${index + 1}` }));
+export const createEmptyGrids = (count = DEFAULT_GRIDS) =>
+  Array.from({ length: count }, (_, index) => ({ name: `Grid ${index + 1}`, cards: [] }));
+
+const normalizeGrids = (grids, count) =>
+  Array.from({ length: count }, (_, index) => normalizeGrid(grids?.[index] ?? { name: `Grid ${index + 1}` }));
 
 const normalizePage = (page, index, used) => {
   const raw = page || {};
   const isFirst = index === 0;
   const kind = raw.kind === "iframe" ? "iframe" : "page";
   const badgeIds = new Set();
+
+  /**
+   * Anzahl der Raster.
+   *
+   * Ist sie nicht gesetzt, wird sie aus den vorhandenen Rastern abgeleitet –
+   * alte Konfigurationen haben immer drei und behalten sie dadurch, ohne dass
+   * jemand etwas ändern muss. Raster über die Anzahl hinaus fallen weg; ihre
+   * Karten wären sonst unsichtbar in der Konfiguration gefangen.
+   */
+  const gridCount = clampNumber(
+    raw.grid_count ?? (Array.isArray(raw.grids) && raw.grids.length ? raw.grids.length : DEFAULT_GRIDS),
+    MIN_GRIDS,
+    MAX_GRIDS,
+    DEFAULT_GRIDS
+  );
 
   return {
     id: isFirst ? "home" : uniqueId(raw.id || raw.name || `seite-${index + 1}`, used, `seite-${index + 1}`),
@@ -116,10 +137,13 @@ const normalizePage = (page, index, used) => {
     badges: (Array.isArray(raw.badges) ? raw.badges : []).map((badge, badgeIndex) =>
       normalizeBadge(badge, badgeIndex, badgeIds)
     ),
-    grid_widths: Array.from({ length: 3 }, (_, widthIndex) =>
-      clampNumber(raw.grid_widths?.[widthIndex], 0.3, 4, DEFAULT_GRID_WIDTHS[widthIndex])
+    grid_count: gridCount,
+    // Über die dritte Spalte hinaus gibt es keine Vorgabe mehr – dort ist
+    // gleich breit die vernünftigste Annahme.
+    grid_widths: Array.from({ length: gridCount }, (_, widthIndex) =>
+      clampNumber(raw.grid_widths?.[widthIndex], 0.3, 4, DEFAULT_GRID_WIDTHS[widthIndex] ?? 1)
     ),
-    grids: normalizeGrids(raw.grids),
+    grids: normalizeGrids(raw.grids, gridCount),
   };
 };
 

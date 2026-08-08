@@ -652,12 +652,17 @@ class HaOsShell extends HTMLElement {
       entry.kind = "page";
     }
 
-    if (!entry.columns.length) {
-      entry.columns = [0, 1, 2].map(() => {
-        const column = el("section", "grid-column");
-        entry.root.append(column);
-        return column;
-      });
+    // Die Anzahl der Spalten ist je Seite einstellbar. Vorhandene Spalten
+    // bleiben stehen – nur die Differenz wird angelegt oder entfernt, damit
+    // beim Ändern nicht alle Kinderkarten neu entstehen.
+    const wantedColumns = page.grids.length;
+    while (entry.columns.length < wantedColumns) {
+      const column = el("section", "grid-column");
+      entry.root.append(column);
+      entry.columns.push(column);
+    }
+    while (entry.columns.length > wantedColumns) {
+      entry.columns.pop()?.remove();
     }
 
     entry.root.style.setProperty(
