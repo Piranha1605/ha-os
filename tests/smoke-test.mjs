@@ -425,6 +425,23 @@ window.HaOsTheme.save({ statusGoodDark: "#7ee0b0" });
 
   const schalter = [...root.querySelectorAll(".control .switch input")];
   check("Schalter in den Einstellungen", schalter.length >= 1, `${schalter.length}`);
+
+  // Kommen die Farben von HA, muss unser Hell/Dunkel-Knopf auch DORT
+  // umschalten - sonst aendert er nichts Sichtbares mehr.
+  const themeKnopf = [...root.querySelectorAll(".side-bottom .icon-button")].at(-1);
+  window.HaOsTheme.save({ follow_ha: false, mode: "dark" });
+  serviceCalls.length = 0;
+  themeKnopf.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  check("ohne Uebernahme bleibt HA unangetastet",
+    !serviceCalls.some((c) => c.startsWith("frontend.")), serviceCalls.join(", ") || "keine");
+
+  window.HaOsTheme.save({ follow_ha: true, mode: "dark" });
+  serviceCalls.length = 0;
+  themeKnopf.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  check("mit Uebernahme schaltet HA mit",
+    serviceCalls.includes("frontend.set_theme"), serviceCalls.join(", ") || "keine");
+
+  window.HaOsTheme.save({ follow_ha: false, mode: "dark" });
 }
 
 const statusGruppe = [...root.querySelectorAll(".group h3")].map((n) => n.textContent);

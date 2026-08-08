@@ -648,11 +648,33 @@ class HaOsShell extends HTMLElement {
     if (config.show_theme_button) {
       this._themeButton = el("button", "icon-button");
       this._themeButton.append(iconEl("mdi:white-balance-sunny"));
-      this._themeButton.addEventListener("click", () => HaOsTheme.toggleMode());
+      this._themeButton.addEventListener("click", () => this._toggleMode());
       this._sideBottom.append(this._themeButton);
     } else {
       this._themeButton = null;
     }
+  }
+
+  /**
+   * Hell/Dunkel umschalten.
+   *
+   * Wenn die Farben von Home Assistant kommen, muss der Knopf auch **dort**
+   * umschalten – sonst aendert er nichts Sichtbares mehr: HA-OS wuerde
+   * weiterhin die Farben eines hellen HA-Themes anzeigen, waehrend es sich
+   * selbst fuer dunkel haelt.
+   *
+   * `frontend.set_theme` mit `mode` ist der einzige Weg von aussen. Der Name
+   * des Themes bleibt unangetastet; ohne ihn faellt Home Assistant auf seine
+   * Vorgabe zurueck und der Anwender verlaere sein gewaehltes Theme.
+   */
+  _toggleMode() {
+    HaOsTheme.toggleMode();
+
+    if (!HaOsTheme.get().follow_ha || !this._hass?.callService) return;
+
+    const mode = HaOsTheme.get().mode === "light" ? "light" : "dark";
+    const name = this._hass.themes?.theme || "Backend-selected";
+    this._hass.callService("frontend", "set_theme", { name, mode });
   }
 
   // ---------------------------------------------------------------- Tabs
