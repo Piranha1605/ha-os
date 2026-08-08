@@ -1,4 +1,4 @@
-/* HA-OS 0.19.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.20.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -118,6 +118,7 @@ var read = () => {
     return normalizeTheme(THEME_DEFAULTS);
   }
 };
+var backgroundOf = (t, mode) => t[`background${mode}`] || fallbacks[`background${mode}`] || "";
 var apply = (settings) => {
   const t = normalizeTheme(settings);
   if (typeof document === "undefined") return t;
@@ -164,8 +165,8 @@ var apply = (settings) => {
     "--haos-status-home": light ? "#168a4a" : "#32d583",
     "--haos-status-away": light ? "#a06a10" : "#f7b955",
     "--haos-margin": `${t.margin}px`,
-    "--haos-background-image": (light ? t.backgroundLight : t.backgroundDark) ? `url("${light ? t.backgroundLight : t.backgroundDark}")` : "none",
-    "--haos-background-dim": String(t.backgroundDim / 100),
+    "--haos-background-image": (light ? backgroundOf(t, "Light") : backgroundOf(t, "Dark")) ? `url("${light ? backgroundOf(t, "Light") : backgroundOf(t, "Dark")}")` : "none",
+    "--haos-background-dim": String((t.backgroundDim || fallbacks.backgroundDim || 0) / 100),
     "--haos-card-surface-rgb": hexToRgb(t.cardSurface),
     "--haos-card-opacity": String(cardOpacity / 100),
     "--haos-card-blur": `${t.cardBlur}px`,
@@ -186,9 +187,29 @@ var apply = (settings) => {
   Object.entries(values).forEach(([key, value]) => root.style.setProperty(key, value));
   return t;
 };
+var fallbacks = {};
 var active = apply(read());
 var HaOsTheme = {
   defaults: THEME_DEFAULTS,
+  /**
+   * Vorgaben aus der Kartenkonfiguration setzen.
+   *
+   * Sie überschreiben nichts: was auf diesem Gerät eingestellt wurde, bleibt.
+   * Sie füllen nur die Lücke – und genau dadurch wirkt ein im Editor
+   * gesetztes Hintergrundbild auf allen Geräten, ohne dass jemand die
+   * Einstellungen jedes Tablets anfassen muss.
+   */
+  setFallbacks(values = {}) {
+    const next = {
+      backgroundLight: imageUrl(values.background_light),
+      backgroundDark: imageUrl(values.background_dark),
+      backgroundDim: clamp(values.background_dim, 0, 80, 0)
+    };
+    if (JSON.stringify(next) === JSON.stringify(fallbacks)) return;
+    fallbacks = next;
+    active = apply(active);
+    window.dispatchEvent(new CustomEvent("haos-theme-changed", { detail: { ...active } }));
+  },
   get: () => ({ ...active }),
   save(changes = {}) {
     active = apply({ ...active, ...changes });
@@ -733,6 +754,12 @@ var normalizeShellConfig = (config = {}) => {
   return {
     type: config.type,
     gap: clampNumber(config.gap, 0, 48, SHELL_DEFAULTS.gap),
+    // Hintergrundbild auf Ebene der Karte: gilt fuer ALLE Geraete. Die
+    // Einstellungsseite schreibt dagegen in den localStorage des jeweiligen
+    // Browsers und bleibt damit geraetespezifisch.
+    background_dark: imageUrl(config.background_dark),
+    background_light: imageUrl(config.background_light),
+    background_dim: clampNumber(config.background_dim, 0, 80, 0),
     row_height: clampNumber(config.row_height, 60, 320, SHELL_DEFAULTS.row_height),
     users: (Array.isArray(config.users) ? config.users : []).map((entry) => typeof entry === "string" ? entry : entry?.entity).filter(Boolean),
     fullscreen_entity: config.fullscreen_entity || "",
@@ -1137,6 +1164,7 @@ var HaOsShell = class extends HTMLElement {
     if (!next.pages.some((page) => page.id === this._activePageId) && this._activePageId !== SETTINGS_PAGE_ID) {
       this._activePageId = next.pages[0]?.id || "home";
     }
+    HaOsTheme.setFallbacks(next);
     this._syncSidebar();
     this._syncTabs();
     this._dropRemovedPages(previous);
@@ -1918,6 +1946,9 @@ var EDITOR_TAG2 = "ha-os-shell-editor";
 var LABELS = {
   gap: "Abstand zwischen Karten",
   row_height: "Kartenhöhe in px",
+  background_dark: "Hintergrundbild Dunkel",
+  background_light: "Hintergrundbild Hell",
+  background_dim: "Hintergrund abdunkeln",
   users: "Benutzer in der Kopfzeile",
   fullscreen_entity: "Vollbild-Schalter",
   sidebar_pages: "Seiten in der Seitenleiste",
@@ -1939,6 +1970,7 @@ var HELPERS = {
   topbar_tabs: "Ausschalten, wenn die Seitenleiste reichen soll – bei vielen Seiten läuft die Kopfzeile sonst über.",
   gap: "Gilt gleichmäßig waagerecht und senkrecht.",
   row_height: "Grundhöhe einer Karte mit Höhenfaktor 1.",
+  background_dim: "Schwarze Schicht über dem Bild. Gilt für alle Geräte.",
   fullscreen_entity: "Ein input_boolean, das den Vollbildmodus schaltet. Leer lassen, um den Knopf auszublenden.",
   users: "Leer lassen, um automatisch alle person-Entitäten anzuzeigen.",
   frame_height: "0 füllt die ganze Seite. Für eine eingebettete Ansicht mit einer einzigen Karte ist ein fester Wert meist besser – sonst wird die Karte über die volle Höhe gezogen.",
@@ -1946,7 +1978,8 @@ var HELPERS = {
 };
 var APPEARANCE_SCHEMA = [
   { name: "gap", selector: { number: { min: 0, max: 48, step: 1, mode: "slider" } } },
-  { name: "row_height", selector: { number: { min: 60, max: 320, step: 5, mode: "slider" } } }
+  { name: "row_height", selector: { number: { min: 60, max: 320, step: 5, mode: "slider" } } },
+  { name: "background_dim", selector: { number: { min: 0, max: 80, step: 1, mode: "slider" } } }
 ];
 var BARS_SCHEMA = [
   { name: "users", selector: { entity: { domain: ["person", "device_tracker"], multiple: true } } },
@@ -2046,6 +2079,7 @@ var STYLES2 = `
   .block.is-open > header { background: color-mix(in srgb, var(--primary-color) 10%, transparent); }
 
   .hint { margin: 0; font-size: 12px; line-height: 1.45; color: var(--secondary-text-color); }
+  ${IMAGE_FIELD_CSS}
   .empty { padding: 14px; text-align: center; font-size: 12px; color: var(--secondary-text-color); }
 
   select.plain, input.plain {
@@ -2273,13 +2307,42 @@ var HaOsShellEditor = class extends HTMLElement {
   // ---------------------------------------------------------------- Allgemein
   _renderAppearance() {
     this._panel.append(
-      el2("p", "hint", "Masse der Shell. Farben und Glas stehen in der internen Einstellungsseite.")
+      el2(
+        "p",
+        "hint",
+        "Masse der Shell und das Hintergrundbild. Farben und Glas stehen in der internen Einstellungsseite – die gilt pro Geraet, das Bild hier fuer alle."
+      )
     );
     this._panel.append(
       this._form("general", APPEARANCE_SCHEMA, this._config, (value) => {
         this._config = normalizeShellConfig({ ...this._config, ...value });
         this._emit();
       })
+    );
+    [
+      ["background_dark", "Hintergrundbild Dunkel"],
+      ["background_light", "Hintergrundbild Hell"]
+    ].forEach(([key, label]) => {
+      const wrap = el2("div", "field");
+      wrap.append(el2("label", null, label));
+      const field = createImageField({
+        getHass: () => this._hass,
+        getValue: () => this._config[key] || "",
+        placeholder: "/local/wallpaper/bild.jpg",
+        onChange: (value) => {
+          this._config = normalizeShellConfig({ ...this._config, [key]: value });
+          this._emit();
+        }
+      });
+      wrap.append(field.element);
+      this._panel.append(wrap);
+    });
+    this._panel.append(
+      el2(
+        "p",
+        "hint",
+        "Ein hier gesetztes Bild erscheint auf jedem Geraet. Wer auf einem Tablet in den Einstellungen ein eigenes Bild waehlt, behaelt seines."
+      )
     );
   }
   _renderBars() {
@@ -6980,7 +7043,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.19.1";
+var VERSION = "0.20.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

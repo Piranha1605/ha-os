@@ -75,7 +75,7 @@ const color = (value, fallback) =>
  * bleiben draussen - ein Hintergrundbild von irgendwoher wuerde bei jedem
  * Laden des Dashboards eine Verbindung dorthin aufbauen.
  */
-const imageUrl = (value) => {
+export const imageUrl = (value) => {
   const text = String(value || "").trim();
   if (!text) return "";
   return /^\/(local|api|media|hacsfiles)\//.test(text) ? text : "";
@@ -184,6 +184,9 @@ const read = () => {
  * Theme-Aenderung KEIN Neu-Rendern der Karten – der Browser rechnet neu,
  * nicht JavaScript. Das war einer der Ausloeser der alten Render-Schleife.
  */
+/** Eigener Wert des Geräts, sonst die Vorgabe aus der Karte. */
+const backgroundOf = (t, mode) => t[`background${mode}`] || fallbacks[`background${mode}`] || "";
+
 const apply = (settings) => {
   const t = normalizeTheme(settings);
   if (typeof document === "undefined") return t;
@@ -247,10 +250,10 @@ const apply = (settings) => {
 
     "--haos-margin": `${t.margin}px`,
 
-    "--haos-background-image": (light ? t.backgroundLight : t.backgroundDark)
-      ? `url("${light ? t.backgroundLight : t.backgroundDark}")`
+    "--haos-background-image": (light ? backgroundOf(t, "Light") : backgroundOf(t, "Dark"))
+      ? `url("${light ? backgroundOf(t, "Light") : backgroundOf(t, "Dark")}")`
       : "none",
-    "--haos-background-dim": String(t.backgroundDim / 100),
+    "--haos-background-dim": String((t.backgroundDim || fallbacks.backgroundDim || 0) / 100),
 
     "--haos-card-surface-rgb": hexToRgb(t.cardSurface),
     "--haos-card-opacity": String(cardOpacity / 100),
@@ -275,10 +278,41 @@ const apply = (settings) => {
   return t;
 };
 
+/**
+ * Vorgaben aus der Kartenkonfiguration.
+ *
+ * Das Theme liegt im localStorage und gilt damit **pro Gerät** – auf dem
+ * Tablet steht ein anderes als am Rechner. Für Hell/Dunkel ist das richtig,
+ * für das Hintergrundbild nicht: das soll überall gleich sein. Deshalb kann
+ * die Shell Vorgaben hinterlegen, die immer dann greifen, wenn auf diesem
+ * Gerät nichts Eigenes gesetzt ist.
+ */
+let fallbacks = {};
+
 let active = apply(read());
 
 export const HaOsTheme = {
   defaults: THEME_DEFAULTS,
+
+  /**
+   * Vorgaben aus der Kartenkonfiguration setzen.
+   *
+   * Sie überschreiben nichts: was auf diesem Gerät eingestellt wurde, bleibt.
+   * Sie füllen nur die Lücke – und genau dadurch wirkt ein im Editor
+   * gesetztes Hintergrundbild auf allen Geräten, ohne dass jemand die
+   * Einstellungen jedes Tablets anfassen muss.
+   */
+  setFallbacks(values = {}) {
+    const next = {
+      backgroundLight: imageUrl(values.background_light),
+      backgroundDark: imageUrl(values.background_dark),
+      backgroundDim: clamp(values.background_dim, 0, 80, 0),
+    };
+    if (JSON.stringify(next) === JSON.stringify(fallbacks)) return;
+    fallbacks = next;
+    active = apply(active);
+    window.dispatchEvent(new CustomEvent("haos-theme-changed", { detail: { ...active } }));
+  },
 
   get: () => ({ ...active }),
 

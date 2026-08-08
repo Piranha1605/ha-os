@@ -7,6 +7,7 @@
  */
 
 import { clampNumber } from "./utils.js";
+import { imageUrl } from "./theme.js";
 
 export const SETTINGS_PAGE_ID = "__haos_settings";
 
@@ -158,6 +159,12 @@ export const normalizeShellConfig = (config = {}) => {
   return {
     type: config.type,
     gap: clampNumber(config.gap, 0, 48, SHELL_DEFAULTS.gap),
+    // Hintergrundbild auf Ebene der Karte: gilt fuer ALLE Geraete. Die
+    // Einstellungsseite schreibt dagegen in den localStorage des jeweiligen
+    // Browsers und bleibt damit geraetespezifisch.
+    background_dark: imageUrl(config.background_dark),
+    background_light: imageUrl(config.background_light),
+    background_dim: clampNumber(config.background_dim, 0, 80, 0),
     row_height: clampNumber(config.row_height, 60, 320, SHELL_DEFAULTS.row_height),
     users: (Array.isArray(config.users) ? config.users : [])
       .map((entry) => (typeof entry === "string" ? entry : entry?.entity))

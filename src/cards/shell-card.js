@@ -449,6 +449,10 @@ class HaOsShell extends HTMLElement {
       this._activePageId = next.pages[0]?.id || "home";
     }
 
+    // Vorgaben aus der Karte an das Theme reichen – sie greifen dort, wo auf
+    // diesem Geraet nichts Eigenes eingestellt ist.
+    HaOsTheme.setFallbacks(next);
+
     this._syncSidebar();
     this._syncTabs();
     this._dropRemovedPages(previous);

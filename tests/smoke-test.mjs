@@ -434,6 +434,34 @@ check("Vorschau zeigt das Bild",
 const schattenBlur = Number(cssVar("--haos-entity-shadow").match(/(\d+)px\s+rgba/)?.[1] || 999);
 check("Kartenschatten passt in den Abstand", schattenBlur <= 16, cssVar("--haos-entity-shadow"));
 
+// Das Theme liegt im localStorage und gilt damit PRO GERAET. Ein Bild in der
+// Kartenkonfiguration muss deshalb auf jedem Geraet greifen - sonst steht das
+// Tablet ohne Hintergrund da.
+{
+  window.HaOsTheme.save({ mode: "dark", backgroundDark: "" });
+  const mitBild = JSON.parse(JSON.stringify(shellConfig));
+  mitBild.background_dark = "/local/wallpaper/aus-der-karte.jpg";
+  shell.setConfig(mitBild);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  check("Bild aus der Karte greift ohne eigene Einstellung",
+    cssVar("--haos-background-image").includes("aus-der-karte.jpg"),
+    cssVar("--haos-background-image") || "(leer)");
+
+  // Wer auf dem Geraet etwas eingestellt hat, behaelt es.
+  window.HaOsTheme.save({ backgroundDark: "/local/wallpaper/eigenes.jpg" });
+  check("eigenes Bild des Geraets gewinnt",
+    cssVar("--haos-background-image").includes("eigenes.jpg"),
+    cssVar("--haos-background-image"));
+
+  window.HaOsTheme.save({ backgroundDark: "" });
+  check("nach dem Zuruecksetzen wieder das aus der Karte",
+    cssVar("--haos-background-image").includes("aus-der-karte.jpg"),
+    cssVar("--haos-background-image"));
+
+  shell.setConfig(shellConfig);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+}
+
 const accentInput = root.querySelector('.control input[type="color"]');
 accentInput.value = "#ff0000";
 accentInput.dispatchEvent(new window.Event("input", { bubbles: true }));

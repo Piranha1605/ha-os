@@ -21,7 +21,7 @@ import {
   MIN_GRIDS,
   MAX_GRIDS,
 } from "../shared/config.js";
-import { isEqualConfig, deepClone } from "../shared/utils.js";
+import { IMAGE_FIELD_CSS, createImageField, isEqualConfig, deepClone } from "../shared/utils.js";
 import { cardCatalog, stubConfigFor, createCardEditorWithCode } from "../shared/card-catalog.js";
 
 const EDITOR_TAG = "ha-os-shell-editor";
@@ -29,6 +29,9 @@ const EDITOR_TAG = "ha-os-shell-editor";
 const LABELS = {
   gap: "Abstand zwischen Karten",
   row_height: "Kartenhöhe in px",
+  background_dark: "Hintergrundbild Dunkel",
+  background_light: "Hintergrundbild Hell",
+  background_dim: "Hintergrund abdunkeln",
   users: "Benutzer in der Kopfzeile",
   fullscreen_entity: "Vollbild-Schalter",
   sidebar_pages: "Seiten in der Seitenleiste",
@@ -52,6 +55,7 @@ const HELPERS = {
     "Ausschalten, wenn die Seitenleiste reichen soll – bei vielen Seiten läuft die Kopfzeile sonst über.",
   gap: "Gilt gleichmäßig waagerecht und senkrecht.",
   row_height: "Grundhöhe einer Karte mit Höhenfaktor 1.",
+  background_dim: "Schwarze Schicht über dem Bild. Gilt für alle Geräte.",
   fullscreen_entity: "Ein input_boolean, das den Vollbildmodus schaltet. Leer lassen, um den Knopf auszublenden.",
   users: "Leer lassen, um automatisch alle person-Entitäten anzuzeigen.",
   frame_height:
@@ -63,6 +67,7 @@ const HELPERS = {
 const APPEARANCE_SCHEMA = [
   { name: "gap", selector: { number: { min: 0, max: 48, step: 1, mode: "slider" } } },
   { name: "row_height", selector: { number: { min: 60, max: 320, step: 5, mode: "slider" } } },
+  { name: "background_dim", selector: { number: { min: 0, max: 80, step: 1, mode: "slider" } } },
 ];
 
 /** Kopfzeile und Seitenleiste – alles, was am Rand sitzt. */
@@ -179,6 +184,7 @@ const STYLES = `
   .block.is-open > header { background: color-mix(in srgb, var(--primary-color) 10%, transparent); }
 
   .hint { margin: 0; font-size: 12px; line-height: 1.45; color: var(--secondary-text-color); }
+  ${IMAGE_FIELD_CSS}
   .empty { padding: 14px; text-align: center; font-size: 12px; color: var(--secondary-text-color); }
 
   select.plain, input.plain {
@@ -443,13 +449,49 @@ class HaOsShellEditor extends HTMLElement {
 
   _renderAppearance() {
     this._panel.append(
-      el("p", "hint", "Masse der Shell. Farben und Glas stehen in der internen Einstellungsseite.")
+      el(
+        "p",
+        "hint",
+        "Masse der Shell und das Hintergrundbild. Farben und Glas stehen in der " +
+          "internen Einstellungsseite – die gilt pro Geraet, das Bild hier fuer alle."
+      )
     );
     this._panel.append(
       this._form("general", APPEARANCE_SCHEMA, this._config, (value) => {
         this._config = normalizeShellConfig({ ...this._config, ...value });
         this._emit();
       })
+    );
+
+    // Die Bildauswahl steht ausserhalb des Formulars: ha-form laesst ein Feld
+    // mit selector image stillschweigend weg – derselbe Grund wie in der
+    // Fahrzeugkarte.
+    [
+      ["background_dark", "Hintergrundbild Dunkel"],
+      ["background_light", "Hintergrundbild Hell"],
+    ].forEach(([key, label]) => {
+      const wrap = el("div", "field");
+      wrap.append(el("label", null, label));
+      const field = createImageField({
+        getHass: () => this._hass,
+        getValue: () => this._config[key] || "",
+        placeholder: "/local/wallpaper/bild.jpg",
+        onChange: (value) => {
+          this._config = normalizeShellConfig({ ...this._config, [key]: value });
+          this._emit();
+        },
+      });
+      wrap.append(field.element);
+      this._panel.append(wrap);
+    });
+
+    this._panel.append(
+      el(
+        "p",
+        "hint",
+        "Ein hier gesetztes Bild erscheint auf jedem Geraet. Wer auf einem Tablet " +
+          "in den Einstellungen ein eigenes Bild waehlt, behaelt seines."
+      )
     );
   }
 
