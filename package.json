@@ -1,13 +1,13 @@
 {
   "name": "ha-os",
-  "version": "0.15.3",
+  "version": "0.16.0",
   "description": "HA-OS – Dashboard-Grundgerüst im Glassmorphism-Stil für Home Assistant",
   "type": "module",
   "private": true,
   "license": "MIT",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node tests/smoke-test.mjs && node tests/weather-graph-test.mjs && node tests/button-card-test.mjs && node tests/grid-card-test.mjs && node tests/card-services-test.mjs && node tests/camera-card-test.mjs && node tests/vehicle-card-test.mjs",
+    "test": "node tests/smoke-test.mjs && node tests/weather-graph-test.mjs && node tests/button-card-test.mjs && node tests/grid-card-test.mjs && node tests/card-services-test.mjs && node tests/camera-card-test.mjs && node tests/vehicle-card-test.mjs && node tests/printer-card-test.mjs",
     "test:src": "HAOS_TARGET=src/ha-os.js npm test",
     "check": "npm run build && npm test"
   },

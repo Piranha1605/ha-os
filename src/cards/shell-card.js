@@ -236,15 +236,26 @@ const STYLES = `
   .control small { display: block; margin-top: 3px; font-size: 9px; color: rgba(var(--haos-text-rgb, 255,255,255), .53); }
   .control output { text-align: right; font-size: 11px; font-weight: 750; color: rgba(var(--haos-text-rgb, 255,255,255), .82); }
   .control input[type="range"] { width: 100%; accent-color: var(--haos-accent, #0a84ff); }
-  .control input[type="color"] {
-    appearance: none; -webkit-appearance: none; width: 44px; height: 44px; justify-self: end; padding: 5px;
+  /* Farbwähler.
+     Der native Farbfleck laesst sich nicht zuverlaessig rund bekommen – die
+     Regeln fuer ::-webkit-color-swatch greifen je nach Browserversion nicht,
+     dann sitzt ein abgerundetes Quadrat im Kreis. Deshalb wird der Kreis
+     selbst gezeichnet und das Bedienelement unsichtbar darübergelegt. Optik
+     wie die Knoepfe der Seitenleiste: 44 px, Rand, Glanzkante, Schatten. */
+  .swatch {
+    position: relative; width: 44px; height: 44px; justify-self: end;
+    border-radius: 50%; cursor: pointer;
     border: 1px solid rgba(var(--haos-card-border-rgb, 255,255,255), calc(var(--haos-card-border-opacity, .25) + .18));
-    border-radius: 50%; overflow: hidden; cursor: pointer;
-    background: linear-gradient(145deg, rgba(var(--haos-card-border-rgb, 255,255,255), .20), rgba(var(--haos-card-surface-rgb, 255,255,255), .07));
+    background: var(--swatch-color, #0a84ff);
     box-shadow: inset 0 1px 0 rgba(255,255,255,.42), 0 7px 18px rgba(0,0,0,.15);
+    transition: transform .16s ease, box-shadow .16s ease;
   }
-  .control input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-  .control input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 50%; }
+  .swatch:hover { transform: translateY(-1px); }
+  .swatch:active { transform: scale(.96); }
+  .swatch input[type="color"] {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    opacity: 0; border: 0; padding: 0; cursor: pointer;
+  }
 
   .settings footer button {
     min-height: 42px; padding: 0 16px; display: flex; align-items: center; gap: 7px; cursor: pointer;
@@ -285,6 +296,10 @@ const STYLES = `
 const THEME_CONTROLS = [
   { group: "general", key: "accent", label: "Akzentfarbe", hint: "Aktive Elemente", type: "color" },
   { group: "general", key: "margin", label: "Außenabstand", hint: "Abstand um die Shell", min: 0, max: 60, step: 1, unit: "px" },
+  // Gilt für alle Karten: sämtliche Beschriftungen und Werte leiten ihre
+  // Abstufungen von dieser einen Farbe ab.
+  { group: "general", key: "textDark", label: "Textfarbe Dunkel", hint: "Schrift im dunklen Modus", type: "color" },
+  { group: "general", key: "textLight", label: "Textfarbe Hell", hint: "Schrift im hellen Modus", type: "color" },
   { group: "background", key: "backgroundDark", label: "Bild für Dunkel", hint: "Hintergrund im dunklen Modus", type: "image" },
   { group: "background", key: "backgroundLight", label: "Bild für Hell", hint: "Hintergrund im hellen Modus", type: "image" },
   { group: "background", key: "backgroundDim", label: "Abdunkeln", hint: "Schwarze Schicht über dem Bild", min: 0, max: 80, step: 1, unit: "%" },
@@ -1149,6 +1164,7 @@ class HaOsShell extends HTMLElement {
     const input = document.createElement("input");
     input.type = control.type === "color" ? "color" : "range";
 
+    let swatch = null;
     if (control.type !== "color") {
       const output = document.createElement("output");
       label.append(output);
@@ -1157,7 +1173,9 @@ class HaOsShell extends HTMLElement {
       input.step = control.step;
       this._settingsInputs.set(control.key, { input, output, control });
     } else {
-      this._settingsInputs.set(control.key, { input, output: null, control });
+      swatch = el("span", "swatch");
+      swatch.append(input);
+      this._settingsInputs.set(control.key, { input, output: null, control, swatch });
     }
 
     input.addEventListener("input", () => {
@@ -1165,9 +1183,10 @@ class HaOsShell extends HTMLElement {
       HaOsTheme.save({ [control.key]: value });
       const record = this._settingsInputs.get(control.key);
       if (record?.output) record.output.textContent = `${value}${control.unit || ""}`;
+      if (record?.swatch) record.swatch.style.setProperty("--swatch-color", value);
     });
 
-    label.append(input);
+    label.append(swatch || input);
     return label;
   }
 
@@ -1211,11 +1230,12 @@ class HaOsShell extends HTMLElement {
   _syncSettingsValues() {
     if (!this._settingsInputs) return;
     const theme = HaOsTheme.get();
-    this._settingsInputs.forEach(({ input, output, control }, key) => {
+    this._settingsInputs.forEach(({ input, output, control, swatch }, key) => {
       const value = theme[key];
       if (value === undefined) return;
       input.value = value;
       if (output) output.textContent = `${value}${control.unit || ""}`;
+      if (swatch) swatch.style.setProperty("--swatch-color", value);
     });
     this._settingsPaths?.forEach((input, key) => {
       input.value = theme[key] || "";

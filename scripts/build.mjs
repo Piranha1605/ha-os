@@ -15,7 +15,7 @@
  */
 
 import { build } from "esbuild";
-import { readFile, mkdir } from "node:fs/promises";
+import { readFile, mkdir, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -47,6 +47,47 @@ await build({
   },
 });
 
+/**
+ * Rückstriche in CSS-Kommentaren.
+ *
+ * Die Stile stehen in Template-Strings. Ein `Rückstrich` in einem
+ * CSS-Kommentar beendet den String mitten im Stil – einmal führte das zu
+ * einem Syntaxfehler, ein andermal zu gültigem, aber falschem Code, der erst
+ * beim Laden auffiel. Beides kostet mehr Zeit als diese Prüfung.
+ */
+const cssComment = /^\s*(\/\*|\*[^/])/;
+const offenders = [];
+for (const folder of ["src", "src/cards", "src/shared"]) {
+  const files = (await readdir(join(root, folder), { withFileTypes: true }))
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".js"))
+    .map((entry) => join(root, folder, entry.name));
+
+  for (const file of files) {
+    const lines = (await readFile(file, "utf8")).split("\n");
+    // Nur innerhalb eines Stil-Blocks suchen. Ein Rückstrich in einem
+    // gewöhnlichen Dokumentationskommentar ist völlig in Ordnung.
+    let inStyles = false;
+    lines.forEach((line, index) => {
+      if (!inStyles) {
+        if (/=\s*`\s*$/.test(line)) inStyles = true;
+        return;
+      }
+      if (/^\s*`;?\s*$/.test(line)) {
+        inStyles = false;
+        return;
+      }
+      if (cssComment.test(line) && line.includes("`")) {
+        offenders.push(`${file.replace(`${root}/`, "")}:${index + 1}`);
+      }
+    });
+  }
+}
+if (offenders.length) {
+  console.error("FEHLER: Rückstrich in einem Kommentar – das beendet den Stil-String.");
+  offenders.forEach((place) => console.error(`   ${place}`));
+  process.exit(1);
+}
+
 const built = await readFile(outfile, "utf8");
 
 // Ein leeres oder halbes Bündel wäre der teuerste Fehler: HA lädt es, meldet
@@ -60,6 +101,8 @@ const required = [
   "ha-os-grid-editor",
   "ha-os-vehicle",
   "ha-os-vehicle-editor",
+  "ha-os-printer",
+  "ha-os-printer-editor",
 ];
 const missing = required.filter((tag) => !built.includes(tag));
 

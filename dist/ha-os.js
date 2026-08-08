@@ -1,4 +1,4 @@
-/* HA-OS 0.15.3 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.16.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -10,6 +10,11 @@ var THEME_DEFAULTS = Object.freeze({
   backgroundLight: "",
   backgroundDark: "",
   backgroundDim: 0,
+  // Textfarbe, getrennt fuer Hell und Dunkel. Sie gilt fuer ALLE Karten:
+  // Beschriftungen, Werte und Symbole leiten ihre Abstufungen davon ab, damit
+  // nicht jede Karte ihre eigene Graustufe mitbringt.
+  textLight: "#18212a",
+  textDark: "#ffffff",
   // Hintergrundkarte = die grosse Glasflaeche der Shell
   cardSurface: "#ffffff",
   cardOpacity: 10,
@@ -69,6 +74,8 @@ var normalizeTheme = (settings = {}) => ({
   backgroundLight: imageUrl(settings.backgroundLight),
   backgroundDark: imageUrl(settings.backgroundDark),
   backgroundDim: clamp(settings.backgroundDim, 0, 80, THEME_DEFAULTS.backgroundDim),
+  textLight: color(settings.textLight, THEME_DEFAULTS.textLight),
+  textDark: color(settings.textDark, THEME_DEFAULTS.textDark),
   cardSurface: color(settings.cardSurface, THEME_DEFAULTS.cardSurface),
   cardOpacity: clamp(settings.cardOpacity, 0, 95, THEME_DEFAULTS.cardOpacity),
   cardBlur: clamp(settings.cardBlur, 0, 50, THEME_DEFAULTS.cardBlur),
@@ -104,9 +111,9 @@ var apply = (settings) => {
   const entityBorderOpacity = light ? Math.max(t.entityBorderOpacity, 38) : t.entityBorderOpacity;
   const values = {
     "--haos-color-scheme": t.mode,
-    "--haos-text": light ? "#18212a" : "#ffffff",
-    "--haos-text-rgb": light ? "24, 33, 42" : "255, 255, 255",
-    "--haos-text-inverse": light ? "#ffffff" : "#18212a",
+    "--haos-text": light ? t.textLight : t.textDark,
+    "--haos-text-rgb": hexToRgb(light ? t.textLight : t.textDark),
+    "--haos-text-inverse": light ? t.textDark : t.textLight,
     "--haos-font-family": "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif",
     "--haos-font-weight-normal": "450",
     "--haos-font-weight-semibold": "650",
@@ -806,15 +813,26 @@ var STYLES = `
   .control small { display: block; margin-top: 3px; font-size: 9px; color: rgba(var(--haos-text-rgb, 255,255,255), .53); }
   .control output { text-align: right; font-size: 11px; font-weight: 750; color: rgba(var(--haos-text-rgb, 255,255,255), .82); }
   .control input[type="range"] { width: 100%; accent-color: var(--haos-accent, #0a84ff); }
-  .control input[type="color"] {
-    appearance: none; -webkit-appearance: none; width: 44px; height: 44px; justify-self: end; padding: 5px;
+  /* Farbwähler.
+     Der native Farbfleck laesst sich nicht zuverlaessig rund bekommen – die
+     Regeln fuer ::-webkit-color-swatch greifen je nach Browserversion nicht,
+     dann sitzt ein abgerundetes Quadrat im Kreis. Deshalb wird der Kreis
+     selbst gezeichnet und das Bedienelement unsichtbar darübergelegt. Optik
+     wie die Knoepfe der Seitenleiste: 44 px, Rand, Glanzkante, Schatten. */
+  .swatch {
+    position: relative; width: 44px; height: 44px; justify-self: end;
+    border-radius: 50%; cursor: pointer;
     border: 1px solid rgba(var(--haos-card-border-rgb, 255,255,255), calc(var(--haos-card-border-opacity, .25) + .18));
-    border-radius: 50%; overflow: hidden; cursor: pointer;
-    background: linear-gradient(145deg, rgba(var(--haos-card-border-rgb, 255,255,255), .20), rgba(var(--haos-card-surface-rgb, 255,255,255), .07));
+    background: var(--swatch-color, #0a84ff);
     box-shadow: inset 0 1px 0 rgba(255,255,255,.42), 0 7px 18px rgba(0,0,0,.15);
+    transition: transform .16s ease, box-shadow .16s ease;
   }
-  .control input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-  .control input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 50%; }
+  .swatch:hover { transform: translateY(-1px); }
+  .swatch:active { transform: scale(.96); }
+  .swatch input[type="color"] {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    opacity: 0; border: 0; padding: 0; cursor: pointer;
+  }
 
   .settings footer button {
     min-height: 42px; padding: 0 16px; display: flex; align-items: center; gap: 7px; cursor: pointer;
@@ -854,6 +872,10 @@ var STYLES = `
 var THEME_CONTROLS = [
   { group: "general", key: "accent", label: "Akzentfarbe", hint: "Aktive Elemente", type: "color" },
   { group: "general", key: "margin", label: "Außenabstand", hint: "Abstand um die Shell", min: 0, max: 60, step: 1, unit: "px" },
+  // Gilt für alle Karten: sämtliche Beschriftungen und Werte leiten ihre
+  // Abstufungen von dieser einen Farbe ab.
+  { group: "general", key: "textDark", label: "Textfarbe Dunkel", hint: "Schrift im dunklen Modus", type: "color" },
+  { group: "general", key: "textLight", label: "Textfarbe Hell", hint: "Schrift im hellen Modus", type: "color" },
   { group: "background", key: "backgroundDark", label: "Bild für Dunkel", hint: "Hintergrund im dunklen Modus", type: "image" },
   { group: "background", key: "backgroundLight", label: "Bild für Hell", hint: "Hintergrund im hellen Modus", type: "image" },
   { group: "background", key: "backgroundDim", label: "Abdunkeln", hint: "Schwarze Schicht über dem Bild", min: 0, max: 80, step: 1, unit: "%" },
@@ -886,9 +908,9 @@ var el = (tag, className, text2) => {
   if (text2 !== void 0) node.textContent = text2;
   return node;
 };
-var iconEl = (icon5) => {
+var iconEl = (icon6) => {
   const node = document.createElement("ha-icon");
-  node.setAttribute("icon", icon5);
+  node.setAttribute("icon", icon6);
   return node;
 };
 var HaOsShell = class extends HTMLElement {
@@ -1318,8 +1340,8 @@ var HaOsShell = class extends HTMLElement {
     this._badges.clear();
     badges.forEach((badge) => {
       const root = el("button", "badge");
-      const icon5 = iconEl(badge.icon || "mdi:circle-outline");
-      root.append(icon5);
+      const icon6 = iconEl(badge.icon || "mdi:circle-outline");
+      root.append(icon6);
       let name = null;
       let state = null;
       if (badge.show_state || badge.name) {
@@ -1335,13 +1357,13 @@ var HaOsShell = class extends HTMLElement {
         root.classList.add("icon-only");
       }
       root.addEventListener("click", () => handleAction(this, this._hass, badge.tap_action, badge.entity));
-      this._badges.set(badge.id, { root, icon: icon5, name, state, badge });
+      this._badges.set(badge.id, { root, icon: icon6, name, state, badge });
       this._badgeList.append(root);
     });
     this._updateBadgeStates();
   }
   _updateBadgeStates() {
-    this._badges.forEach(({ root, icon: icon5, name, state, badge }) => {
+    this._badges.forEach(({ root, icon: icon6, name, state, badge }) => {
       if (badge.kind === "link") {
         root.classList.remove("is-on", "is-off", "is-unavailable");
         if (name) name.textContent = badge.name || "Link";
@@ -1353,7 +1375,7 @@ var HaOsShell = class extends HTMLElement {
       const label = badge.name || friendlyName(badge.entity, entityState);
       root.classList.remove("is-on", "is-off", "is-unavailable");
       root.classList.add(statusClass(entityState));
-      icon5.setAttribute("icon", badge.icon || domainIcon(badge.entity, entityState));
+      icon6.setAttribute("icon", badge.icon || domainIcon(badge.entity, entityState));
       if (name) name.textContent = label;
       if (state) state.textContent = formatState(this._hass, badge.entity);
       root.title = label;
@@ -1535,6 +1557,7 @@ var HaOsShell = class extends HTMLElement {
     label.append(text2);
     const input = document.createElement("input");
     input.type = control.type === "color" ? "color" : "range";
+    let swatch = null;
     if (control.type !== "color") {
       const output = document.createElement("output");
       label.append(output);
@@ -1543,15 +1566,18 @@ var HaOsShell = class extends HTMLElement {
       input.step = control.step;
       this._settingsInputs.set(control.key, { input, output, control });
     } else {
-      this._settingsInputs.set(control.key, { input, output: null, control });
+      swatch = el("span", "swatch");
+      swatch.append(input);
+      this._settingsInputs.set(control.key, { input, output: null, control, swatch });
     }
     input.addEventListener("input", () => {
       const value = control.type === "color" ? input.value : Number(input.value);
       HaOsTheme.save({ [control.key]: value });
       const record = this._settingsInputs.get(control.key);
       if (record?.output) record.output.textContent = `${value}${control.unit || ""}`;
+      if (record?.swatch) record.swatch.style.setProperty("--swatch-color", value);
     });
-    label.append(input);
+    label.append(swatch || input);
     return label;
   }
   /**
@@ -1589,11 +1615,12 @@ var HaOsShell = class extends HTMLElement {
   _syncSettingsValues() {
     if (!this._settingsInputs) return;
     const theme = HaOsTheme.get();
-    this._settingsInputs.forEach(({ input, output, control }, key) => {
+    this._settingsInputs.forEach(({ input, output, control, swatch }, key) => {
       const value = theme[key];
       if (value === void 0) return;
       input.value = value;
       if (output) output.textContent = `${value}${control.unit || ""}`;
+      if (swatch) swatch.style.setProperty("--swatch-color", value);
     });
     this._settingsPaths?.forEach((input, key) => {
       input.value = theme[key] || "";
@@ -1675,15 +1702,15 @@ var createHaCardEditor = ({ hass, value, onChange }) => {
   });
   return editor;
 };
-var createCardEditorWithCode = ({ hass, value, onChange, codeMode, onToggleCode, el: el6 }) => {
-  const wrap = el6("div");
+var createCardEditorWithCode = ({ hass, value, onChange, codeMode, onToggleCode, el: el7 }) => {
+  const wrap = el7("div");
   const gui = codeMode ? null : createHaCardEditor({ hass, value, onChange });
   if (gui) {
     wrap.append(gui);
   } else {
     if (!codeMode) {
       wrap.append(
-        el6(
+        el7(
           "p",
           "hint",
           "Der Karteneditor von Home Assistant steht hier nicht zur Verfuegung - Konfiguration als YAML."
@@ -1699,7 +1726,7 @@ var createCardEditorWithCode = ({ hass, value, onChange, codeMode, onToggleCode,
     });
     wrap.append(yaml);
   }
-  const toggle = el6("button", "linkish", codeMode ? "Eingabemaske anzeigen" : "Code-Editor anzeigen");
+  const toggle = el7("button", "linkish", codeMode ? "Eingabemaske anzeigen" : "Code-Editor anzeigen");
   toggle.addEventListener("click", onToggleCode);
   wrap.append(toggle);
   return wrap;
@@ -2481,6 +2508,17 @@ var HaOsShellEditor = class extends HTMLElement {
         });
       }, true)
     );
+    const addPrinter = el2("button", "add");
+    addPrinter.append(icon("mdi:printer-3d"), el2("span", null, "Drucker"));
+    addPrinter.addEventListener(
+      "click",
+      () => this._mutate((draft) => {
+        draft.pages[pageIndex].grids[columnIndex].cards.push({
+          type: "custom:ha-os-printer",
+          haos_weight: 3
+        });
+      }, true)
+    );
     const addOther = el2("button", "add");
     addOther.append(icon("mdi:view-dashboard-outline"), el2("span", null, "Andere Karte wählen"));
     addOther.addEventListener("click", () => {
@@ -2488,7 +2526,7 @@ var HaOsShellEditor = class extends HTMLElement {
       this._openPicker = this._openPicker === key ? null : key;
       this._renderPanels();
     });
-    addRow.append(addOwn, addGrid, addVehicle, addOther);
+    addRow.append(addOwn, addGrid, addVehicle, addPrinter, addOther);
     wrap.append(addRow);
     if (this._openPicker === `picker-${pageIndex}-${columnIndex}`) {
       wrap.append(
@@ -5578,8 +5616,812 @@ var HaOsVehicleEditor = class extends HTMLElement {
 };
 if (!customElements.get(EDITOR_TAG7)) customElements.define(EDITOR_TAG7, HaOsVehicleEditor);
 
+// src/cards/printer-card.js
+var TAG5 = "ha-os-printer";
+var EDITOR_TAG8 = "ha-os-printer-editor";
+var FIELDS = [
+  { key: "status", label: "Status", domain: "sensor", section: "overview", suffixes: ["druckstatus", "print_status"] },
+  { key: "stage", label: "Arbeitsschritt", domain: "sensor", section: "overview", suffixes: ["aktueller_arbeitsschritt", "current_stage"] },
+  { key: "progress", label: "Fortschritt", domain: "sensor", section: "overview", suffixes: ["druckfortschritt", "print_progress"] },
+  { key: "task", label: "Auftrag", domain: "sensor", section: "overview", suffixes: ["name_der_aufgabe", "task_name"] },
+  { key: "remaining", label: "Restzeit", domain: "sensor", section: "overview", suffixes: ["verbleibende_zeit", "remaining_time"] },
+  { key: "end_time", label: "Fertig um", domain: "sensor", section: "overview", suffixes: ["endzeit", "end_time"] },
+  { key: "layer", label: "Aktuelle Schicht", domain: "sensor", section: "overview", suffixes: ["aktuelle_schicht", "current_layer"] },
+  { key: "layers", label: "Schichten gesamt", domain: "sensor", section: "overview", suffixes: ["gesamtzahl_der_schichten", "total_layer_count"] },
+  { key: "cover", label: "Titelbild", domain: "image", section: "overview", suffixes: ["titelbild", "cover_image"] },
+  { key: "online", label: "Online", domain: "binary_sensor", section: "overview", suffixes: ["online"] },
+  { key: "error", label: "Druckfehler", domain: "binary_sensor", section: "overview", suffixes: ["druckfehler", "print_error"] },
+  { key: "hms", label: "HMS-Fehler", domain: "binary_sensor", section: "overview", suffixes: ["hms_fehler", "hms_errors"] },
+  { key: "nozzle", label: "Düse", domain: "sensor", section: "temps", suffixes: ["temperatur_der_duse", "nozzle_temperature"] },
+  { key: "nozzle_target", label: "Düse Soll", domain: "sensor", section: "temps", suffixes: ["zieltemperatur_der_duse", "target_nozzle_temperature"] },
+  { key: "bed", label: "Druckbett", domain: "sensor", section: "temps", suffixes: ["druckbetttemperatur", "bed_temperature"] },
+  { key: "bed_target", label: "Druckbett Soll", domain: "sensor", section: "temps", suffixes: ["zieltemperatur_vom_druckbett", "target_bed_temperature"] },
+  { key: "fan_part", label: "Bauteillüfter", domain: "sensor", section: "temps", suffixes: ["bauteillufterdrehzahl", "cooling_fan_speed"] },
+  { key: "fan_aux", label: "Druckraumlüfter", domain: "sensor", section: "temps", suffixes: ["druckraumlufterdrehzahl", "aux_fan_speed"] },
+  { key: "fan_hotend", label: "Druckkopflüfter", domain: "sensor", section: "temps", suffixes: ["druckkopflufterdrehzahl", "heatbreak_fan_speed"] },
+  { key: "nozzle_size", label: "Düsengröße", domain: "sensor", section: "temps", suffixes: ["dusengrosse", "nozzle_size"] },
+  { key: "ams_slot_1", label: "Slot 1", domain: "sensor", section: "ams", suffixes: ["ams_1_slot_1", "ams_1_tray_1"] },
+  { key: "ams_slot_2", label: "Slot 2", domain: "sensor", section: "ams", suffixes: ["ams_1_slot_2", "ams_1_tray_2"] },
+  { key: "ams_slot_3", label: "Slot 3", domain: "sensor", section: "ams", suffixes: ["ams_1_slot_3", "ams_1_tray_3"] },
+  { key: "ams_slot_4", label: "Slot 4", domain: "sensor", section: "ams", suffixes: ["ams_1_slot_4", "ams_1_tray_4"] },
+  { key: "ams_temp", label: "AMS-Temperatur", domain: "sensor", section: "ams", suffixes: ["ams_1_temperatur", "ams_1_temperature"] },
+  { key: "ams_humidity", label: "AMS-Luftfeuchte", domain: "sensor", section: "ams", suffixes: ["ams_1_luftfeuchtigkeit", "ams_1_humidity"] },
+  { key: "ams_active", label: "Aktiver Slot", domain: "sensor", section: "ams", suffixes: ["aktiver_slot", "active_tray"] },
+  { key: "pause", label: "Anhalten", domain: "button", section: "control", suffixes: ["druckvorgang_anhalten", "pause_printing"] },
+  { key: "resume", label: "Fortsetzen", domain: "button", section: "control", suffixes: ["druckvorgang_fortsetzen", "resume_printing"] },
+  { key: "stop", label: "Beenden", domain: "button", section: "control", suffixes: ["druckvorgang_beenden", "stop_printing"] },
+  { key: "light", label: "Kammerlicht", domain: "light", section: "control", suffixes: ["druckraumbeleuchtung", "chamber_light"] },
+  { key: "speed", label: "Druckgeschwindigkeit", domain: "select", section: "control", suffixes: ["druckgeschwindigkeit", "printing_speed"] },
+  { key: "camera", label: "Kamera", domain: "camera", section: "camera", suffixes: ["kamera", "camera"] }
+];
+var FIELD_BY_KEY = Object.fromEntries(FIELDS.map((field) => [field.key, field]));
+var guessEntities = (baseEntity, hass) => {
+  const objectId = String(baseEntity || "").split(".")[1] || "";
+  if (!objectId || !hass?.states) return {};
+  const parts = objectId.split("_");
+  const prefixes = [];
+  for (let count = parts.length - 1; count >= 1; count -= 1) prefixes.push(parts.slice(0, count).join("_"));
+  const ids = Object.keys(hass.states);
+  let best = {};
+  prefixes.forEach((prefix) => {
+    if (Object.keys(best).length) return;
+    const found = {};
+    FIELDS.forEach((field) => {
+      const match = field.suffixes.map((suffix) => `${field.domain}.${prefix}_${suffix}`).find((candidate) => ids.includes(candidate));
+      if (match) found[field.key] = match;
+    });
+    if (Object.keys(found).length >= 3) best = found;
+  });
+  return best;
+};
+var resolveField = (config, key) => config?.[`entity_${key}`] || "";
+var el6 = (tag, className, text2) => {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text2 !== void 0) node.textContent = text2;
+  return node;
+};
+var icon5 = (name) => {
+  const node = document.createElement("ha-icon");
+  node.icon = name;
+  return node;
+};
+var SECTIONS2 = [
+  ["overview", "mdi:printer-3d", "Übersicht"],
+  ["temps", "mdi:thermometer", "Temperaturen"],
+  ["ams", "mdi:tray-full", "AMS"],
+  ["control", "mdi:gesture-tap-button", "Steuerung"],
+  ["camera", "mdi:cctv", "Kamera"]
+];
+var STYLES7 = `
+  :host { display: block; height: 100%; }
+  * { box-sizing: border-box; }
+  button { font: inherit; color: inherit; }
+
+  .card {
+    height: 100%; padding: 10px; display: flex; gap: 10px; overflow: hidden;
+    color: var(--haos-text, #fff);
+    font-family: var(--haos-font-family);
+    ${CARD_SURFACE_CSS}
+  }
+
+  .rail {
+    width: 56px; flex: 0 0 56px; border-radius: 14px; padding: 8px 0;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .07);
+  }
+  .rail button {
+    width: 38px; height: 38px; border-radius: 11px; border: 0; padding: 0;
+    display: grid; place-items: center; cursor: pointer;
+    background: none; color: rgba(var(--haos-text-rgb, 255,255,255), .45);
+    transition: background .16s ease, color .16s ease;
+  }
+  .rail button.active { background: rgba(var(--haos-text-rgb, 255,255,255), .16); color: var(--haos-text, #fff); }
+  .rail ha-icon { --mdc-icon-size: 19px; }
+
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+
+  .head { display: flex; align-items: center; gap: 8px; }
+  .head-text { flex: 1; min-width: 0; }
+  .title { font-size: 15px; font-weight: var(--haos-font-weight-medium, 500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .subtitle { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pill {
+    display: flex; align-items: center; gap: 5px; flex: 0 0 auto;
+    border-radius: 999px; padding: 5px 10px; font-size: 12px;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+    color: rgba(var(--haos-text-rgb, 255,255,255), .85);
+  }
+  .pill[hidden] { display: none; }
+  .pill.good { color: var(--haos-good, #7ee0b0); }
+  .pill.bad { color: var(--haos-bad, #ff6b6b); }
+  .pill ha-icon { --mdc-icon-size: 14px; }
+
+  .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; scrollbar-width: none; }
+  .panel::-webkit-scrollbar { display: none; }
+  .panel[hidden] { display: none; }
+  .panel.rows { gap: 0; }
+  /* Zeilenblock INNERHALB einer Tafel - bewusst ohne die Klasse panel,
+     sonst gaebe es verschachtelte Tafeln mit eigener Sichtbarkeit. */
+  .rows { display: flex; flex-direction: column; }
+  .panel-note { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
+
+  .hero { border-radius: 14px; padding: 14px; display: flex; align-items: center; gap: 16px; background: rgba(var(--haos-text-rgb, 255,255,255), .10); }
+  .hero-main { flex: 1; min-width: 0; }
+  .hero-label { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hero-value { font-size: 30px; font-weight: var(--haos-font-weight-medium, 500); line-height: 1.15; }
+  .bar { height: 6px; border-radius: 99px; margin-top: 10px; overflow: hidden; background: rgba(var(--haos-text-rgb, 255,255,255), .14); }
+  .bar span { display: block; height: 100%; width: 0; background: var(--haos-accent, #0a84ff); transition: width .3s ease; }
+  .hero-foot { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; margin-top: 5px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
+  .hero-image { width: 96px; flex: 0 0 96px; height: 96px; border-radius: 11px; display: grid; place-items: center; overflow: hidden; background: rgba(var(--haos-text-rgb, 255,255,255), .07); color: rgba(var(--haos-text-rgb, 255,255,255), .35); }
+  .hero-image img { width: 100%; height: 100%; object-fit: contain; }
+  .hero-image[hidden] { display: none; }
+  .hero-image ha-icon { --mdc-icon-size: 34px; }
+
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 2px; font-size: 13px; border-bottom: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .07); }
+  .row:last-child { border-bottom: 0; }
+  .row[hidden] { display: none; }
+  .row-label { color: rgba(var(--haos-text-rgb, 255,255,255), .6); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-value { font-weight: var(--haos-font-weight-medium, 500); flex: 0 0 auto; }
+  .row-value.good { color: var(--haos-good, #7ee0b0); }
+  .row-value.bad { color: var(--haos-bad, #ff6b6b); }
+
+  .slots { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .slot { border-radius: 12px; padding: 10px; text-align: center; background: rgba(var(--haos-text-rgb, 255,255,255), .10); }
+  .slot[hidden] { display: none; }
+  .slot.active { box-shadow: inset 0 0 0 1px var(--haos-accent, #0a84ff); }
+  .slot-dot { width: 22px; height: 22px; margin: 0 auto 6px; border-radius: 50%; background: rgba(var(--haos-text-rgb, 255,255,255), .25); }
+  .slot-name { font-size: 12px; font-weight: var(--haos-font-weight-medium, 500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .slot-label { font-size: 10px; margin-top: 2px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ctrl {
+    flex: 1 1 120px; min-width: 0; padding: 12px 10px; border: 0; border-radius: 12px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .10); color: var(--haos-text, #fff);
+    transition: background .16s ease, transform .12s ease;
+  }
+  .ctrl:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .16); }
+  .ctrl:active { transform: scale(.97); }
+  .ctrl[hidden] { display: none; }
+  .ctrl.danger { color: var(--haos-bad, #ff6b6b); }
+  .ctrl.armed { background: color-mix(in srgb, var(--haos-bad, #ff6b6b) 26%, transparent); }
+  .ctrl.on { background: color-mix(in srgb, var(--haos-accent, #0a84ff) 28%, transparent); }
+  .ctrl ha-icon { --mdc-icon-size: 22px; }
+
+  select.speed {
+    width: 100%; padding: 10px 12px; border-radius: 12px; font: inherit; color: var(--haos-text, #fff);
+    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+    border: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .14);
+  }
+  select.speed option { color: #18212a; }
+
+  .camera-wrap { flex: 1; min-height: 0; border-radius: 12px; overflow: hidden; background: rgba(0,0,0,.35); position: relative; }
+  .camera-wrap img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .camera-note { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 12px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
+  .camera-note[hidden] { display: none; }
+
+  .empty { flex: 1; display: grid; place-content: center; text-align: center; gap: 6px; padding: 16px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
+  .empty[hidden] { display: none; }
+`;
+var numberOf2 = (state) => {
+  if (!state || ["unknown", "unavailable", ""].includes(state.state)) return null;
+  const value = Number(state.state);
+  return Number.isFinite(value) ? value : null;
+};
+var unitOf2 = (state) => state?.attributes?.unit_of_measurement || "";
+var formatNumber2 = (value, digits = 0) => value === null ? "–" : value.toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+var formatMinutes = (state) => {
+  const minutes = numberOf2(state);
+  if (minutes === null) return state && !["unknown", "unavailable"].includes(state.state) ? state.state : "";
+  if (minutes < 60) return `${Math.round(minutes)} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = Math.round(minutes % 60);
+  return rest ? `${hours} h ${rest} min` : `${hours} h`;
+};
+var HaOsPrinterCard = class extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = null;
+    this._hass = null;
+    this._nodes = null;
+    this._section = "overview";
+    this._lastStates = null;
+    this._armed = false;
+  }
+  static getConfigElement() {
+    return document.createElement(EDITOR_TAG8);
+  }
+  static getStubConfig() {
+    return { type: `custom:${TAG5}` };
+  }
+  setConfig(config) {
+    if (!config || typeof config !== "object") throw new Error("Ungültige Konfiguration.");
+    this._config = { ...config };
+    if (!this._nodes) this._build();
+    this._update();
+  }
+  set hass(hass) {
+    const first = !this._hass;
+    this._hass = hass;
+    if (first || this._watchedChanged(hass)) this._update();
+  }
+  getCardSize() {
+    return 4;
+  }
+  getGridOptions() {
+    return { columns: "full", min_rows: 3 };
+  }
+  _watchedEntities() {
+    return FIELDS.map((field) => resolveField(this._config, field.key)).filter(Boolean);
+  }
+  _watchedChanged(hass) {
+    const watched = this._watchedEntities();
+    if (!watched.length) return false;
+    const previous = this._lastStates;
+    const current = new Map(watched.map((id) => [id, hass?.states?.[id]]));
+    this._lastStates = current;
+    if (!previous || previous.size !== current.size) return true;
+    for (const [id, state] of current) if (previous.get(id) !== state) return true;
+    return false;
+  }
+  _state(key) {
+    return this._hass?.states?.[resolveField(this._config, key)];
+  }
+  _build() {
+    const style = document.createElement("style");
+    style.textContent = STYLES7;
+    const card = el6("div", "card");
+    const rail = el6("div", "rail");
+    const buttons = /* @__PURE__ */ new Map();
+    SECTIONS2.forEach(([key, iconName, label]) => {
+      const button = el6("button");
+      button.append(icon5(iconName));
+      button.title = label;
+      button.setAttribute("aria-label", label);
+      button.addEventListener("click", () => {
+        this._section = key;
+        this._armed = false;
+        this._update();
+      });
+      buttons.set(key, button);
+      rail.append(button);
+    });
+    const main = el6("div", "main");
+    const head = el6("div", "head");
+    const headText = el6("div", "head-text");
+    const title = el6("div", "title");
+    const subtitle = el6("div", "subtitle");
+    headText.append(title, subtitle);
+    const statePill = el6("div", "pill");
+    const statePillIcon = icon5("mdi:printer-3d-nozzle");
+    const statePillText = el6("span");
+    statePill.append(statePillIcon, statePillText);
+    const errorPill = el6("div", "pill bad");
+    const errorPillText = el6("span");
+    errorPill.append(icon5("mdi:alert"), errorPillText);
+    head.append(headText, errorPill, statePill);
+    const overview = el6("div", "panel");
+    const hero = el6("div", "hero");
+    const heroMain = el6("div", "hero-main");
+    const heroLabel = el6("div", "hero-label", "Fortschritt");
+    const heroValue = el6("div", "hero-value", "–");
+    const bar = el6("div", "bar");
+    const barFill = el6("span");
+    bar.append(barFill);
+    const heroFoot = el6("div", "hero-foot");
+    const footLeft = el6("span");
+    const footRight = el6("span");
+    heroFoot.append(footLeft, footRight);
+    heroMain.append(heroLabel, heroValue, bar, heroFoot);
+    const heroImage = el6("div", "hero-image");
+    heroImage.append(icon5("mdi:image-outline"));
+    hero.append(heroMain, heroImage);
+    const rows = {};
+    const rowPanel = (keys, parent) => {
+      keys.forEach(({ key, label }) => {
+        const row = el6("div", "row");
+        row.append(el6("span", "row-label", label));
+        const value = el6("span", "row-value", "–");
+        row.append(value);
+        parent.append(row);
+        rows[key] = { row, value };
+      });
+    };
+    const overviewRows = el6("div", "rows");
+    rowPanel(
+      [
+        { key: "task", label: "Auftrag" },
+        { key: "stage", label: "Arbeitsschritt" },
+        { key: "remaining", label: "Restzeit" },
+        { key: "end_time", label: "Fertig um" },
+        { key: "layer_of", label: "Schicht" }
+      ],
+      overviewRows
+    );
+    overview.append(hero, overviewRows);
+    const temps = el6("div", "panel rows");
+    rowPanel(
+      [
+        { key: "nozzle_pair", label: "Düse" },
+        { key: "bed_pair", label: "Druckbett" },
+        { key: "nozzle_size", label: "Düsengröße" },
+        { key: "fan_part", label: "Bauteillüfter" },
+        { key: "fan_aux", label: "Druckraumlüfter" },
+        { key: "fan_hotend", label: "Druckkopflüfter" }
+      ],
+      temps
+    );
+    const ams = el6("div", "panel");
+    const slots = el6("div", "slots");
+    const slotNodes = [1, 2, 3, 4].map((number2) => {
+      const slot = el6("div", "slot");
+      const dot = el6("div", "slot-dot");
+      const name = el6("div", "slot-name", "–");
+      slot.append(dot, name, el6("div", "slot-label", `Slot ${number2}`));
+      slots.append(slot);
+      return { slot, dot, name };
+    });
+    const amsRows = el6("div", "rows");
+    rowPanel(
+      [
+        { key: "ams_temp", label: "Temperatur" },
+        { key: "ams_humidity", label: "Luftfeuchte" }
+      ],
+      amsRows
+    );
+    ams.append(slots, amsRows);
+    const control = el6("div", "panel");
+    const controls = el6("div", "controls");
+    const makeCtrl = (iconName, label, className = "") => {
+      const button = el6("button", `ctrl ${className}`.trim());
+      button.append(icon5(iconName), el6("span", null, label));
+      controls.append(button);
+      return button;
+    };
+    const pauseBtn = makeCtrl("mdi:pause", "Anhalten");
+    const resumeBtn = makeCtrl("mdi:play", "Fortsetzen");
+    const stopBtn = makeCtrl("mdi:stop", "Beenden", "danger");
+    const lightBtn = makeCtrl("mdi:lightbulb", "Kammerlicht");
+    const speedSelect = document.createElement("select");
+    speedSelect.className = "speed";
+    const controlNote = el6("div", "panel-note");
+    control.append(controls, speedSelect, controlNote);
+    pauseBtn.addEventListener("click", () => this._press("pause"));
+    resumeBtn.addEventListener("click", () => this._press("resume"));
+    lightBtn.addEventListener("click", () => {
+      const entity = resolveField(this._config, "light");
+      if (entity) this._hass?.callService("light", "toggle", { entity_id: entity });
+    });
+    stopBtn.addEventListener("click", () => {
+      if (!this._armed) {
+        this._armed = true;
+        this._update();
+        clearTimeout(this._armTimer);
+        this._armTimer = setTimeout(() => {
+          this._armed = false;
+          this._update();
+        }, 5e3);
+        return;
+      }
+      clearTimeout(this._armTimer);
+      this._armed = false;
+      this._press("stop");
+      this._update();
+    });
+    speedSelect.addEventListener("change", () => {
+      const entity = resolveField(this._config, "speed");
+      if (!entity) return;
+      const domain = entity.split(".")[0];
+      this._hass?.callService(domain, "select_option", { entity_id: entity, option: speedSelect.value });
+    });
+    const camera = el6("div", "panel");
+    const cameraWrap = el6("div", "camera-wrap");
+    const cameraImage = document.createElement("img");
+    cameraImage.alt = "";
+    const cameraNote = el6("div", "camera-note");
+    cameraWrap.append(cameraImage, cameraNote);
+    camera.append(cameraWrap);
+    const empty = el6("div", "empty");
+    empty.append(
+      el6("strong", null, "Noch kein Drucker gewählt"),
+      el6("span", null, "Im Editor oben eine Entität des Druckers wählen – die übrigen Felder füllen sich dann von selbst.")
+    );
+    const panels = { overview, temps, ams, control, camera };
+    Object.values(panels).forEach((panel) => main.append(panel));
+    main.prepend(head);
+    main.append(empty);
+    card.append(rail, main);
+    this._nodes = {
+      card,
+      rail,
+      buttons,
+      title,
+      subtitle,
+      statePill,
+      statePillIcon,
+      statePillText,
+      errorPill,
+      errorPillText,
+      heroValue,
+      barFill,
+      footLeft,
+      footRight,
+      heroImage,
+      rows,
+      slotNodes,
+      panels,
+      empty,
+      pauseBtn,
+      resumeBtn,
+      stopBtn,
+      lightBtn,
+      speedSelect,
+      controlNote,
+      cameraImage,
+      cameraNote
+    };
+    this.shadowRoot.replaceChildren(style, card);
+  }
+  _press(key) {
+    const entity = resolveField(this._config, key);
+    if (!entity) return;
+    const domain = entity.split(".")[0];
+    this._hass?.callService(domain, domain === "button" ? "press" : "turn_on", { entity_id: entity });
+  }
+  /** Setzt eine Zeile; ohne Wert verschwindet sie ganz. */
+  _row(key, text2, tone = "") {
+    const row = this._nodes.rows[key];
+    if (!row) return;
+    const empty = text2 === "" || text2 === null || text2 === void 0;
+    row.row.hidden = empty;
+    row.value.textContent = empty ? "" : text2;
+    row.value.classList.remove("good", "bad");
+    if (tone && !empty) row.value.classList.add(tone);
+  }
+  _update() {
+    if (!this._nodes || !this._hass) return;
+    const nodes = this._nodes;
+    nodes.buttons.forEach((button, key) => button.classList.toggle("active", key === this._section));
+    Object.entries(nodes.panels).forEach(([key, panel]) => {
+      panel.hidden = key !== this._section;
+    });
+    const configured = this._watchedEntities().length;
+    nodes.empty.hidden = configured > 0;
+    if (!configured) {
+      Object.values(nodes.panels).forEach((panel) => {
+        panel.hidden = true;
+      });
+      nodes.title.textContent = this._config?.name || "Drucker";
+      nodes.subtitle.textContent = "";
+      nodes.statePill.hidden = true;
+      nodes.errorPill.hidden = true;
+      return;
+    }
+    this._updateHead();
+    this._updateOverview();
+    this._updateTemps();
+    this._updateAms();
+    this._updateControl();
+    this._updateCamera();
+  }
+  _updateHead() {
+    const nodes = this._nodes;
+    const status = this._state("status");
+    const online = this._state("online");
+    nodes.title.textContent = this._config.name || status?.attributes?.device_name || this._deviceName() || "Drucker";
+    const stage = this._state("stage");
+    nodes.subtitle.textContent = stage && !["unknown", "unavailable"].includes(stage.state) ? stage.state : "";
+    if (status && !["unknown", "unavailable"].includes(status.state)) {
+      const running = ["printing", "running", "druckt", "drucken"].includes(String(status.state).toLowerCase());
+      nodes.statePill.hidden = false;
+      nodes.statePill.classList.toggle("good", running);
+      nodes.statePillIcon.icon = running ? "mdi:printer-3d-nozzle" : "mdi:printer-3d";
+      nodes.statePillText.textContent = status.state;
+    } else if (online) {
+      nodes.statePill.hidden = false;
+      nodes.statePill.classList.toggle("good", online.state === "on");
+      nodes.statePillText.textContent = online.state === "on" ? "Online" : "Offline";
+    } else {
+      nodes.statePill.hidden = true;
+    }
+    const error = this._state("error");
+    const hms = this._state("hms");
+    const problems = [error, hms].filter((state) => state?.state === "on").length;
+    nodes.errorPill.hidden = problems === 0;
+    nodes.errorPillText.textContent = problems > 1 ? `${problems} Fehler` : "Fehler";
+  }
+  /** Aus einer Entitäts-ID einen brauchbaren Namen ableiten, z. B. „P1S". */
+  _deviceName() {
+    const first = this._watchedEntities()[0] || "";
+    const objectId = first.split(".")[1] || "";
+    return objectId.split("_")[0]?.toUpperCase() || "";
+  }
+  _updateOverview() {
+    const nodes = this._nodes;
+    const progress = numberOf2(this._state("progress"));
+    nodes.heroValue.textContent = progress === null ? "–" : `${formatNumber2(progress)} %`;
+    nodes.barFill.style.width = progress === null ? "0%" : `${Math.max(0, Math.min(100, progress))}%`;
+    const remaining = formatMinutes(this._state("remaining"));
+    nodes.footLeft.textContent = remaining ? `noch ${remaining}` : "";
+    const end = this._state("end_time");
+    nodes.footRight.textContent = end && !["unknown", "unavailable"].includes(end.state) ? `fertig ${end.state}` : "";
+    const task = this._state("task");
+    this._row("task", task && !["unknown", "unavailable"].includes(task.state) ? task.state : "");
+    const stage = this._state("stage");
+    this._row("stage", stage && !["unknown", "unavailable"].includes(stage.state) ? stage.state : "");
+    this._row("remaining", remaining);
+    this._row("end_time", end && !["unknown", "unavailable"].includes(end.state) ? end.state : "");
+    const layer = numberOf2(this._state("layer"));
+    const layers = numberOf2(this._state("layers"));
+    this._row(
+      "layer_of",
+      layer === null && layers === null ? "" : `${formatNumber2(layer)} / ${formatNumber2(layers)}`
+    );
+    const cover = this._state("cover");
+    const picture = cover?.attributes?.entity_picture;
+    if (picture) {
+      nodes.heroImage.hidden = false;
+      let img = nodes.heroImage.firstElementChild;
+      if (img?.tagName !== "IMG") {
+        img = document.createElement("img");
+        img.alt = "";
+        nodes.heroImage.replaceChildren(img);
+      }
+      img.src = picture;
+    } else {
+      nodes.heroImage.hidden = true;
+    }
+  }
+  _updateTemps() {
+    const pair = (currentKey, targetKey) => {
+      const current = this._state(currentKey);
+      const target = this._state(targetKey);
+      const currentValue = numberOf2(current);
+      const targetValue = numberOf2(target);
+      if (currentValue === null && targetValue === null) return "";
+      const unit = unitOf2(current) || unitOf2(target) || "°C";
+      const shown = `${formatNumber2(currentValue, 0)} ${unit}`;
+      return targetValue ? `${shown} → ${formatNumber2(targetValue, 0)} ${unit}` : shown;
+    };
+    this._row("nozzle_pair", pair("nozzle", "nozzle_target"));
+    this._row("bed_pair", pair("bed", "bed_target"));
+    const size = this._state("nozzle_size");
+    this._row("nozzle_size", size && !["unknown", "unavailable"].includes(size.state) ? `${size.state} ${unitOf2(size)}`.trim() : "");
+    ["fan_part", "fan_aux", "fan_hotend"].forEach((key) => {
+      const state = this._state(key);
+      const value = numberOf2(state);
+      this._row(key, value === null ? "" : `${formatNumber2(value)} ${unitOf2(state) || "%"}`);
+    });
+  }
+  _updateAms() {
+    const active2 = this._state("ams_active");
+    const activeIndex = numberOf2(active2);
+    this._nodes.slotNodes.forEach(({ slot, dot, name }, index) => {
+      const state = this._state(`ams_slot_${index + 1}`);
+      if (!state) {
+        slot.hidden = true;
+        return;
+      }
+      slot.hidden = false;
+      const empty = ["unknown", "unavailable", "", "Empty", "leer"].includes(state.state);
+      name.textContent = empty ? "leer" : state.state;
+      const colour = state.attributes?.color || state.attributes?.colour || state.attributes?.filament_color;
+      dot.style.background = colour ? String(colour).startsWith("#") ? colour : `#${colour}` : "";
+      slot.classList.toggle("active", activeIndex !== null && activeIndex === index + 1);
+    });
+    const temp = this._state("ams_temp");
+    const tempValue = numberOf2(temp);
+    this._row("ams_temp", tempValue === null ? "" : `${formatNumber2(tempValue, 1)} ${unitOf2(temp) || "°C"}`);
+    const humidity = this._state("ams_humidity");
+    const humidityValue = numberOf2(humidity);
+    this._row(
+      "ams_humidity",
+      humidityValue === null ? humidity && !["unknown", "unavailable"].includes(humidity.state) ? humidity.state : "" : `${formatNumber2(humidityValue)} ${unitOf2(humidity) || "%"}`
+    );
+  }
+  _updateControl() {
+    const nodes = this._nodes;
+    nodes.pauseBtn.hidden = !resolveField(this._config, "pause");
+    nodes.resumeBtn.hidden = !resolveField(this._config, "resume");
+    nodes.stopBtn.hidden = !resolveField(this._config, "stop");
+    nodes.lightBtn.hidden = !resolveField(this._config, "light");
+    nodes.stopBtn.classList.toggle("armed", this._armed);
+    nodes.stopBtn.lastElementChild.textContent = this._armed ? "Wirklich beenden?" : "Beenden";
+    nodes.controlNote.textContent = this._armed ? "Noch einmal tippen beendet den Druck. Die Rückfrage verfällt nach fünf Sekunden." : "";
+    const light = this._state("light");
+    nodes.lightBtn.classList.toggle("on", light?.state === "on");
+    const speed = this._state("speed");
+    const options = speed?.attributes?.options || [];
+    nodes.speedSelect.hidden = !speed || !options.length;
+    if (speed && options.length) {
+      const current = options.join("|");
+      if (nodes.speedSelect.dataset.options !== current) {
+        nodes.speedSelect.dataset.options = current;
+        nodes.speedSelect.replaceChildren(
+          ...options.map((option) => {
+            const node = document.createElement("option");
+            node.value = option;
+            node.textContent = option;
+            return node;
+          })
+        );
+      }
+      if (nodes.speedSelect.value !== speed.state) nodes.speedSelect.value = speed.state;
+    }
+  }
+  _updateCamera() {
+    const nodes = this._nodes;
+    const camera = this._state("camera");
+    const picture = camera?.attributes?.entity_picture;
+    if (!camera) {
+      nodes.cameraNote.hidden = false;
+      nodes.cameraNote.textContent = "Keine Kamera gewählt.";
+      nodes.cameraImage.hidden = true;
+      return;
+    }
+    if (!picture || camera.state === "unavailable") {
+      nodes.cameraNote.hidden = false;
+      nodes.cameraNote.textContent = "Kamera nicht erreichbar.";
+      nodes.cameraImage.hidden = true;
+      return;
+    }
+    nodes.cameraNote.hidden = true;
+    nodes.cameraImage.hidden = false;
+    if (this._section !== "camera") {
+      if (nodes.cameraImage.getAttribute("src")) nodes.cameraImage.removeAttribute("src");
+      clearInterval(this._cameraTimer);
+      this._cameraTimer = null;
+      return;
+    }
+    const paint = () => {
+      nodes.cameraImage.src = `${picture}${picture.includes("?") ? "&" : "?"}_=${Date.now()}`;
+    };
+    paint();
+    if (!this._cameraTimer) this._cameraTimer = setInterval(paint, 5e3);
+  }
+  disconnectedCallback() {
+    clearInterval(this._cameraTimer);
+    this._cameraTimer = null;
+    clearTimeout(this._armTimer);
+  }
+};
+if (!customElements.get(TAG5)) customElements.define(TAG5, HaOsPrinterCard);
+registerCard({
+  type: TAG5,
+  name: "HA-OS Drucker",
+  description: "3D-Drucker (Bambu Lab) – Fortschritt, Temperaturen, AMS, Steuerung und Kamera.",
+  preview: false
+});
+
+// src/cards/printer-editor.js
+var EDITOR_TAG9 = EDITOR_TAG8;
+var SECTION_LABELS = {
+  overview: "Übersicht",
+  temps: "Temperaturen",
+  ams: "AMS",
+  control: "Steuerung",
+  camera: "Kamera"
+};
+var SECTION_ICONS = {
+  overview: "M12,2A10,10 0 1,0 22,12A10,10 0 0,0 12,2Z",
+  temps: "M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2Z",
+  ams: "M4,4H20V8H4V4M4,10H20V14H4V10M4,16H20V20H4V16Z",
+  control: "M12,18.5A6.5,6.5 0 0,1 5.5,12A6.5,6.5 0 0,1 12,5.5A6.5,6.5 0 0,1 18.5,12A6.5,6.5 0 0,1 12,18.5Z",
+  camera: "M4,4H7L9,2H15L17,4H20A2,2 0 0,1 22,6V18A2,2 0 0,1 20,20H4A2,2 0 0,1 2,18V6A2,2 0 0,1 4,4Z"
+};
+var LABELS4 = {
+  entity: "Drucker",
+  name: "Name"
+};
+var HELPERS4 = {
+  entity: "Eine beliebige Entität des Druckers. Beim Wählen werden die übrigen Felder einmalig gefüllt – ändern lässt sich danach jedes einzeln.",
+  name: "Leer lassen für den Namen aus Home Assistant."
+};
+FIELDS.forEach((field) => {
+  LABELS4[`entity_${field.key}`] = field.label;
+});
+var sectionsOf = (fields) => {
+  const order = ["overview", "temps", "ams", "control", "camera"];
+  return order.map((section) => ({ section, items: fields.filter((field) => field.section === section) })).filter(({ items }) => items.length);
+};
+var buildSchema2 = () => [
+  { name: "entity", selector: { entity: {} } },
+  { name: "name", selector: { text: {} } },
+  ...sectionsOf(FIELDS).map(({ section, items }) => ({
+    name: section,
+    type: "expandable",
+    flatten: true,
+    iconPath: SECTION_ICONS[section],
+    schema: items.map((field) => ({
+      name: `entity_${field.key}`,
+      selector: { entity: field.domain ? { domain: field.domain } : {} }
+    }))
+  }))
+];
+var SECTION_TITLES = Object.fromEntries(
+  Object.entries(SECTION_LABELS).map(([key, label]) => [key, label])
+);
+var HaOsPrinterEditor = class extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = {};
+    this._hass = null;
+    this._form = null;
+    this._hint = null;
+  }
+  setConfig(config) {
+    const next = { ...config };
+    if (isEqualConfig(next, this._config) && this._form) return;
+    this._config = next;
+    if (!this._form) {
+      this._build();
+      return;
+    }
+    this._form.data = this._config;
+    this._paintHint();
+  }
+  set hass(hass) {
+    this._hass = hass;
+    if (this._form) this._form.hass = hass;
+    this._paintHint();
+  }
+  get hass() {
+    return this._hass;
+  }
+  _filled() {
+    return FIELDS.filter((field) => this._config[`entity_${field.key}`]).length;
+  }
+  _paintHint() {
+    if (!this._hint) return;
+    const filled = this._filled();
+    if (!filled) {
+      this._hint.textContent = "Oben eine Entität des Druckers wählen – die übrigen Felder werden dann einmalig gefüllt.";
+      return;
+    }
+    this._hint.textContent = `${filled} von ${FIELDS.length} Werten gesetzt. Jedes Feld lässt sich einzeln ändern.`;
+  }
+  _build() {
+    const style = document.createElement("style");
+    style.textContent = `
+      :host { display: block; }
+      .hint { margin: 0 0 12px; font-size: 12px; line-height: 1.45; color: var(--secondary-text-color); }
+    `;
+    this._hint = document.createElement("p");
+    this._hint.className = "hint";
+    const form = document.createElement("ha-form");
+    form.hass = this._hass;
+    form.data = this._config;
+    form.schema = buildSchema2();
+    form.computeLabel = (field) => LABELS4[field.name] || SECTION_TITLES[field.name] || field.name;
+    form.computeHelper = (field) => HELPERS4[field.name] || "";
+    form.addEventListener("value-changed", (event) => {
+      event.stopPropagation();
+      let value = { ...event.detail.value };
+      if (value.entity && value.entity !== this._config.entity) {
+        const guessed = guessEntities(value.entity, this._hass);
+        Object.entries(guessed).forEach(([key, entityId]) => {
+          if (!value[`entity_${key}`]) value[`entity_${key}`] = entityId;
+        });
+      }
+      Object.keys(value).forEach((key) => {
+        if (value[key] === "" || value[key] === void 0) delete value[key];
+      });
+      this._config = value;
+      this._form.data = value;
+      this._paintHint();
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: value }, bubbles: true, composed: true }));
+    });
+    this._form = form;
+    this.shadowRoot.replaceChildren(style, this._hint, form);
+    this._paintHint();
+  }
+};
+if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
+
 // src/ha-os.js
-var VERSION = "0.15.3";
+var VERSION = "0.16.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",
@@ -5587,6 +6429,8 @@ console.info(
 );
 export {
   CARD_TYPES,
+  FIELDS as PRINTER_FIELDS,
   VERSION,
+  guessEntities,
   uploadImage
 };

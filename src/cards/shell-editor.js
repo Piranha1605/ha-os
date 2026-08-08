@@ -909,6 +909,17 @@ class HaOsShellEditor extends HTMLElement {
       }, true)
     );
 
+    const addPrinter = el("button", "add");
+    addPrinter.append(icon("mdi:printer-3d"), el("span", null, "Drucker"));
+    addPrinter.addEventListener("click", () =>
+      this._mutate((draft) => {
+        draft.pages[pageIndex].grids[columnIndex].cards.push({
+          type: "custom:ha-os-printer",
+          haos_weight: 3,
+        });
+      }, true)
+    );
+
     const addOther = el("button", "add");
     addOther.append(icon("mdi:view-dashboard-outline"), el("span", null, "Andere Karte wählen"));
     addOther.addEventListener("click", () => {
@@ -917,7 +928,7 @@ class HaOsShellEditor extends HTMLElement {
       this._renderPanels();
     });
 
-    addRow.append(addOwn, addGrid, addVehicle, addOther);
+    addRow.append(addOwn, addGrid, addVehicle, addPrinter, addOther);
     wrap.append(addRow);
 
     if (this._openPicker === `picker-${pageIndex}-${columnIndex}`) {

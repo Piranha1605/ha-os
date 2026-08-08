@@ -21,13 +21,14 @@
  *   custom:ha-os-card   – generische Karte mit Typ-Auswahl
  *   custom:ha-os-grid   – 2×2-Raster mit vier frei belegbaren Plätzen
  *   custom:ha-os-vehicle – Fahrzeugübersicht für Mercedes (mbapi2020)
+ *   custom:ha-os-printer – 3D-Drucker (Bambu Lab)
  *
  * Das alte glass-dashboard bleibt vollständig unberührt und kann parallel
  * geladen werden: alle Element-Namen, CSS-Variablen und Speicherschlüssel
  * sind verschieden.
  */
 
-export const VERSION = "0.15.3";
+export const VERSION = "0.16.0";
 
 import "./shared/theme.js";
 import "./cards/shell-card.js";
@@ -38,11 +39,14 @@ import "./cards/grid-card.js";
 import "./cards/grid-editor.js";
 import "./cards/vehicle-card.js";
 import "./cards/vehicle-editor.js";
+import "./cards/printer-card.js";
+import "./cards/printer-editor.js";
 
 export { CARD_TYPES } from "./cards/haos-card.js";
 // Für die Tests: der Upload wird sonst nur über eine Dateiauswahl erreichbar,
 // die sich in jsdom nicht sinnvoll füllen lässt.
 export { uploadImage } from "./shared/utils.js";
+export { guessEntities, FIELDS as PRINTER_FIELDS } from "./cards/printer-card.js";
 
 console.info(
   `%c HA-OS %c ${VERSION} `,

@@ -19,6 +19,12 @@ export const THEME_DEFAULTS = Object.freeze({
   backgroundDark: "",
   backgroundDim: 0,
 
+  // Textfarbe, getrennt fuer Hell und Dunkel. Sie gilt fuer ALLE Karten:
+  // Beschriftungen, Werte und Symbole leiten ihre Abstufungen davon ab, damit
+  // nicht jede Karte ihre eigene Graustufe mitbringt.
+  textLight: "#18212a",
+  textDark: "#ffffff",
+
   // Hintergrundkarte = die grosse Glasflaeche der Shell
   cardSurface: "#ffffff",
   cardOpacity: 10,
@@ -122,6 +128,8 @@ export const normalizeTheme = (settings = {}) => ({
   backgroundLight: imageUrl(settings.backgroundLight),
   backgroundDark: imageUrl(settings.backgroundDark),
   backgroundDim: clamp(settings.backgroundDim, 0, 80, THEME_DEFAULTS.backgroundDim),
+  textLight: color(settings.textLight, THEME_DEFAULTS.textLight),
+  textDark: color(settings.textDark, THEME_DEFAULTS.textDark),
 
   cardSurface: color(settings.cardSurface, THEME_DEFAULTS.cardSurface),
   cardOpacity: clamp(settings.cardOpacity, 0, 95, THEME_DEFAULTS.cardOpacity),
@@ -172,9 +180,9 @@ const apply = (settings) => {
 
   const values = {
     "--haos-color-scheme": t.mode,
-    "--haos-text": light ? "#18212a" : "#ffffff",
-    "--haos-text-rgb": light ? "24, 33, 42" : "255, 255, 255",
-    "--haos-text-inverse": light ? "#ffffff" : "#18212a",
+    "--haos-text": light ? t.textLight : t.textDark,
+    "--haos-text-rgb": hexToRgb(light ? t.textLight : t.textDark),
+    "--haos-text-inverse": light ? t.textDark : t.textLight,
     "--haos-font-family":
       "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif",
     "--haos-font-weight-normal": "450",

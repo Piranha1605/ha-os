@@ -24,6 +24,8 @@ globalThis.history = dom.window.history;
 globalThis.localStorage = dom.window.localStorage;
 if (!globalThis.structuredClone) globalThis.structuredClone = (v) => JSON.parse(JSON.stringify(v));
 
+const cssVar = (name) => document.documentElement.style.getPropertyValue(name);
+
 let failures = 0;
 const check = (name, condition, detail = "") => {
   if (condition) {
@@ -114,9 +116,10 @@ check("ha-os-card-editor registriert", Boolean(customElements.get("ha-os-card-ed
 check("ha-os-grid registriert", Boolean(customElements.get("ha-os-grid")));
 check("ha-os-grid-editor registriert", Boolean(customElements.get("ha-os-grid-editor")));
 check("ha-os-vehicle registriert", Boolean(customElements.get("ha-os-vehicle")));
+check("ha-os-printer registriert", Boolean(customElements.get("ha-os-printer")));
 check(
-  "alle vier Karten im HA-Auswahldialog",
-  ["ha-os-shell", "ha-os-card", "ha-os-grid", "ha-os-vehicle"].every((type) =>
+  "alle fuenf Karten im HA-Auswahldialog",
+  ["ha-os-shell", "ha-os-card", "ha-os-grid", "ha-os-vehicle", "ha-os-printer"].every((type) =>
     window.customCards?.some((entry) => entry.type === type)
   ),
   `gefunden: ${window.customCards?.map((c) => c.type).join(", ")}`
@@ -351,6 +354,22 @@ check("Einstellungsseite geöffnet", Boolean(root.querySelector(".settings")));
 check("keine Popup-Dialoge", document.querySelectorAll("dialog").length === 0);
 check("Regler vorhanden", root.querySelectorAll('.control input[type="range"]').length > 5);
 check("Farbwähler vorhanden", root.querySelectorAll('.control input[type="color"]').length >= 5);
+// Der native Farbfleck laesst sich nicht zuverlaessig rund bekommen, deshalb
+// zeichnet die Shell den Kreis selbst und legt das Bedienelement darueber.
+check("Farbwähler sitzen in einem runden Traeger",
+  root.querySelectorAll(".swatch input[type=\"color\"]").length ===
+    root.querySelectorAll('.control input[type="color"]').length);
+check("Traeger zeigt die Farbe",
+  root.querySelector(".swatch").style.getPropertyValue("--swatch-color").length > 0,
+  root.querySelector(".swatch").style.getPropertyValue("--swatch-color") || "(leer)");
+// Die Textfarbe war fest verdrahtet. Jetzt kommt sie aus dem Theme und gilt
+// fuer alle Karten - auch die Abstufungen, die ueber --haos-text-rgb laufen.
+window.HaOsTheme.save({ mode: "dark", textDark: "#ffcc00" });
+check("Textfarbe wirkt", cssVar("--haos-text") === "#ffcc00", cssVar("--haos-text"));
+check("Abstufungen folgen mit", cssVar("--haos-text-rgb") === "255, 204, 0", cssVar("--haos-text-rgb"));
+window.HaOsTheme.save({ mode: "light", textLight: "#223344" });
+check("Hell hat eine eigene Farbe", cssVar("--haos-text") === "#223344", cssVar("--haos-text"));
+window.HaOsTheme.save({ mode: "dark", textDark: "#ffffff", textLight: "#18212a" });
 
 // Die Bildauswahl hing frueher an `ha-selector`. War das Element beim Bauen
 // der Seite noch nicht geladen - reine Zeitfrage -, fehlte sie ganz, ohne
@@ -388,7 +407,6 @@ check(
 );
 
 // Hintergrundbild, getrennt fuer Hell und Dunkel.
-const cssVar = (name) => document.documentElement.style.getPropertyValue(name);
 check("Bildschicht vorhanden", Boolean(root.querySelector(".wallpaper")));
 check("Pfadfeld fuer eigene Bilder vorhanden",
   root.querySelectorAll(".control.stacked input.path").length === 2,
@@ -508,8 +526,8 @@ check("Rasterwechsel schliesst die offene Karte",
 const knoepfe = [...shellEditor.shadowRoot.querySelectorAll(".add")].map((b) => b.textContent);
 // Die Fahrzeugkarte ist kein Typ von ha-os-card und taucht deshalb nicht in
 // dessen Typenliste auf – ohne eigenen Knopf waere sie praktisch versteckt.
-check("vier Knoepfe zum Hinzufuegen im Raster",
-  ["HA-OS Karte", "2×2", "Fahrzeug", "Andere Karte"].every((t) => knoepfe.some((k) => k.includes(t))),
+check("fuenf Knoepfe zum Hinzufuegen im Raster",
+  ["HA-OS Karte", "2×2", "Fahrzeug", "Drucker", "Andere Karte"].every((t) => knoepfe.some((k) => k.includes(t))),
   knoepfe.join(" | "));
 
 reiter[0].click();
