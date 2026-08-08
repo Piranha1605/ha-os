@@ -34,6 +34,7 @@ const LABELS = {
   kind: "Seitentyp",
   url: "Adresse",
   hide_ha_chrome: "HA-Kopfzeile im Rahmen ausblenden",
+  frame_height: "Höhe des Rahmens in px",
   entity: "Entität",
   show_state: "Zustand anzeigen",
   tap_action: "Tippen",
@@ -47,6 +48,9 @@ const HELPERS = {
   row_height: "Grundhöhe einer Karte mit Höhenfaktor 1.",
   fullscreen_entity: "Ein input_boolean, das den Vollbildmodus schaltet. Leer lassen, um den Knopf auszublenden.",
   users: "Leer lassen, um automatisch alle person-Entitäten anzuzeigen.",
+  frame_height:
+    "0 füllt die ganze Seite. Für eine eingebettete Ansicht mit einer einzigen Karte ist ein fester Wert meist besser – sonst wird die Karte über die volle Höhe gezogen.",
+  hide_ha_chrome: "Blendet Kopfzeile und Seitenleiste von Home Assistant im Rahmen aus.",
 };
 
 /** Nur die Maße der Shell. */
@@ -85,6 +89,7 @@ const PAGE_SCHEMA = [
 const IFRAME_SCHEMA = [
   { name: "url", selector: { text: {} } },
   { name: "hide_ha_chrome", selector: { boolean: {} } },
+  { name: "frame_height", selector: { number: { min: 0, max: 2000, step: 10, mode: "box" } } },
 ];
 
 const BADGE_SCHEMA = [

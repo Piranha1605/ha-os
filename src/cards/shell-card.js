@@ -194,7 +194,12 @@ const STYLES = `
 
   /* ---------- iFrame-Seite ---------- */
   .frame-page { grid-column: 1 / -1; min-width: 0; min-height: 0; overflow: hidden; ${ENTITY_SURFACE_CSS} }
-  .frame-page iframe { width: 100%; height: 100%; min-height: 60vh; border: 0; display: block; background: #fff; }
+  /* Ohne feste Höhe füllt der Rahmen die Seite. Ist eine Höhe eingestellt,
+     wird er genau so hoch und richtet sich oben aus – die frühere
+     frühere Mindesthöhe hätte jede kleinere Angabe überstimmt. */
+  .frame-page { align-content: start; }
+  .frame-page iframe { width: 100%; height: 100%; min-height: 0; border: 0; display: block; background: #fff; }
+  .frame-page.fixed { height: auto; }
   .frame-empty { display: grid; place-content: center; gap: 8px; text-align: center; padding: 40px; color: rgba(var(--haos-text-rgb, 255,255,255), .68); }
   .frame-empty ha-icon { margin: auto; --mdc-icon-size: 30px; }
 
@@ -770,6 +775,12 @@ class HaOsShell extends HTMLElement {
     frame.title = page.name;
     frame.setAttribute("loading", "eager");
     frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+
+    if (page.frame_height) {
+      container.classList.add("fixed");
+      frame.style.height = `${page.frame_height}px`;
+    }
+
     container.append(frame);
     entry.root.append(container);
 
@@ -801,10 +812,16 @@ class HaOsShell extends HTMLElement {
     }
     if (!doc?.documentElement || typeof MutationObserver === "undefined") return;
 
+    // `.header` ist der entscheidende Eintrag: Home Assistant nennt die
+    // Kopfzeile einer Lovelace-Ansicht heute so, nicht mehr `app-header`.
+    // Ohne ihn blieb oben ein Streifen mit den Bearbeiten-Symbolen stehen.
+    // Dasselbe Ziel verfolgt kiosk-mode mit derselben Klasse.
     const css = `
       :host { --app-drawer-width: 0px !important; --ha-sidebar-width: 0px !important; --header-height: 0px !important; }
-      ha-sidebar, app-header, ha-menu-button, [slot="app-header"] { display: none !important; }
+      ha-sidebar, app-header, ha-menu-button, [slot="app-header"],
+      .header, .toolbar, app-toolbar, ha-top-app-bar-fixed .mdc-top-app-bar { display: none !important; }
       #main, #content, main, .mdc-drawer-app-content { margin-left: 0 !important; padding-top: 0 !important; }
+      hui-view, #view { padding-top: 0 !important; }
     `;
 
     const seen = new WeakSet();
@@ -816,7 +833,7 @@ class HaOsShell extends HTMLElement {
         style.textContent = css;
         (root === doc ? doc.head || doc.documentElement : root).append?.(style);
       }
-      root.querySelectorAll("ha-sidebar, app-header, ha-menu-button").forEach((node) =>
+      root.querySelectorAll("ha-sidebar, app-header, ha-menu-button, .header, .toolbar, app-toolbar").forEach((node) =>
         node.style.setProperty("display", "none", "important")
       );
       root.querySelectorAll("*").forEach((node) => node.shadowRoot && observe(node.shadowRoot));

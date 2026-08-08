@@ -276,6 +276,25 @@ tabs[2].dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
 await new Promise((resolve) => setTimeout(resolve, 30));
 check("iFrame-Seite erzeugt", Boolean(root.querySelector('.page[data-page-id="extern"] iframe')));
 
+// Ohne Hoehenangabe fuellt der Rahmen die Seite. Frueher stand zusaetzlich
+// min-height: 60vh im Stil - eine kleinere Angabe waere davon still
+// ueberstimmt worden.
+const rahmen = root.querySelector('.page[data-page-id="extern"] iframe');
+check("ohne Angabe keine feste Hoehe", rahmen.style.height === "", `"${rahmen.style.height}"`);
+check("keine min-height mehr im Stil", !shell.shadowRoot.querySelector("style").textContent.includes("60vh"));
+
+const mitHoehe = JSON.parse(JSON.stringify(shellConfig));
+mitHoehe.pages[2].frame_height = 320;
+shell.setConfig(mitHoehe);
+await new Promise((resolve) => setTimeout(resolve, 20));
+const fest = root.querySelector('.page[data-page-id="extern"] iframe')
+  || shell.shadowRoot.querySelector('.page[data-page-id="extern"] iframe');
+check("eingestellte Hoehe wird gesetzt", fest.style.height === "320px", `"${fest.style.height}"`);
+check("Seite waechst nicht mit", Boolean(fest.closest(".frame-page")?.classList.contains("fixed")));
+
+shell.setConfig(shellConfig);
+await new Promise((resolve) => setTimeout(resolve, 20));
+
 // ---------------------------------------------------------------- Einstellungen
 
 console.log("\n6. Interne Einstellungsseite");

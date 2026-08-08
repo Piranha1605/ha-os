@@ -109,6 +109,10 @@ const normalizePage = (page, index, used) => {
     kind,
     url: kind === "iframe" ? raw.url || "" : "",
     hide_ha_chrome: kind === "iframe" && Boolean(raw.hide_ha_chrome),
+    // Höhe des Rahmens in Pixeln. 0 heisst: volle Höhe der Seite. Ohne diese
+    // Angabe füllte der Rahmen immer die ganze Seite, und eine eingebettete
+    // Ansicht mit einer einzigen Karte wurde dadurch übermässig hoch.
+    frame_height: kind === "iframe" ? clampNumber(raw.frame_height, 0, 2000, 0) : 0,
     badges: (Array.isArray(raw.badges) ? raw.badges : []).map((badge, badgeIndex) =>
       normalizeBadge(badge, badgeIndex, badgeIds)
     ),

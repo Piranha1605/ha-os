@@ -1,4 +1,4 @@
-/* HA-OS 0.13.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.14.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -540,6 +540,10 @@ var normalizePage = (page, index, used) => {
     kind,
     url: kind === "iframe" ? raw.url || "" : "",
     hide_ha_chrome: kind === "iframe" && Boolean(raw.hide_ha_chrome),
+    // Höhe des Rahmens in Pixeln. 0 heisst: volle Höhe der Seite. Ohne diese
+    // Angabe füllte der Rahmen immer die ganze Seite, und eine eingebettete
+    // Ansicht mit einer einzigen Karte wurde dadurch übermässig hoch.
+    frame_height: kind === "iframe" ? clampNumber(raw.frame_height, 0, 2e3, 0) : 0,
     badges: (Array.isArray(raw.badges) ? raw.badges : []).map(
       (badge, badgeIndex) => normalizeBadge(badge, badgeIndex, badgeIds)
     ),
@@ -735,7 +739,12 @@ var STYLES = `
 
   /* ---------- iFrame-Seite ---------- */
   .frame-page { grid-column: 1 / -1; min-width: 0; min-height: 0; overflow: hidden; ${ENTITY_SURFACE_CSS} }
-  .frame-page iframe { width: 100%; height: 100%; min-height: 60vh; border: 0; display: block; background: #fff; }
+  /* Ohne feste Höhe füllt der Rahmen die Seite. Ist eine Höhe eingestellt,
+     wird er genau so hoch und richtet sich oben aus – die frühere
+     frühere Mindesthöhe hätte jede kleinere Angabe überstimmt. */
+  .frame-page { align-content: start; }
+  .frame-page iframe { width: 100%; height: 100%; min-height: 0; border: 0; display: block; background: #fff; }
+  .frame-page.fixed { height: auto; }
   .frame-empty { display: grid; place-content: center; gap: 8px; text-align: center; padding: 40px; color: rgba(var(--haos-text-rgb, 255,255,255), .68); }
   .frame-empty ha-icon { margin: auto; --mdc-icon-size: 30px; }
 
@@ -1200,6 +1209,10 @@ var HaOsShell = class extends HTMLElement {
     frame.title = page.name;
     frame.setAttribute("loading", "eager");
     frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+    if (page.frame_height) {
+      container.classList.add("fixed");
+      frame.style.height = `${page.frame_height}px`;
+    }
     container.append(frame);
     entry.root.append(container);
     if (page.hide_ha_chrome && this._isInternalUrl(frame.src)) {
@@ -1228,8 +1241,10 @@ var HaOsShell = class extends HTMLElement {
     if (!doc?.documentElement || typeof MutationObserver === "undefined") return;
     const css = `
       :host { --app-drawer-width: 0px !important; --ha-sidebar-width: 0px !important; --header-height: 0px !important; }
-      ha-sidebar, app-header, ha-menu-button, [slot="app-header"] { display: none !important; }
+      ha-sidebar, app-header, ha-menu-button, [slot="app-header"],
+      .header, .toolbar, app-toolbar, ha-top-app-bar-fixed .mdc-top-app-bar { display: none !important; }
       #main, #content, main, .mdc-drawer-app-content { margin-left: 0 !important; padding-top: 0 !important; }
+      hui-view, #view { padding-top: 0 !important; }
     `;
     const seen = /* @__PURE__ */ new WeakSet();
     const refresh = (root) => {
@@ -1240,7 +1255,7 @@ var HaOsShell = class extends HTMLElement {
         style.textContent = css;
         (root === doc ? doc.head || doc.documentElement : root).append?.(style);
       }
-      root.querySelectorAll("ha-sidebar, app-header, ha-menu-button").forEach(
+      root.querySelectorAll("ha-sidebar, app-header, ha-menu-button, .header, .toolbar, app-toolbar").forEach(
         (node) => node.style.setProperty("display", "none", "important")
       );
       root.querySelectorAll("*").forEach((node) => node.shadowRoot && observe(node.shadowRoot));
@@ -1679,6 +1694,7 @@ var LABELS = {
   kind: "Seitentyp",
   url: "Adresse",
   hide_ha_chrome: "HA-Kopfzeile im Rahmen ausblenden",
+  frame_height: "Höhe des Rahmens in px",
   entity: "Entität",
   show_state: "Zustand anzeigen",
   tap_action: "Tippen"
@@ -1689,7 +1705,9 @@ var HELPERS = {
   gap: "Gilt gleichmäßig waagerecht und senkrecht.",
   row_height: "Grundhöhe einer Karte mit Höhenfaktor 1.",
   fullscreen_entity: "Ein input_boolean, das den Vollbildmodus schaltet. Leer lassen, um den Knopf auszublenden.",
-  users: "Leer lassen, um automatisch alle person-Entitäten anzuzeigen."
+  users: "Leer lassen, um automatisch alle person-Entitäten anzuzeigen.",
+  frame_height: "0 füllt die ganze Seite. Für eine eingebettete Ansicht mit einer einzigen Karte ist ein fester Wert meist besser – sonst wird die Karte über die volle Höhe gezogen.",
+  hide_ha_chrome: "Blendet Kopfzeile und Seitenleiste von Home Assistant im Rahmen aus."
 };
 var APPEARANCE_SCHEMA = [
   { name: "gap", selector: { number: { min: 0, max: 48, step: 1, mode: "slider" } } },
@@ -1721,7 +1739,8 @@ var PAGE_SCHEMA = [
 ];
 var IFRAME_SCHEMA = [
   { name: "url", selector: { text: {} } },
-  { name: "hide_ha_chrome", selector: { boolean: {} } }
+  { name: "hide_ha_chrome", selector: { boolean: {} } },
+  { name: "frame_height", selector: { number: { min: 0, max: 2e3, step: 10, mode: "box" } } }
 ];
 var BADGE_SCHEMA = [
   { name: "entity", selector: { entity: {} } },
@@ -5466,7 +5485,7 @@ var HaOsVehicleEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG7)) customElements.define(EDITOR_TAG7, HaOsVehicleEditor);
 
 // src/ha-os.js
-var VERSION = "0.13.0";
+var VERSION = "0.14.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",
