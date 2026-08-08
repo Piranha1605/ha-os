@@ -1,4 +1,4 @@
-/* HA-OS 0.21.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.22.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -3262,6 +3262,29 @@ var STYLES3 = `
   }
   .media-controls button.is-active { color: var(--haos-accent, #0a84ff); }
 
+  /* --- Lautstaerke --- */
+  .volume { display: flex; align-items: center; gap: 9px; }
+  .volume[hidden] { display: none; }
+  .mute {
+    width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%; display: grid; place-items: center;
+    color: rgba(var(--haos-text-rgb, 255,255,255), .75);
+    ${CONTROL_SURFACE_CSS}
+  }
+  .mute[hidden] { display: none; }
+  .mute.is-active { color: var(--haos-accent, #0a84ff); }
+  .mute ha-icon { --mdc-icon-size: 17px; }
+  .volume-track {
+    position: relative; flex: 1; height: 10px; border-radius: 99px; overflow: hidden;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .16);
+  }
+  .volume-track[hidden] { display: none; }
+  .volume-track span { display: block; height: 100%; width: 0; background: var(--haos-accent, #0a84ff); transition: width .18s ease; }
+  .volume-track input[type="range"] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
+  .volume-value { flex: 0 0 auto; font-size: 11px; min-width: 38px; text-align: right; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
+  .volume-value[hidden] { display: none; }
+  select.source { font-size: 12px; padding: 7px 10px; }
+  select.source[hidden] { display: none; }
+
   /* --- Mitglieder --- */
   .members { display: flex; align-items: center; }
   .member { width: 40px; height: 40px; margin-left: -10px; border-radius: 50%; overflow: hidden; border: 2px solid rgba(var(--haos-card-surface-rgb, 255,255,255), .35); display: grid; place-items: center; background: rgba(var(--haos-text-rgb, 255,255,255), .12); font-size: 11px; font-weight: 800; }
@@ -3988,7 +4011,43 @@ var renderers = {
       ctx.nodes.repeat = repeat;
       ctx.nodes.mediaButtons = [shuffle, previous, play, next, repeat];
       controls.append(...ctx.nodes.mediaButtons.map((b) => b.node));
-      root.append(head, ctx.nodes.progress, times, controls);
+      const volumeRow = el3("div", "volume");
+      ctx.nodes.muteButton = el3("button", "mute");
+      ctx.nodes.muteIcon = icon2("mdi:volume-high");
+      ctx.nodes.muteButton.append(ctx.nodes.muteIcon);
+      ctx.nodes.muteButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const muted = ctx.hass?.states?.[ctx.config.entity]?.attributes?.is_volume_muted === true;
+        call("volume_mute", { is_volume_muted: !muted });
+      });
+      const volumeTrack = el3("div", "volume-track");
+      ctx.nodes.volumeFill = el3("span");
+      ctx.nodes.volumeInput = document.createElement("input");
+      ctx.nodes.volumeInput.type = "range";
+      ctx.nodes.volumeInput.min = "0";
+      ctx.nodes.volumeInput.max = "100";
+      ctx.nodes.volumeInput.step = "1";
+      volumeTrack.append(ctx.nodes.volumeFill, ctx.nodes.volumeInput);
+      ctx.nodes.volumeValue = el3("span", "volume-value", "–");
+      ctx.nodes.volumeInput.addEventListener("input", (event) => {
+        event.stopPropagation();
+        ctx.nodes.volumeFill.style.width = `${ctx.nodes.volumeInput.value}%`;
+        ctx.nodes.volumeValue.textContent = `${ctx.nodes.volumeInput.value} %`;
+      });
+      ctx.nodes.volumeInput.addEventListener("change", (event) => {
+        event.stopPropagation();
+        call("volume_set", { volume_level: Number(ctx.nodes.volumeInput.value) / 100 });
+      });
+      volumeRow.append(ctx.nodes.muteButton, volumeTrack, ctx.nodes.volumeValue);
+      ctx.nodes.volumeRow = volumeRow;
+      ctx.nodes.sourceSelect = document.createElement("select");
+      ctx.nodes.sourceSelect.className = "dropdown source";
+      ctx.nodes.sourceSelect.addEventListener("click", (event) => event.stopPropagation());
+      ctx.nodes.sourceSelect.addEventListener("change", (event) => {
+        event.stopPropagation();
+        call("select_source", { source: ctx.nodes.sourceSelect.value });
+      });
+      root.append(head, ctx.nodes.progress, times, controls, volumeRow, ctx.nodes.sourceSelect);
       return root;
     },
     update(ctx) {
@@ -3996,13 +4055,18 @@ var renderers = {
       const attributes = state?.attributes || {};
       ctx.nodes.track.textContent = attributes.media_title || ctx.config.name || friendlyName(ctx.config.entity, state);
       ctx.nodes.artist.textContent = attributes.media_artist || attributes.media_series_title || state?.state || "";
-      const picture = attributes.entity_picture || "";
+      const picture = attributes.entity_picture || attributes.entity_picture_local || (attributes.media_image_remotely_accessible ? attributes.media_image_url : "") || "";
       if (picture !== ctx.nodes.artUrl) {
         ctx.nodes.artUrl = picture;
         if (picture) {
           const img = document.createElement("img");
-          img.src = picture;
           img.alt = "";
+          img.addEventListener("error", () => {
+            if (ctx.nodes.artUrl !== picture) return;
+            ctx.nodes.artUrl = "";
+            ctx.nodes.art.replaceChildren(ctx.nodes.artIcon);
+          });
+          img.src = picture;
           ctx.nodes.art.replaceChildren(img);
         } else {
           ctx.nodes.art.replaceChildren(ctx.nodes.artIcon);
@@ -4026,6 +4090,43 @@ var renderers = {
       const repeat = attributes.repeat || "off";
       ctx.nodes.repeat?.node.classList.toggle("is-active", repeat !== "off");
       ctx.nodes.repeat?.node.querySelector("ha-icon")?.setAttribute("icon", repeat === "one" ? "mdi:repeat-once" : "mdi:repeat");
+      const kann = (bit) => (features & bit) === bit;
+      ctx.nodes.volumeRow.hidden = !kann(MEDIA_FEATURE.VOLUME_SET) && !kann(MEDIA_FEATURE.VOLUME_MUTE);
+      ctx.nodes.muteButton.hidden = !kann(MEDIA_FEATURE.VOLUME_MUTE);
+      ctx.nodes.volumeInput.parentElement.hidden = !kann(MEDIA_FEATURE.VOLUME_SET);
+      ctx.nodes.volumeValue.hidden = !kann(MEDIA_FEATURE.VOLUME_SET);
+      const muted = attributes.is_volume_muted === true;
+      ctx.nodes.muteIcon.icon = muted ? "mdi:volume-off" : "mdi:volume-high";
+      ctx.nodes.muteButton.classList.toggle("is-active", muted);
+      const level = Number(attributes.volume_level);
+      if (Number.isFinite(level)) {
+        const prozent = Math.round(level * 100);
+        if (document.activeElement !== ctx.nodes.volumeInput) {
+          ctx.nodes.volumeInput.value = String(prozent);
+          ctx.nodes.volumeFill.style.width = `${prozent}%`;
+        }
+        ctx.nodes.volumeValue.textContent = muted ? "stumm" : `${prozent} %`;
+      } else {
+        ctx.nodes.volumeValue.textContent = muted ? "stumm" : "–";
+      }
+      const sources = Array.isArray(attributes.source_list) ? attributes.source_list : [];
+      ctx.nodes.sourceSelect.hidden = !kann(MEDIA_FEATURE.SELECT_SOURCE) || !sources.length;
+      if (!ctx.nodes.sourceSelect.hidden) {
+        const schluessel = sources.join("|");
+        if (ctx.nodes.sourceKeys !== schluessel) {
+          ctx.nodes.sourceKeys = schluessel;
+          ctx.nodes.sourceSelect.replaceChildren(
+            ...sources.map((quelle) => {
+              const option = document.createElement("option");
+              option.value = quelle;
+              option.textContent = quelle;
+              return option;
+            })
+          );
+        }
+        const aktuell = attributes.source || "";
+        if (aktuell && ctx.nodes.sourceSelect.value !== aktuell) ctx.nodes.sourceSelect.value = aktuell;
+      }
     }
   },
   // ------------------------------------------------------------- Mitglieder
@@ -7216,7 +7317,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.21.1";
+var VERSION = "0.22.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

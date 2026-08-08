@@ -292,5 +292,122 @@ console.log("\n8. Knoepfe tragen Glas");
   check("Abspielknopf bleibt kraeftig", stil.includes(".media-controls .play"));
 }
 
+console.log("\n9. Titelbild des Medienspielers");
+{
+  const bauen = (attrs) => {
+    const zustaende = {
+      ...makeHass().states,
+      "media_player.probe": zustand("media_player.probe", "playing", {
+        friendly_name: "Probe",
+        media_title: "Ein Titel",
+        supported_features: 1 | 16 | 32,
+        ...attrs,
+      }),
+    };
+    const karte = document.createElement("ha-os-card");
+    karte.setConfig({ type: "custom:ha-os-card", card_type: "media", entity: "media_player.probe" });
+    document.body.append(karte);
+    karte.hass = { ...makeHass(), states: zustaende };
+    return karte;
+  };
+
+  const normal = bauen({ entity_picture: "/api/media_player_proxy/x?token=t" });
+  check("entity_picture wird genommen",
+    normal.shadowRoot.querySelector(".media-art img")?.getAttribute("src") === "/api/media_player_proxy/x?token=t",
+    normal.shadowRoot.querySelector(".media-art img")?.getAttribute("src") || "kein Bild");
+
+  // Streamingdienste liefern haeufig nur die Originaladresse.
+  const fremd = bauen({
+    media_image_url: "https://i.ytimg.com/vi/abc/hqdefault.jpg",
+    media_image_remotely_accessible: true,
+  });
+  check("erreichbare Fremdadresse wird genutzt",
+    fremd.shadowRoot.querySelector(".media-art img")?.getAttribute("src")?.includes("ytimg"),
+    fremd.shadowRoot.querySelector(".media-art img")?.getAttribute("src") || "kein Bild");
+
+  const nichtErreichbar = bauen({
+    media_image_url: "https://intern.example/cover.jpg",
+    media_image_remotely_accessible: false,
+  });
+  check("nicht erreichbare Adresse wird nicht versucht",
+    !nichtErreichbar.shadowRoot.querySelector(".media-art img"),
+    nichtErreichbar.shadowRoot.querySelector(".media-art img")?.getAttribute("src") || "kein Bild");
+
+  const kaputt = bauen({ entity_picture: "/api/tot.jpg" });
+  const img = kaputt.shadowRoot.querySelector(".media-art img");
+  img.dispatchEvent(new dom.window.Event("error"));
+  check("tote Adresse faellt auf das Symbol zurueck",
+    !kaputt.shadowRoot.querySelector(".media-art img") &&
+      Boolean(kaputt.shadowRoot.querySelector(".media-art ha-icon")));
+}
+
+console.log("\n10. Lautstaerke, Stumm und Quelle");
+{
+  const bauen = (attrs) => {
+    const zustaende = {
+      ...makeHass().states,
+      "media_player.laut": zustand("media_player.laut", "playing", {
+        friendly_name: "Laut",
+        media_title: "Titel",
+        ...attrs,
+      }),
+    };
+    const karte = document.createElement("ha-os-card");
+    karte.setConfig({ type: "custom:ha-os-card", card_type: "media", entity: "media_player.laut" });
+    document.body.append(karte);
+    karte.hass = { ...makeHass(), states: zustaende };
+    return karte;
+  };
+
+  const voll = bauen({
+    supported_features: 1 | 4 | 8 | 2048 | 16384,
+    volume_level: 0.42,
+    is_volume_muted: false,
+    source: "Spotify",
+    source_list: ["Spotify", "Radio", "TV"],
+  });
+  const sr2 = voll.shadowRoot;
+  check("Lautstaerkezeile sichtbar", !sr2.querySelector(".volume").hidden);
+  check("Wert in Prozent", sr2.querySelector(".volume-value").textContent === "42 %",
+    sr2.querySelector(".volume-value").textContent);
+  check("Spur zeigt den Stand", sr2.querySelector(".volume-track span").style.width === "42%",
+    sr2.querySelector(".volume-track span").style.width);
+  check("Quellen uebernommen", sr2.querySelector("select.source").options.length === 3);
+  check("aktuelle Quelle gewaehlt", sr2.querySelector("select.source").value === "Spotify");
+
+  calls.length = 0;
+  const regler = sr2.querySelector(".volume-track input");
+  regler.value = "80";
+  regler.dispatchEvent(new dom.window.Event("input"));
+  check("beim Ziehen wird nichts gesendet", calls.length === 0, JSON.stringify(calls));
+  regler.dispatchEvent(new dom.window.Event("change"));
+  check("Loslassen setzt die Lautstaerke",
+    calls[0]?.dienst === "media_player.volume_set" && calls[0]?.daten?.volume_level === 0.8,
+    JSON.stringify(calls[0] || {}));
+
+  calls.length = 0;
+  sr2.querySelector(".mute").click();
+  check("Stummschalten sendet den Wert mit",
+    calls[0]?.dienst === "media_player.volume_mute" && calls[0]?.daten?.is_volume_muted === true,
+    JSON.stringify(calls[0] || {}));
+
+  calls.length = 0;
+  const quelle = sr2.querySelector("select.source");
+  quelle.value = "Radio";
+  quelle.dispatchEvent(new dom.window.Event("change"));
+  check("Quellenwechsel wird gesetzt",
+    calls[0]?.dienst === "media_player.select_source" && calls[0]?.daten?.source === "Radio",
+    JSON.stringify(calls[0] || {}));
+
+  // Ein Player, der nichts davon kann, zeigt auch nichts davon.
+  const karg = bauen({ supported_features: 1 | 16384 });
+  check("ohne Unterstuetzung keine Lautstaerkezeile", karg.shadowRoot.querySelector(".volume").hidden);
+  check("ohne Unterstuetzung keine Quellenwahl", karg.shadowRoot.querySelector("select.source").hidden);
+
+  const stumm = bauen({ supported_features: 1 | 4 | 8, volume_level: 0.3, is_volume_muted: true });
+  check("stumm wird benannt", stumm.shadowRoot.querySelector(".volume-value").textContent === "stumm",
+    stumm.shadowRoot.querySelector(".volume-value").textContent);
+}
+
 console.log(failures === 0 ? "\nAlle Prüfungen bestanden.\n" : `\n${failures} Prüfung(en) fehlgeschlagen.\n`);
 process.exit(failures === 0 ? 0 : 1);

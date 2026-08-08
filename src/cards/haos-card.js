@@ -228,6 +228,29 @@ const STYLES = `
   }
   .media-controls button.is-active { color: var(--haos-accent, #0a84ff); }
 
+  /* --- Lautstaerke --- */
+  .volume { display: flex; align-items: center; gap: 9px; }
+  .volume[hidden] { display: none; }
+  .mute {
+    width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%; display: grid; place-items: center;
+    color: rgba(var(--haos-text-rgb, 255,255,255), .75);
+    ${CONTROL_SURFACE_CSS}
+  }
+  .mute[hidden] { display: none; }
+  .mute.is-active { color: var(--haos-accent, #0a84ff); }
+  .mute ha-icon { --mdc-icon-size: 17px; }
+  .volume-track {
+    position: relative; flex: 1; height: 10px; border-radius: 99px; overflow: hidden;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .16);
+  }
+  .volume-track[hidden] { display: none; }
+  .volume-track span { display: block; height: 100%; width: 0; background: var(--haos-accent, #0a84ff); transition: width .18s ease; }
+  .volume-track input[type="range"] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
+  .volume-value { flex: 0 0 auto; font-size: 11px; min-width: 38px; text-align: right; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
+  .volume-value[hidden] { display: none; }
+  select.source { font-size: 12px; padding: 7px 10px; }
+  select.source[hidden] { display: none; }
+
   /* --- Mitglieder --- */
   .members { display: flex; align-items: center; }
   .member { width: 40px; height: 40px; margin-left: -10px; border-radius: 50%; overflow: hidden; border: 2px solid rgba(var(--haos-card-surface-rgb, 255,255,255), .35); display: grid; place-items: center; background: rgba(var(--haos-text-rgb, 255,255,255), .12); font-size: 11px; font-weight: 800; }
@@ -1152,7 +1175,62 @@ const renderers = {
       ctx.nodes.mediaButtons = [shuffle, previous, play, next, repeat];
       controls.append(...ctx.nodes.mediaButtons.map((b) => b.node));
 
-      root.append(head, ctx.nodes.progress, times, controls);
+      /*
+       * Lautstaerke.
+       *
+       * Der Regler liegt unsichtbar ueber einer eigenen Spur – der native
+       * laesst sich nicht zuverlaessig einfaerben, dieselbe Loesung wie bei
+       * den Lueftern der Druckerkarte.
+       *
+       * Gesendet wird erst beim Loslassen. Waehrend des Ziehens ueber jeden
+       * Zwischenwert zu schicken, ergaebe bei einem Zug von 20 auf 80 rund
+       * sechzig Aufrufe – manche Player kommen damit nicht mit.
+       */
+      const volumeRow = el("div", "volume");
+      ctx.nodes.muteButton = el("button", "mute");
+      ctx.nodes.muteIcon = icon("mdi:volume-high");
+      ctx.nodes.muteButton.append(ctx.nodes.muteIcon);
+      ctx.nodes.muteButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const muted = ctx.hass?.states?.[ctx.config.entity]?.attributes?.is_volume_muted === true;
+        call("volume_mute", { is_volume_muted: !muted });
+      });
+
+      const volumeTrack = el("div", "volume-track");
+      ctx.nodes.volumeFill = el("span");
+      ctx.nodes.volumeInput = document.createElement("input");
+      ctx.nodes.volumeInput.type = "range";
+      ctx.nodes.volumeInput.min = "0";
+      ctx.nodes.volumeInput.max = "100";
+      ctx.nodes.volumeInput.step = "1";
+      volumeTrack.append(ctx.nodes.volumeFill, ctx.nodes.volumeInput);
+
+      ctx.nodes.volumeValue = el("span", "volume-value", "–");
+
+      ctx.nodes.volumeInput.addEventListener("input", (event) => {
+        event.stopPropagation();
+        ctx.nodes.volumeFill.style.width = `${ctx.nodes.volumeInput.value}%`;
+        ctx.nodes.volumeValue.textContent = `${ctx.nodes.volumeInput.value} %`;
+      });
+      ctx.nodes.volumeInput.addEventListener("change", (event) => {
+        event.stopPropagation();
+        call("volume_set", { volume_level: Number(ctx.nodes.volumeInput.value) / 100 });
+      });
+
+      volumeRow.append(ctx.nodes.muteButton, volumeTrack, ctx.nodes.volumeValue);
+      ctx.nodes.volumeRow = volumeRow;
+
+      // Quellenwahl. Ein Aufklappmenue statt Segmenten: manche Player melden
+      // zwanzig Quellen, die nebeneinander niemand mehr trifft.
+      ctx.nodes.sourceSelect = document.createElement("select");
+      ctx.nodes.sourceSelect.className = "dropdown source";
+      ctx.nodes.sourceSelect.addEventListener("click", (event) => event.stopPropagation());
+      ctx.nodes.sourceSelect.addEventListener("change", (event) => {
+        event.stopPropagation();
+        call("select_source", { source: ctx.nodes.sourceSelect.value });
+      });
+
+      root.append(head, ctx.nodes.progress, times, controls, volumeRow, ctx.nodes.sourceSelect);
       return root;
     },
     update(ctx) {
@@ -1162,13 +1240,43 @@ const renderers = {
       ctx.nodes.track.textContent = attributes.media_title || ctx.config.name || friendlyName(ctx.config.entity, state);
       ctx.nodes.artist.textContent = attributes.media_artist || attributes.media_series_title || state?.state || "";
 
-      const picture = attributes.entity_picture || "";
+      /*
+       * Titelbild.
+       *
+       * Es gibt drei Quellen, und welche gefuellt ist, haengt an der
+       * Integration:
+       *
+       *   entity_picture        von Home Assistant durchgereicht und
+       *                         angemeldet – der Normalfall
+       *   entity_picture_local  dasselbe bei einigen Integrationen
+       *   media_image_url       die Originaladresse beim Anbieter. Nur
+       *                         brauchbar, wenn HA sie ausdruecklich als
+       *                         von aussen erreichbar meldet; sonst laeuft
+       *                         sie ins Leere oder verlangt Anmeldung.
+       *
+       * Bei Streamingdiensten wie YouTube ist haeufig nur die letzte gesetzt.
+       * Wer nur `entity_picture` liest, bekommt dort ein leeres Kaestchen.
+       */
+      const picture =
+        attributes.entity_picture ||
+        attributes.entity_picture_local ||
+        (attributes.media_image_remotely_accessible ? attributes.media_image_url : "") ||
+        "";
+
       if (picture !== ctx.nodes.artUrl) {
         ctx.nodes.artUrl = picture;
         if (picture) {
           const img = document.createElement("img");
-          img.src = picture;
           img.alt = "";
+          // Ohne diesen Zweig bliebe bei einer toten Adresse ein graues
+          // Kaestchen stehen – das Symbol sagt wenigstens, dass es ein
+          // Medienspieler ist.
+          img.addEventListener("error", () => {
+            if (ctx.nodes.artUrl !== picture) return;
+            ctx.nodes.artUrl = "";
+            ctx.nodes.art.replaceChildren(ctx.nodes.artIcon);
+          });
+          img.src = picture;
           ctx.nodes.art.replaceChildren(img);
         } else {
           ctx.nodes.art.replaceChildren(ctx.nodes.artIcon);
@@ -1200,6 +1308,51 @@ const renderers = {
       ctx.nodes.repeat?.node
         .querySelector("ha-icon")
         ?.setAttribute("icon", repeat === "one" ? "mdi:repeat-once" : "mdi:repeat");
+
+      // --- Lautstaerke, Stummschalten, Quelle
+      const kann = (bit) => (features & bit) === bit;
+      ctx.nodes.volumeRow.hidden = !kann(MEDIA_FEATURE.VOLUME_SET) && !kann(MEDIA_FEATURE.VOLUME_MUTE);
+      ctx.nodes.muteButton.hidden = !kann(MEDIA_FEATURE.VOLUME_MUTE);
+      ctx.nodes.volumeInput.parentElement.hidden = !kann(MEDIA_FEATURE.VOLUME_SET);
+      ctx.nodes.volumeValue.hidden = !kann(MEDIA_FEATURE.VOLUME_SET);
+
+      const muted = attributes.is_volume_muted === true;
+      ctx.nodes.muteIcon.icon = muted ? "mdi:volume-off" : "mdi:volume-high";
+      ctx.nodes.muteButton.classList.toggle("is-active", muted);
+
+      const level = Number(attributes.volume_level);
+      if (Number.isFinite(level)) {
+        const prozent = Math.round(level * 100);
+        // Nicht ueberschreiben, waehrend jemand zieht – sonst springt der
+        // Regler unter dem Finger zurueck.
+        if (document.activeElement !== ctx.nodes.volumeInput) {
+          ctx.nodes.volumeInput.value = String(prozent);
+          ctx.nodes.volumeFill.style.width = `${prozent}%`;
+        }
+        ctx.nodes.volumeValue.textContent = muted ? "stumm" : `${prozent} %`;
+      } else {
+        ctx.nodes.volumeValue.textContent = muted ? "stumm" : "–";
+      }
+
+      const sources = Array.isArray(attributes.source_list) ? attributes.source_list : [];
+      ctx.nodes.sourceSelect.hidden = !kann(MEDIA_FEATURE.SELECT_SOURCE) || !sources.length;
+      if (!ctx.nodes.sourceSelect.hidden) {
+        const schluessel = sources.join("|");
+        if (ctx.nodes.sourceKeys !== schluessel) {
+          ctx.nodes.sourceKeys = schluessel;
+          ctx.nodes.sourceSelect.replaceChildren(
+            ...sources.map((quelle) => {
+              const option = document.createElement("option");
+              option.value = quelle;
+              option.textContent = quelle;
+              return option;
+            })
+          );
+        }
+        const aktuell = attributes.source || "";
+        if (aktuell && ctx.nodes.sourceSelect.value !== aktuell) ctx.nodes.sourceSelect.value = aktuell;
+      }
+
     },
   },
 
