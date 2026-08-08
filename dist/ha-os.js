@@ -1,4 +1,4 @@
-/* HA-OS 0.26.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.26.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -3356,21 +3356,37 @@ var STYLES3 = `
 
   /* Fenster ueber der Karte. Innerhalb, nicht am Fenster: die Karte ist durch
      ihren backdrop-filter selbst der Bezugsrahmen fuer fixe Kinder. */
+  /* Fenster ueber der Karte.
+     Nebeneinander statt untereinander: die Uhr ist breit und flach, ein
+     Drehregler mit Knoepfen darunter passt dort nicht hinein. Und deutlich
+     deckender als eine Glasflaeche - sonst liest man die Uhrzeit durch den
+     Regler hindurch. */
   .sheet {
-    position: absolute; inset: -16px; z-index: 5; border-radius: inherit;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-    padding: 12px;
-    background: rgba(var(--haos-entity-surface-rgb, 255,255,255), calc(var(--haos-entity-opacity, .10) + .06));
-    backdrop-filter: blur(22px) saturate(180%);
-    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    position: absolute; inset: 0; z-index: 5; border-radius: inherit;
+    display: flex; flex-direction: row; align-items: center; justify-content: center;
+    gap: 12px; padding: 8px;
+    background: rgba(var(--haos-entity-surface-rgb, 255,255,255), calc(var(--haos-entity-opacity, .10) + .55));
+    backdrop-filter: blur(26px) saturate(180%);
+    -webkit-backdrop-filter: blur(26px) saturate(180%);
   }
   .sheet[hidden] { display: none; }
-  .timer-dial { max-width: 150px; cursor: pointer; touch-action: none; }
-  .sheet-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  .timer-dial {
+    flex: 0 1 auto; width: auto; height: 100%; max-height: 108px; aspect-ratio: 1;
+    cursor: pointer; touch-action: none;
+  }
+  .timer-dial .dial-temp { font-size: 24px; font-weight: 650; }
+  .timer-dial .dial-label { font-size: 9px; }
+  .sheet-actions { display: flex; flex-direction: column; gap: 5px; }
   .sheet-btn {
-    padding: 7px 12px; border-radius: 10px; font-size: 12px; cursor: pointer;
+    padding: 6px 11px; border-radius: 9px; font-size: 11px; cursor: pointer; white-space: nowrap;
     color: var(--haos-text, #fff);
     ${CONTROL_SURFACE_CSS}
+  }
+  /* Sehr schmale Karten: dann doch untereinander, sonst wird der Regler
+     unbedienbar klein. */
+  @media (max-width: 260px) {
+    .sheet { flex-direction: column; gap: 6px; }
+    .sheet-actions { flex-direction: row; }
   }
   .sheet-btn.primary { color: var(--haos-accent, #0a84ff); }
   .sheet-btn.danger { color: var(--haos-bad, #ff6b6b); }
@@ -7621,7 +7637,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.26.0";
+var VERSION = "0.26.1";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

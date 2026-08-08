@@ -572,6 +572,15 @@ console.log("\n13. Kurzzeitwecker in der Uhr");
   laeuft.shadowRoot.querySelector(".clock-timer-btn").click();
   laeuft.shadowRoot.querySelector(".sheet-btn.danger").click();
   check("Abbrechen stoppt den Wecker", calls[0]?.dienst === "timer.cancel", JSON.stringify(calls[0] || {}));
+
+  // Das Fenster deckt die Karte ab: die Uhrzeit soll nicht durch den
+  // Drehregler hindurchscheinen, und es darf nicht ueber die Karte
+  // hinausragen.
+  const stil = mit.shadowRoot.querySelector("style").textContent;
+  const sheetCss = stil.slice(stil.indexOf("  .sheet {"), stil.indexOf("}", stil.indexOf("  .sheet {")));
+  check("Fenster bleibt in der Karte", sheetCss.includes("inset: 0"), sheetCss.trim().slice(0, 60));
+  check("Fenster ist deckend", sheetCss.includes("+ .55"), sheetCss.trim().slice(0, 90));
+  check("Regler und Knoepfe nebeneinander", sheetCss.includes("flex-direction: row"));
 }
 
 console.log(failures === 0 ? "\nAlle Prüfungen bestanden.\n" : `\n${failures} Prüfung(en) fehlgeschlagen.\n`);
