@@ -401,11 +401,28 @@ check("Token wird mitgeschickt", anfrage?.options?.headers?.Authorization === "B
   anfrage?.options?.headers?.Authorization || "keiner");
 check("liefert die Serve-Adresse", upload === "/api/image/serve/abc123/original", upload);
 
-globalThis.fetch = async () => ({ ok: false, status: 401, statusText: "Unauthorized" });
+// Home Assistant nimmt nur JPEG, PNG und GIF. Ein WebP darf gar nicht erst
+// losgeschickt werden - sonst kommt nur ein nacktes 400 zurueck.
+let typFehler = "";
+try { await uploadImage(editor2.hass, new dom.window.File(["x"], "auto.webp", { type: "image/webp" })); }
+catch (error) { typFehler = error.message; }
+check("WebP wird vorher abgefangen", typFehler.includes("JPEG, PNG und GIF"), typFehler);
+check("dabei keine Anfrage an den Server", anfrage?.url === "/api/image/upload" && anfrage.options.method === "POST");
+
+globalThis.fetch = async () => ({
+  ok: false, status: 400, statusText: "Bad Request",
+  text: async () => JSON.stringify({ message: "Only jpeg, png, and gif images are allowed" }),
+});
 let fehler = "";
 try { await uploadImage(editor2.hass, new dom.window.File(["x"], "auto.png", { type: "image/png" })); }
 catch (error) { fehler = error.message; }
-check("Fehler wird durchgereicht statt verschluckt", fehler === "401 Unauthorized", fehler);
+check("Begruendung des Servers steht im Fehler", fehler.includes("Only jpeg, png, and gif"), fehler);
+
+globalThis.fetch = async () => ({ ok: false, status: 401, statusText: "Unauthorized", text: async () => "" });
+let authFehler = "";
+try { await uploadImage(editor2.hass, new dom.window.File(["x"], "auto.png", { type: "image/png" })); }
+catch (error) { authFehler = error.message; }
+check("Fehler ohne Text bleibt lesbar", authFehler === "401 Unauthorized", authFehler);
 
 const ohneToken = document.createElement("ha-os-vehicle-editor");
 ohneToken.setConfig({ type: "custom:ha-os-vehicle", entity: `sensor.${ID}_odometer` });

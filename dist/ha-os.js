@@ -1,4 +1,4 @@
-/* HA-OS 0.15.2 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.15.3 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -358,9 +358,13 @@ var registerCard = (entry) => {
   window.customCards = window.customCards || [];
   if (!window.customCards.some((card) => card.type === entry.type)) window.customCards.push(entry);
 };
+var UPLOAD_TYPES = ["image/jpeg", "image/png", "image/gif"];
 var uploadImage = async (hass, file) => {
   const token = hass?.auth?.data?.access_token || hass?.connection?.options?.auth?.accessToken;
   if (!token) throw new Error("kein Zugangstoken im hass-Objekt");
+  if (file?.type && !UPLOAD_TYPES.includes(file.type)) {
+    throw new Error(`${file.type} wird nicht angenommen. Home Assistant nimmt nur JPEG, PNG und GIF.`);
+  }
   const body = new FormData();
   body.append("file", file);
   const response = await fetch("/api/image/upload", {
@@ -368,7 +372,16 @@ var uploadImage = async (hass, file) => {
     headers: { Authorization: `Bearer ${token}` },
     body
   });
-  if (!response.ok) throw new Error(`${response.status} ${response.statusText || ""}`.trim());
+  if (!response.ok) {
+    let reason = "";
+    try {
+      const text2 = await response.text();
+      reason = (JSON.parse(text2)?.message ?? text2 ?? "").toString().trim().slice(0, 160);
+    } catch (_error) {
+      reason = "";
+    }
+    throw new Error([`${response.status} ${response.statusText || ""}`.trim(), reason].filter(Boolean).join(" – "));
+  }
   const data = await response.json();
   if (!data?.id) throw new Error("Antwort ohne Bild-Kennung");
   return `/api/image/serve/${data.id}/original`;
@@ -383,7 +396,7 @@ var createImageField = ({ getHass, getValue, onChange, placeholder = "/local/bil
   row.append(preview);
   const fileInput = document.createElement("input");
   fileInput.type = "file";
-  fileInput.accept = "image/png,image/jpeg,image/gif,image/webp";
+  fileInput.accept = UPLOAD_TYPES.join(",");
   fileInput.className = "haos-image-file";
   const uploadButton = document.createElement("button");
   uploadButton.type = "button";
@@ -5566,7 +5579,7 @@ var HaOsVehicleEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG7)) customElements.define(EDITOR_TAG7, HaOsVehicleEditor);
 
 // src/ha-os.js
-var VERSION = "0.15.2";
+var VERSION = "0.15.3";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

@@ -270,9 +270,18 @@ export const registerCard = (entry) => {
  * probiert. Ohne Token bricht es mit klarer Meldung ab, statt eine Anfrage
  * ohne Anmeldung zu schicken.
  */
+export const UPLOAD_TYPES = ["image/jpeg", "image/png", "image/gif"];
+
 export const uploadImage = async (hass, file) => {
   const token = hass?.auth?.data?.access_token || hass?.connection?.options?.auth?.accessToken;
   if (!token) throw new Error("kein Zugangstoken im hass-Objekt");
+
+  // Home Assistant nimmt ausschliesslich JPEG, PNG und GIF an und antwortet
+  // sonst mit 400. Das hier vorher abzufangen erspart den Weg zum Server und
+  // sagt klarer, was zu tun ist – ein WebP muss vorher umgewandelt werden.
+  if (file?.type && !UPLOAD_TYPES.includes(file.type)) {
+    throw new Error(`${file.type} wird nicht angenommen. Home Assistant nimmt nur JPEG, PNG und GIF.`);
+  }
 
   const body = new FormData();
   body.append("file", file);
@@ -283,7 +292,18 @@ export const uploadImage = async (hass, file) => {
     body,
   });
 
-  if (!response.ok) throw new Error(`${response.status} ${response.statusText || ""}`.trim());
+  if (!response.ok) {
+    // Der Grund steht im Antworttext – ohne ihn bleibt nur „400 Bad Request",
+    // und das sagt niemandem, was zu ändern ist.
+    let reason = "";
+    try {
+      const text = await response.text();
+      reason = (JSON.parse(text)?.message ?? text ?? "").toString().trim().slice(0, 160);
+    } catch (_error) {
+      reason = "";
+    }
+    throw new Error([`${response.status} ${response.statusText || ""}`.trim(), reason].filter(Boolean).join(" – "));
+  }
 
   const data = await response.json();
   if (!data?.id) throw new Error("Antwort ohne Bild-Kennung");
@@ -315,7 +335,7 @@ export const createImageField = ({ getHass, getValue, onChange, placeholder = "/
 
   const fileInput = document.createElement("input");
   fileInput.type = "file";
-  fileInput.accept = "image/png,image/jpeg,image/gif,image/webp";
+  fileInput.accept = UPLOAD_TYPES.join(",");
   fileInput.className = "haos-image-file";
 
   const uploadButton = document.createElement("button");
