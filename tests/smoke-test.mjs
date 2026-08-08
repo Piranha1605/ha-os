@@ -493,6 +493,16 @@ check("im Dashboard bleibt es hinter dem Fenster",
     !shell.shadowRoot.querySelector(".wallpaper").classList.contains("contained"));
 vorschau.remove();
 
+// Ohne eigenen Stapelkontext rutscht die Bildschicht (z-index: -1) unter den
+// Hintergrund uebergeordneter Elemente - und damit unter das Hintergrundbild
+// eines Home-Assistant-Themes. Auf dem Tablet war deshalb HAs Bild zu sehen
+// und unseres lag darunter.
+{
+  const stil = shell.shadowRoot.querySelector("style").textContent;
+  const host = stil.slice(stil.indexOf(":host"), stil.indexOf("}", stil.indexOf(":host")));
+  check("Shell bildet einen eigenen Stapelkontext", host.includes("isolation: isolate"), host.trim().slice(0, 80));
+}
+
 check("Bildschicht vorhanden", Boolean(root.querySelector(".wallpaper")));
 check("Pfadfeld fuer eigene Bilder vorhanden",
   root.querySelectorAll(".control.stacked input.path").length === 2,

@@ -1,4 +1,4 @@
-/* HA-OS 0.20.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.20.2 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -790,6 +790,14 @@ var STYLES = `
   :host {
     display: block;
     position: relative;
+    /* Eigener Stapelkontext.
+       Ohne ihn rutscht die Bildschicht (z-index: -1) unter den Hintergrund
+       uebergeordneter Elemente - und damit unter ein Hintergrundbild, das
+       ein Home-Assistant-Theme setzt. Genau so verschwand das Wallpaper auf
+       dem Tablet: sichtbar war HAs Bild, unseres lag darunter.
+       Mit isolation gilt das negative z-index nur innerhalb dieser Karte:
+       hinter dem Glas, aber vor allem, was HA darunter malt. */
+    isolation: isolate;
     margin: var(--haos-margin, 25px);
     width: calc(100% - 2 * var(--haos-margin, 25px));
   }
@@ -7063,7 +7071,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.20.1";
+var VERSION = "0.20.2";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

@@ -49,6 +49,14 @@ const STYLES = `
   :host {
     display: block;
     position: relative;
+    /* Eigener Stapelkontext.
+       Ohne ihn rutscht die Bildschicht (z-index: -1) unter den Hintergrund
+       uebergeordneter Elemente - und damit unter ein Hintergrundbild, das
+       ein Home-Assistant-Theme setzt. Genau so verschwand das Wallpaper auf
+       dem Tablet: sichtbar war HAs Bild, unseres lag darunter.
+       Mit isolation gilt das negative z-index nur innerhalb dieser Karte:
+       hinter dem Glas, aber vor allem, was HA darunter malt. */
+    isolation: isolate;
     margin: var(--haos-margin, 25px);
     width: calc(100% - 2 * var(--haos-margin, 25px));
   }
