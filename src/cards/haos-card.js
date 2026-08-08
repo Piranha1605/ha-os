@@ -304,6 +304,40 @@ const STYLES = `
   .clock { flex: 1; display: grid; place-content: center; text-align: center; }
   .clock-time { font-size: 44px; font-weight: 300; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
   .clock-date { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
+  .clock { position: relative; }
+  .clock-timer { margin-top: 6px; font-size: 12px; color: var(--haos-accent, #0a84ff); }
+  .clock-timer[hidden] { display: none; }
+  .clock-timer-btn {
+    position: absolute; top: -4px; right: -4px;
+    width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+    color: rgba(var(--haos-text-rgb, 255,255,255), .6);
+    ${CONTROL_SURFACE_CSS}
+  }
+  .clock-timer-btn[hidden] { display: none; }
+  .clock-timer-btn.is-active { color: var(--haos-accent, #0a84ff); }
+  .clock-timer-btn ha-icon { --mdc-icon-size: 17px; }
+
+  /* Fenster ueber der Karte. Innerhalb, nicht am Fenster: die Karte ist durch
+     ihren backdrop-filter selbst der Bezugsrahmen fuer fixe Kinder. */
+  .sheet {
+    position: absolute; inset: -16px; z-index: 5; border-radius: inherit;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    padding: 12px;
+    background: rgba(var(--haos-entity-surface-rgb, 255,255,255), calc(var(--haos-entity-opacity, .10) + .06));
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+  }
+  .sheet[hidden] { display: none; }
+  .timer-dial { max-width: 150px; cursor: pointer; touch-action: none; }
+  .sheet-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  .sheet-btn {
+    padding: 7px 12px; border-radius: 10px; font-size: 12px; cursor: pointer;
+    color: var(--haos-text, #fff);
+    ${CONTROL_SURFACE_CSS}
+  }
+  .sheet-btn.primary { color: var(--haos-accent, #0a84ff); }
+  .sheet-btn.danger { color: var(--haos-bad, #ff6b6b); }
+  .sheet-btn[hidden] { display: none; }
 
   /* --- Kamera ---
      Das Bild füllt die Karte randlos. Die 16 px Polsterung der Karte werden
@@ -1953,7 +1987,137 @@ const renderers = {
       const root = el("div", "clock");
       ctx.nodes.time = el("div", "clock-time", "--:--");
       ctx.nodes.date = el("div", "clock-date");
-      root.append(ctx.nodes.time, ctx.nodes.date);
+      ctx.nodes.timerLine = el("div", "clock-timer");
+      root.append(ctx.nodes.time, ctx.nodes.date, ctx.nodes.timerLine);
+
+      /*
+       * Kurzzeitwecker.
+       *
+       * Gesteuert wird ein `timer`-Helfer von Home Assistant, kein Zaehler im
+       * Browser. Ein Wecker, der beim Neuladen des Tablets verschwindet, ist
+       * keiner - und nur die Entitaet kann spaeter etwas ausloesen.
+       *
+       * Das Fenster liegt INNERHALB der Karte. Ein `position: fixed` waere
+       * hier wirkungslos: die Karte hat `backdrop-filter` und wird dadurch
+       * selbst zum Bezugsrahmen fuer fest positionierte Kinder.
+       */
+      ctx.nodes.timerButton = el("button", "clock-timer-btn");
+      ctx.nodes.timerButton.append(icon("mdi:timer-outline"));
+      ctx.nodes.timerButton.title = "Kurzzeitwecker";
+      ctx.nodes.timerButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        ctx.nodes.minutes = renderers.clock._remaining(ctx) || 5;
+        ctx.nodes.sheet.hidden = false;
+        renderers.clock._paintDial(ctx);
+      });
+      root.append(ctx.nodes.timerButton);
+
+      // --- Fenster mit Drehregler
+      const sheet = el("div", "sheet");
+      const dial = el("div", "dial timer-dial");
+      const SVG = "http://www.w3.org/2000/svg";
+      const svg = document.createElementNS(SVG, "svg");
+      svg.setAttribute("viewBox", "0 0 100 100");
+
+      const umfang = 2 * Math.PI * 42;
+      const bogen = umfang * 0.75;
+      const kreis = (klasse, offset) => {
+        const node = document.createElementNS(SVG, "circle");
+        node.setAttribute("class", klasse);
+        node.setAttribute("cx", "50");
+        node.setAttribute("cy", "50");
+        node.setAttribute("r", "42");
+        node.setAttribute("stroke-width", "7");
+        node.setAttribute("stroke-dasharray", `${bogen} ${umfang}`);
+        if (offset !== undefined) node.setAttribute("stroke-dashoffset", String(offset));
+        return node;
+      };
+      ctx.nodes.timerArc = kreis("value", bogen);
+      ctx.nodes.timerArcLength = bogen;
+      svg.append(kreis("track"), ctx.nodes.timerArc);
+
+      const mitte = el("div", "dial-center");
+      ctx.nodes.timerValue = el("div", "dial-temp", "5");
+      ctx.nodes.timerUnit = el("div", "dial-label", "Minuten");
+      mitte.append(ctx.nodes.timerValue, ctx.nodes.timerUnit);
+      dial.append(svg, mitte);
+
+      /*
+       * Ziehen auf dem Ring.
+       *
+       * Der Bogen ist um 135 Grad gedreht: er beginnt unten LINKS und laeuft
+       * ueber 270 Grad im Uhrzeigersinn bis unten rechts. Rechts vom
+       * Mittelpunkt liegen deshalb 50 Minuten, nicht 10 - genau das hatte
+       * die erste Fassung falsch.
+       *
+       * Unten zwischen Ende und Anfang klafft die Luecke von 90 Grad. Wer
+       * dort tippt, bekommt den naeheren Rand: 0 oder 60.
+       */
+      const START = 225; // Grad im Uhrzeigersinn ab zwoelf Uhr
+      const ausZeiger = (event) => {
+        const kasten = dial.getBoundingClientRect();
+        if (!kasten.width) return null;
+        const x = event.clientX - (kasten.left + kasten.width / 2);
+        const y = event.clientY - (kasten.top + kasten.height / 2);
+        let winkel = (Math.atan2(y, x) * 180) / Math.PI + 90;
+        if (winkel < 0) winkel += 360;
+        let aufBogen = winkel - START;
+        if (aufBogen < 0) aufBogen += 360;
+        if (aufBogen > 270) return aufBogen < 315 ? 60 : 0;
+        return Math.round((aufBogen / 270) * 60);
+      };
+
+      const setzen = (event) => {
+        const minuten = ausZeiger(event);
+        if (minuten === null) return;
+        ctx.nodes.minutes = Math.max(0, Math.min(60, minuten));
+        renderers.clock._paintDial(ctx);
+      };
+
+      let zieht = false;
+      dial.addEventListener("pointerdown", (event) => {
+        zieht = true;
+        dial.setPointerCapture?.(event.pointerId);
+        setzen(event);
+      });
+      dial.addEventListener("pointermove", (event) => {
+        if (zieht) setzen(event);
+      });
+      dial.addEventListener("pointerup", () => {
+        zieht = false;
+      });
+
+      const knoepfe = el("div", "sheet-actions");
+      ctx.nodes.timerStart = el("button", "sheet-btn primary", "Starten");
+      const abbrechen = el("button", "sheet-btn", "Schließen");
+      ctx.nodes.timerCancel = el("button", "sheet-btn danger", "Abbrechen");
+      knoepfe.append(ctx.nodes.timerCancel, abbrechen, ctx.nodes.timerStart);
+
+      abbrechen.addEventListener("click", (event) => {
+        event.stopPropagation();
+        sheet.hidden = true;
+      });
+      ctx.nodes.timerStart.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const ziel = ctx.config.timer_entity;
+        if (!ziel) return;
+        const minuten = Math.max(1, ctx.nodes.minutes || 1);
+        ctx.hass?.callService("timer", "start", {
+          entity_id: ziel,
+          duration: `00:${String(minuten).padStart(2, "0")}:00`,
+        });
+        sheet.hidden = true;
+      });
+      ctx.nodes.timerCancel.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (ctx.config.timer_entity) ctx.hass?.callService("timer", "cancel", { entity_id: ctx.config.timer_entity });
+        sheet.hidden = true;
+      });
+
+      sheet.append(dial, knoepfe);
+      sheet.hidden = true;
+      ctx.nodes.sheet = sheet;
+      root.append(sheet);
 
       ctx.nodes.tick = () => {
         const now = new Date();
@@ -1986,7 +2150,48 @@ const renderers = {
       renderers.clock.reconnect(ctx);
       return root;
     },
+    /** Restminuten des laufenden Weckers, aufgerundet. */
+    _remaining(ctx) {
+      const state = ctx.hass?.states?.[ctx.config.timer_entity];
+      if (!state || state.state !== "active") return 0;
+      const ende = Date.parse(state.attributes?.finishes_at || "");
+      if (!Number.isFinite(ende)) return 0;
+      return Math.max(0, Math.ceil((ende - Date.now()) / 60000));
+    },
+
+    /** Zeichnet den Ring und die Zahl im Fenster. */
+    _paintDial(ctx) {
+      const minuten = Math.max(0, Math.min(60, ctx.nodes.minutes ?? 5));
+      ctx.nodes.timerValue.textContent = String(minuten);
+      ctx.nodes.timerUnit.textContent = minuten === 1 ? "Minute" : "Minuten";
+      const anteil = minuten / 60;
+      ctx.nodes.timerArc.setAttribute(
+        "stroke-dashoffset",
+        String(ctx.nodes.timerArcLength * (1 - anteil))
+      );
+    },
+
     update(ctx) {
+      // Kurzzeitwecker: der Knopf erscheint nur, wenn eine Timer-Entitaet
+      // gesetzt ist. Ohne sie waere er ein Knopf ohne Wirkung.
+      const timer = ctx.config.timer_entity ? ctx.hass?.states?.[ctx.config.timer_entity] : null;
+      ctx.nodes.timerButton.hidden = !ctx.config.timer_entity;
+      if (!ctx.config.timer_entity) ctx.nodes.sheet.hidden = true;
+
+      const laeuft = timer?.state === "active";
+      ctx.nodes.timerCancel.hidden = !laeuft;
+      ctx.nodes.timerButton.classList.toggle("is-active", laeuft);
+
+      if (laeuft) {
+        const rest = renderers.clock._remaining(ctx);
+        ctx.nodes.timerLine.textContent = `Wecker in ${rest} ${rest === 1 ? "Minute" : "Minuten"}`;
+      } else if (timer?.state === "paused") {
+        ctx.nodes.timerLine.textContent = "Wecker angehalten";
+      } else {
+        ctx.nodes.timerLine.textContent = "";
+      }
+      ctx.nodes.timerLine.hidden = !ctx.nodes.timerLine.textContent;
+
       // Die Anzeige läuft über den eigenen Timer. Hier wird nur geprüft, ob
       // die Taktrate wegen der Sekundenanzeige angepasst werden muss.
       const wanted = ctx.config.show_seconds ? 1000 : 15000;

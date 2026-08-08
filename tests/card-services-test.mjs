@@ -511,5 +511,68 @@ console.log("\n12. Music Assistant: Springen, Stopp, Favorit");
   check("ohne Knopf-Entitaet kein Herz", ohneSeek.shadowRoot.querySelector(".media-fav").hidden);
 }
 
+console.log("\n13. Kurzzeitwecker in der Uhr");
+{
+  const bauen = (config, timerState = null) => {
+    const zustaende = { ...makeHass().states };
+    if (timerState) zustaende["timer.kueche"] = timerState;
+    const karte = document.createElement("ha-os-card");
+    karte.setConfig({ type: "custom:ha-os-card", card_type: "clock", ...config });
+    document.body.append(karte);
+    karte.hass = { ...makeHass(), states: zustaende };
+    return karte;
+  };
+
+  // Ohne Timer-Entitaet kein Knopf: er haette keine Wirkung.
+  const ohne = bauen({});
+  check("ohne Timer kein Symbol", ohne.shadowRoot.querySelector(".clock-timer-btn").hidden);
+
+  const mit = bauen({ timer_entity: "timer.kueche" },
+    zustand("timer.kueche", "idle", { duration: "0:00:00" }));
+  const sr4 = mit.shadowRoot;
+  check("Symbol erscheint", !sr4.querySelector(".clock-timer-btn").hidden);
+  check("Fenster ist zu", sr4.querySelector(".sheet").hidden);
+
+  sr4.querySelector(".clock-timer-btn").click();
+  check("Symbol oeffnet das Fenster", !sr4.querySelector(".sheet").hidden);
+  check("Drehregler vorhanden", Boolean(sr4.querySelector(".timer-dial")));
+  check("Vorgabe fuenf Minuten", sr4.querySelector(".timer-dial .dial-temp").textContent === "5",
+    sr4.querySelector(".timer-dial .dial-temp").textContent);
+
+  // Der Bogen beginnt unten links und laeuft ueber 270 Grad: rechts vom
+  // Mittelpunkt liegen 50 Minuten.
+  const regler = sr4.querySelector(".timer-dial");
+  regler.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 });
+  regler.dispatchEvent(new dom.window.PointerEvent("pointerdown", { bubbles: true, clientX: 100, clientY: 50 }));
+  check("Ziehen setzt die Minuten", sr4.querySelector(".timer-dial .dial-temp").textContent === "50",
+    sr4.querySelector(".timer-dial .dial-temp").textContent);
+
+  regler.dispatchEvent(new dom.window.PointerEvent("pointermove", { bubbles: true, clientX: 50, clientY: 0 }));
+  check("oben sind es 30 Minuten", sr4.querySelector(".timer-dial .dial-temp").textContent === "30",
+    sr4.querySelector(".timer-dial .dial-temp").textContent);
+  regler.dispatchEvent(new dom.window.PointerEvent("pointermove", { bubbles: true, clientX: 10, clientY: 90 }));
+  check("unten links ist der Anfang", sr4.querySelector(".timer-dial .dial-temp").textContent === "0",
+    sr4.querySelector(".timer-dial .dial-temp").textContent);
+  regler.dispatchEvent(new dom.window.PointerEvent("pointermove", { bubbles: true, clientX: 100, clientY: 50 }));
+
+  calls.length = 0;
+  sr4.querySelector(".sheet-btn.primary").click();
+  check("Starten schickt die Dauer",
+    calls[0]?.dienst === "timer.start" && calls[0]?.daten?.duration === "00:50:00",
+    JSON.stringify(calls[0] || {}));
+  check("Fenster schliesst nach dem Start", sr4.querySelector(".sheet").hidden);
+
+  // Laeuft er, steht die Restzeit in der Karte und Abbrechen ist moeglich.
+  const laeuft = bauen({ timer_entity: "timer.kueche" },
+    zustand("timer.kueche", "active", { finishes_at: new Date(Date.now() + 12 * 60000).toISOString() }));
+  check("Restzeit steht in der Karte",
+    laeuft.shadowRoot.querySelector(".clock-timer").textContent.includes("12"),
+    laeuft.shadowRoot.querySelector(".clock-timer").textContent);
+  calls.length = 0;
+  laeuft.shadowRoot.querySelector(".clock-timer-btn").click();
+  laeuft.shadowRoot.querySelector(".sheet-btn.danger").click();
+  check("Abbrechen stoppt den Wecker", calls[0]?.dienst === "timer.cancel", JSON.stringify(calls[0] || {}));
+}
+
 console.log(failures === 0 ? "\nAlle Prüfungen bestanden.\n" : `\n${failures} Prüfung(en) fehlgeschlagen.\n`);
 process.exit(failures === 0 ? 0 : 1);

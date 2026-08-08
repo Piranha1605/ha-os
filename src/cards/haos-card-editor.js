@@ -147,6 +147,7 @@ const SCHEMAS = {
   ],
   clock: [
     text("name"),
+    { name: "timer_entity", selector: { entity: { domain: "timer" } } },
     {
       name: "hour_format",
       selector: {
@@ -189,6 +190,7 @@ const LABELS = {
   show_seconds: "Sekunden anzeigen",
   show_date: "Datum anzeigen",
   time_zone: "Zeitzone",
+  timer_entity: "Kurzzeitwecker",
   haos_weight: "Höhenfaktor",
   align: "Ausrichtung",
   show_line: "Linie anzeigen",
@@ -204,6 +206,8 @@ const HELPERS = {
   camera_mode:
     "Standbild holt in festem Takt ein einzelnes Bild und schont die Leitung. Livebild überträgt dauerhaft – auf einem Wandtablet mit mehreren Kameras spürbar. Tippen öffnet in beiden Fällen den großen Kameradialog.",
   refresh_interval: "Nur beim Standbild. Wie oft ein neues Bild geholt wird.",
+  timer_entity:
+    "Ein Timer-Helfer aus Home Assistant. Ohne ihn erscheint kein Weckersymbol. Anlegen unter Einstellungen → Geräte & Dienste → Helfer → Timer.",
   time_zone: "Leer lassen für die Zeitzone des Browsers, z. B. Europe/Berlin.",
   days: "Zeitraum, der geladen wird.",
   show_graph: "Temperaturverlauf über der Vorhersagezeile. Standardmäßig an.",
