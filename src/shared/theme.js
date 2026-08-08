@@ -212,9 +212,14 @@ const apply = (settings) => {
     "--haos-card-shadow": light
       ? "0 18px 48px rgba(38, 48, 58, .18)"
       : "0 24px 70px rgba(0, 0, 0, .30)",
+    // Der Schlagschatten der Karten muss in den Abstand zwischen ihnen
+    // passen. Die Shell hat runde Ecken und deshalb `overflow: hidden` –
+    // was darueber hinausragt, wird abgeschnitten, und an den Ecken sah man
+    // eine gerade Kante. Bei 16 px Abstand ist knapp die Haelfte davon als
+    // Weichzeichnung sinnvoll; der Rest kommt aus dem Versatz nach unten.
     "--haos-entity-shadow": light
-      ? "0 10px 28px rgba(38, 48, 58, .14)"
-      : "0 12px 30px rgba(0, 0, 0, .20)",
+      ? "0 4px 12px rgba(38, 48, 58, .13)"
+      : "0 5px 14px rgba(0, 0, 0, .22)",
 
     "--haos-card-sheen": sheenShadow(t.cardSheen, light),
     "--haos-entity-sheen": sheenShadow(t.entitySheen, light),

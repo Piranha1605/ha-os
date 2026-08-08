@@ -159,7 +159,8 @@ const STYLES = `
   .rail {
     width: 56px; flex: 0 0 56px; padding: 8px 0;
     display: flex; flex-direction: column; align-items: center; gap: 6px;
-    ${ENTITY_SURFACE_CSS}
+    ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px);
   }
   .rail button {
     width: 38px; height: 38px; border-radius: 11px; border: 0; padding: 0;
@@ -185,7 +186,8 @@ const STYLES = `
     display: flex; align-items: center; gap: 5px; flex: 0 0 auto;
     padding: 5px 10px; font-size: 12px;
     color: rgba(var(--haos-text-rgb, 255,255,255), .85);
-    ${ENTITY_SURFACE_CSS}
+    ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px);
     border-radius: 999px;
   }
   .pill[hidden] { display: none; }
@@ -202,7 +204,8 @@ const STYLES = `
   .rows { display: flex; flex-direction: column; }
   .panel-note { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
 
-  .hero { padding: 14px; display: flex; align-items: center; gap: 16px; ${ENTITY_SURFACE_CSS} }
+  .hero { padding: 14px; display: flex; align-items: center; gap: 16px; ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px); }
   .hero-main { flex: 1; min-width: 0; }
   .hero-label { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hero-value { font-size: 30px; font-weight: var(--haos-font-weight-medium, 500); line-height: 1.15; }
@@ -223,7 +226,8 @@ const STYLES = `
   .row-value.bad { color: var(--haos-bad, #ff6b6b); }
 
   .slots { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-  .slot { padding: 10px; text-align: center; ${ENTITY_SURFACE_CSS} }
+  .slot { padding: 10px; text-align: center; ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px); }
   .slot[hidden] { display: none; }
   .slot.active { box-shadow: inset 0 0 0 1px var(--haos-accent, #0a84ff); }
   .slot-dot { width: 22px; height: 22px; margin: 0 auto 6px; border-radius: 50%; background: rgba(var(--haos-text-rgb, 255,255,255), .25); }
@@ -243,7 +247,8 @@ const STYLES = `
   /* Luefter: Regler mit Verlauf in der Akzentfarbe - je schneller, desto
      dunkler. Der native Regler laesst sich nicht zuverlaessig einfaerben,
      deshalb liegt er unsichtbar ueber der eigenen Spur. */
-  .fan { padding: 12px; ${ENTITY_SURFACE_CSS} }
+  .fan { padding: 12px; ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px); }
   .fan[hidden] { display: none; }
   .fan-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .fan-name { font-size: 13px; color: rgba(var(--haos-text-rgb, 255,255,255), .7); }
@@ -266,7 +271,8 @@ const STYLES = `
     display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px;
     color: var(--haos-text, #fff);
     transition: background .16s ease, transform .12s ease;
-    ${ENTITY_SURFACE_CSS}
+    ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px);
   }
   .ctrl:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .16); }
   .ctrl:active { transform: scale(.97); }
@@ -284,7 +290,8 @@ const STYLES = `
   @media (max-width: 620px) { .columns { grid-template-columns: minmax(0, 1fr); } }
 
   /* Bild und Kamera in einer Kachel, umschaltbar. */
-  .media { position: relative; flex: 1; min-height: 120px; overflow: hidden; ${ENTITY_SURFACE_CSS} }
+  .media { position: relative; flex: 1; min-height: 120px; overflow: hidden; ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px); }
   .media img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .media img[hidden] { display: none; }
   .media-note { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 12px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
@@ -300,7 +307,8 @@ const STYLES = `
   /* Temperaturen: zwei Kacheln nebeneinander unter dem Bild. */
   .graphs { flex: 0 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .graphs[hidden] { display: none; }
-  .graph { min-width: 0; padding: 10px; ${ENTITY_SURFACE_CSS} }
+  .graph { min-width: 0; padding: 10px; ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px); }
   .graph[hidden] { display: none; }
   .graph-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
   .graph-label { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }

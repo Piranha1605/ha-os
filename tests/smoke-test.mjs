@@ -266,6 +266,22 @@ tabs[1].dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
 await new Promise((resolve) => setTimeout(resolve, 30));
 
 check("Küche ist aktiv", tabs[1].classList.contains("active"));
+// Die Pille verschwand nach einem Wechsel: ausgeblendete Elemente melden
+// Breite 0, und die wurde uebernommen. Jetzt wird eine Nullbreite ignoriert.
+{
+  const pille = root.querySelector(".tabs .haos-seg-pill");
+  pille.style.width = "88px";
+  pille.style.opacity = "1";
+  const versteckt = document.createElement("div");
+  versteckt.hidden = true;
+  document.body.append(versteckt);
+  // Umschalten, waehrend nichts messbar ist – die Pille darf nicht auf 0.
+  tabs[1].dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  check("Pille faellt nicht auf Nullbreite", pille.style.width !== "0px", pille.style.width);
+  check("Pille bleibt sichtbar", pille.style.opacity !== "0", pille.style.opacity);
+  versteckt.remove();
+}
+
 check("Home ist ausgeblendet", root.querySelector('.page[data-page-id="home"]')?.hidden === true);
 
 tabs[0].dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
@@ -411,6 +427,12 @@ check("Pfad landet im Theme",
 check("Vorschau zeigt das Bild",
   root.querySelector(".haos-image-preview img")?.getAttribute("src") === "/local/wallpaper/test.jpg",
   root.querySelector(".haos-image-preview img")?.getAttribute("src") || "kein Bild");
+
+// Der Schatten muss in den Abstand zwischen den Karten passen: die Shell hat
+// runde Ecken und schneidet ab, was darueber hinausragt - an den Ecken sah
+// man dadurch eine gerade Kante.
+const schattenBlur = Number(cssVar("--haos-entity-shadow").match(/(\d+)px\s+rgba/)?.[1] || 999);
+check("Kartenschatten passt in den Abstand", schattenBlur <= 16, cssVar("--haos-entity-shadow"));
 
 const accentInput = root.querySelector('.control input[type="color"]');
 accentInput.value = "#ff0000";

@@ -152,7 +152,8 @@ const STYLES = `
   .rail {
     width: 56px; flex: 0 0 56px; padding: 8px 0;
     display: flex; flex-direction: column; align-items: center; gap: 6px;
-    ${ENTITY_SURFACE_CSS}
+    ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px);
   }
   .rail button {
     width: 38px; height: 38px; border-radius: 11px; border: 0; padding: 0;
@@ -180,7 +181,8 @@ const STYLES = `
     display: flex; align-items: center; gap: 5px; flex: 0 0 auto;
     padding: 5px 10px; font-size: 12px;
     color: rgba(var(--haos-text-rgb, 255,255,255), .85);
-    ${ENTITY_SURFACE_CSS}
+    ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px);
     border-radius: 999px;
   }
   .pill[hidden] { display: none; }
@@ -191,7 +193,8 @@ const STYLES = `
   /* --- Reichweite --- */
   .hero {
     padding: 14px; display: flex; align-items: center; gap: 16px;
-    ${ENTITY_SURFACE_CSS}
+    ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px);
   }
   .hero-main { flex: 1; min-width: 0; }
   .hero-label { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
@@ -210,7 +213,8 @@ const STYLES = `
 
   /* --- Kacheln --- */
   .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-  .tile { padding: 10px; min-width: 0; ${ENTITY_SURFACE_CSS} }
+  .tile { padding: 10px; min-width: 0; ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px); }
   .tile-label { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tile-value { font-size: 14px; font-weight: var(--haos-font-weight-medium, 500); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tile-value.good { color: var(--haos-good, #7ee0b0); }
@@ -238,7 +242,8 @@ const STYLES = `
   .tire-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .tire {
     padding: 10px; display: grid; place-content: center; text-align: center;
-    ${ENTITY_SURFACE_CSS}
+    ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px);
   }
   .tire-value { font-size: 19px; font-weight: var(--haos-font-weight-medium, 500); }
   .tire-value.bad { color: var(--haos-bad, #ff6b6b); }

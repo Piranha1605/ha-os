@@ -1,4 +1,4 @@
-/* HA-OS 0.19.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.19.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -138,7 +138,12 @@ var apply = (settings) => {
     // inset-Schatten IN der Fläche, der Schlagschatten darunter. Zusammen in
     // einer Variablen liessen sie sich nicht einzeln regeln.
     "--haos-card-shadow": light ? "0 18px 48px rgba(38, 48, 58, .18)" : "0 24px 70px rgba(0, 0, 0, .30)",
-    "--haos-entity-shadow": light ? "0 10px 28px rgba(38, 48, 58, .14)" : "0 12px 30px rgba(0, 0, 0, .20)",
+    // Der Schlagschatten der Karten muss in den Abstand zwischen ihnen
+    // passen. Die Shell hat runde Ecken und deshalb `overflow: hidden` –
+    // was darueber hinausragt, wird abgeschnitten, und an den Ecken sah man
+    // eine gerade Kante. Bei 16 px Abstand ist knapp die Haelfte davon als
+    // Weichzeichnung sinnvoll; der Rest kommt aus dem Versatz nach unten.
+    "--haos-entity-shadow": light ? "0 4px 12px rgba(38, 48, 58, .13)" : "0 5px 14px rgba(0, 0, 0, .22)",
     "--haos-card-sheen": sheenShadow(t.cardSheen, light),
     "--haos-entity-sheen": sheenShadow(t.entitySheen, light),
     "--haos-card-gloss": glossLayer(t.cardSheen, light),
@@ -539,6 +544,7 @@ var createSegmented = ({ options = [], value = "", onChange, ariaLabel = "" } = 
       pill.style.opacity = "0";
       return;
     }
+    if (!active2.offsetWidth) return;
     pill.style.opacity = "1";
     pill.style.width = `${active2.offsetWidth}px`;
     pill.style.transform = `translateX(${active2.offsetLeft}px)`;
@@ -573,6 +579,10 @@ var createSegmented = ({ options = [], value = "", onChange, ariaLabel = "" } = 
   };
   render(options);
   sync();
+  if (typeof ResizeObserver === "function") {
+    const observer = new ResizeObserver(() => place());
+    observer.observe(wrap);
+  }
   return {
     element: wrap,
     /** Wert und – falls nötig – die Optionen nachziehen. */
@@ -5104,7 +5114,8 @@ var STYLES6 = `
   .rail {
     width: 56px; flex: 0 0 56px; padding: 8px 0;
     display: flex; flex-direction: column; align-items: center; gap: 6px;
-    ${ENTITY_SURFACE_CSS}
+    ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px);
   }
   .rail button {
     width: 38px; height: 38px; border-radius: 11px; border: 0; padding: 0;
@@ -5132,7 +5143,8 @@ var STYLES6 = `
     display: flex; align-items: center; gap: 5px; flex: 0 0 auto;
     padding: 5px 10px; font-size: 12px;
     color: rgba(var(--haos-text-rgb, 255,255,255), .85);
-    ${ENTITY_SURFACE_CSS}
+    ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px);
     border-radius: 999px;
   }
   .pill[hidden] { display: none; }
@@ -5143,7 +5155,8 @@ var STYLES6 = `
   /* --- Reichweite --- */
   .hero {
     padding: 14px; display: flex; align-items: center; gap: 16px;
-    ${ENTITY_SURFACE_CSS}
+    ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px);
   }
   .hero-main { flex: 1; min-width: 0; }
   .hero-label { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
@@ -5162,7 +5175,8 @@ var STYLES6 = `
 
   /* --- Kacheln --- */
   .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-  .tile { padding: 10px; min-width: 0; ${ENTITY_SURFACE_CSS} }
+  .tile { padding: 10px; min-width: 0; ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px); }
   .tile-label { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tile-value { font-size: 14px; font-weight: var(--haos-font-weight-medium, 500); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tile-value.good { color: var(--haos-good, #7ee0b0); }
@@ -5190,7 +5204,8 @@ var STYLES6 = `
   .tire-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .tire {
     padding: 10px; display: grid; place-content: center; text-align: center;
-    ${ENTITY_SURFACE_CSS}
+    ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px);
   }
   .tire-value { font-size: 19px; font-weight: var(--haos-font-weight-medium, 500); }
   .tire-value.bad { color: var(--haos-bad, #ff6b6b); }
@@ -5985,7 +6000,8 @@ var STYLES7 = `
   .rail {
     width: 56px; flex: 0 0 56px; padding: 8px 0;
     display: flex; flex-direction: column; align-items: center; gap: 6px;
-    ${ENTITY_SURFACE_CSS}
+    ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px);
   }
   .rail button {
     width: 38px; height: 38px; border-radius: 11px; border: 0; padding: 0;
@@ -6011,7 +6027,8 @@ var STYLES7 = `
     display: flex; align-items: center; gap: 5px; flex: 0 0 auto;
     padding: 5px 10px; font-size: 12px;
     color: rgba(var(--haos-text-rgb, 255,255,255), .85);
-    ${ENTITY_SURFACE_CSS}
+    ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px);
     border-radius: 999px;
   }
   .pill[hidden] { display: none; }
@@ -6028,7 +6045,8 @@ var STYLES7 = `
   .rows { display: flex; flex-direction: column; }
   .panel-note { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
 
-  .hero { padding: 14px; display: flex; align-items: center; gap: 16px; ${ENTITY_SURFACE_CSS} }
+  .hero { padding: 14px; display: flex; align-items: center; gap: 16px; ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px); }
   .hero-main { flex: 1; min-width: 0; }
   .hero-label { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hero-value { font-size: 30px; font-weight: var(--haos-font-weight-medium, 500); line-height: 1.15; }
@@ -6049,7 +6067,8 @@ var STYLES7 = `
   .row-value.bad { color: var(--haos-bad, #ff6b6b); }
 
   .slots { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-  .slot { padding: 10px; text-align: center; ${ENTITY_SURFACE_CSS} }
+  .slot { padding: 10px; text-align: center; ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px); }
   .slot[hidden] { display: none; }
   .slot.active { box-shadow: inset 0 0 0 1px var(--haos-accent, #0a84ff); }
   .slot-dot { width: 22px; height: 22px; margin: 0 auto 6px; border-radius: 50%; background: rgba(var(--haos-text-rgb, 255,255,255), .25); }
@@ -6069,7 +6088,8 @@ var STYLES7 = `
   /* Luefter: Regler mit Verlauf in der Akzentfarbe - je schneller, desto
      dunkler. Der native Regler laesst sich nicht zuverlaessig einfaerben,
      deshalb liegt er unsichtbar ueber der eigenen Spur. */
-  .fan { padding: 12px; ${ENTITY_SURFACE_CSS} }
+  .fan { padding: 12px; ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px); }
   .fan[hidden] { display: none; }
   .fan-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .fan-name { font-size: 13px; color: rgba(var(--haos-text-rgb, 255,255,255), .7); }
@@ -6092,7 +6112,8 @@ var STYLES7 = `
     display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px;
     color: var(--haos-text, #fff);
     transition: background .16s ease, transform .12s ease;
-    ${ENTITY_SURFACE_CSS}
+    ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px);
   }
   .ctrl:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .16); }
   .ctrl:active { transform: scale(.97); }
@@ -6110,7 +6131,8 @@ var STYLES7 = `
   @media (max-width: 620px) { .columns { grid-template-columns: minmax(0, 1fr); } }
 
   /* Bild und Kamera in einer Kachel, umschaltbar. */
-  .media { position: relative; flex: 1; min-height: 120px; overflow: hidden; ${ENTITY_SURFACE_CSS} }
+  .media { position: relative; flex: 1; min-height: 120px; overflow: hidden; ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px); }
   .media img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .media img[hidden] { display: none; }
   .media-note { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 12px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
@@ -6126,7 +6148,8 @@ var STYLES7 = `
   /* Temperaturen: zwei Kacheln nebeneinander unter dem Bild. */
   .graphs { flex: 0 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .graphs[hidden] { display: none; }
-  .graph { min-width: 0; padding: 10px; ${ENTITY_SURFACE_CSS} }
+  .graph { min-width: 0; padding: 10px; ${CONTROL_SURFACE_CSS}
+    border-radius: var(--haos-entity-radius, 20px); }
   .graph[hidden] { display: none; }
   .graph-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
   .graph-label { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
@@ -6957,7 +6980,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.19.0";
+var VERSION = "0.19.1";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

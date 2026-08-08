@@ -491,10 +491,14 @@ export const createSegmented = ({ options = [], value = "", onChange, ariaLabel 
       pill.style.opacity = "0";
       return;
     }
+
+    // Ausgeblendete Elemente melden Breite 0. Wird die Pille darauf gesetzt,
+    // ist sie weg – und bleibt weg, weil beim Wiedereinblenden niemand neu
+    // rechnet. Deshalb: Nullbreite ignorieren, der ResizeObserver unten holt
+    // es nach, sobald das Element wirklich sichtbar ist.
+    if (!active.offsetWidth) return;
+
     pill.style.opacity = "1";
-    // offsetLeft/-Width sind erst nach dem Einhängen belastbar. Bis dahin
-    // sitzt die Pille auf Position 0 – sichtbar wird das nie, weil der
-    // erste Anstrich vor dem Einblenden passiert.
     pill.style.width = `${active.offsetWidth}px`;
     pill.style.transform = `translateX(${active.offsetLeft}px)`;
   };
@@ -531,6 +535,13 @@ export const createSegmented = ({ options = [], value = "", onChange, ariaLabel 
 
   render(options);
   sync();
+
+  // Greift beim Einblenden, beim Seitenwechsel und wenn sich die Breite der
+  // Karte aendert. Ohne ihn sitzt die Pille nach einem Wechsel falsch.
+  if (typeof ResizeObserver === "function") {
+    const observer = new ResizeObserver(() => place());
+    observer.observe(wrap);
+  }
 
   return {
     element: wrap,
