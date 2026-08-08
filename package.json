@@ -1,6 +1,6 @@
 {
   "name": "ha-os",
-  "version": "0.15.1",
+  "version": "0.15.2",
   "description": "HA-OS – Dashboard-Grundgerüst im Glassmorphism-Stil für Home Assistant",
   "type": "module",
   "private": true,

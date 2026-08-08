@@ -149,6 +149,28 @@ const wenigOel = build({}, makeHass({
 }));
 check("niedriger Stand ist rot", sr(wenigOel).querySelectorAll(".tile-value")[1].classList.contains("bad"));
 
+console.log("\n6b. Fenster-Kachel in der Kopfzeile");
+// Anlass: ein Fenster meldete seit einem Tag nichts (Wert 0). HAs
+// Sammelsensor windows_closed steht dann auf off, und die Kachel behauptete
+// „Fenster offen" - obwohl am Fahrzeug keines offen war.
+const kachel = (werte, sammel = "off") => {
+  const zustaende = {};
+  ["front_left", "front_right", "rear_left", "rear_right"].forEach((seite, i) => {
+    zustaende[`sensor.garage_aussen_${ID}_window_status_${seite}`] =
+      state(`sensor.garage_aussen_${ID}_window_status_${seite}`, werte[i]);
+  });
+  zustaende[`binary_sensor.${ID}_windows_closed`] = state(`binary_sensor.${ID}_windows_closed`, sammel);
+  const k = build({}, makeHass(zustaende));
+  return sr(k).querySelectorAll(".pill span")[1].textContent;
+};
+check("alle zu", kachel(["2", "2", "2", "2"], "on") === "Fenster zu", kachel(["2", "2", "2", "2"], "on"));
+check("eines meldet nichts: nicht 'offen'", kachel(["2", "0", "2", "2"]) === "Fenster unklar",
+  kachel(["2", "0", "2", "2"]));
+check("wirklich offen bleibt offen", kachel(["2", "1", "2", "2"]) === "Fenster offen",
+  kachel(["2", "1", "2", "2"]));
+check("zwei offen werden gezaehlt", kachel(["1", "1", "2", "2"]) === "2 Fenster offen",
+  kachel(["1", "1", "2", "2"]));
+
 console.log("\n7. Offenes Fahrzeug");
 const offen = build({}, makeHass({
   [`sensor.${ID}_lock`]: state(`sensor.${ID}_lock`, "0"),
@@ -270,7 +292,7 @@ const fenster = (value) => {
     .find((r) => r.querySelector(".row-label").textContent === "Fenster vorn links")
     ?.querySelector(".row-value").textContent;
 };
-check("0 wird nicht geraten", fenster("0") === "unbekannt", fenster("0"));
+check("0 heisst keine Meldung, nicht offen", fenster("0") === "keine Meldung", fenster("0"));
 check("3 ist Lueftungsstellung", fenster("3") === "Lüftungsstellung", fenster("3"));
 check("unbekannter Wert wird roh gezeigt", fenster("9") === "9", fenster("9"));
 check("Warnleuchten einzeln", rowValue("Motorkontrollleuchte") === "ok", rowValue("Motorkontrollleuchte"));

@@ -1,4 +1,4 @@
-/* HA-OS 0.15.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.15.2 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -4903,9 +4903,18 @@ var windowLabel = (state) => {
   const value = String(state.state).toLowerCase();
   if (value === "2" || value === "closed" || value === "off") return { text: "geschlossen", tone: "good" };
   if (value === "1" || value === "open" || value === "on") return { text: "offen", tone: "bad" };
-  if (value === "0") return { text: "unbekannt", tone: "" };
+  if (value === "0") return { text: "keine Meldung", tone: "" };
   if (value === "3" || value === "4") return { text: "Lüftungsstellung", tone: "bad" };
   return { text: state.state, tone: "" };
+};
+var windowSummary = (values) => {
+  const known = values.filter((value) => value !== null && value !== void 0);
+  if (!known.length) return null;
+  const open = known.filter((value) => ["1", "3", "4", "open", "on"].includes(String(value).toLowerCase()));
+  if (open.length) return { text: open.length === 1 ? "Fenster offen" : `${open.length} Fenster offen`, tone: "bad" };
+  const silent = known.filter((value) => String(value) === "0");
+  if (silent.length) return { text: "Fenster unklar", tone: "" };
+  return { text: "Fenster zu", tone: "good" };
 };
 var formatNumber = (value, digits = 0) => value === null ? "–" : value.toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 var HaOsVehicleCard = class extends HTMLElement {
@@ -5174,7 +5183,24 @@ var HaOsVehicleCard = class extends HTMLElement {
       nodes.lockPill.hidden = true;
     }
     const windows = stateOf("windows");
-    if (windows && windows.state !== "unavailable") {
+    const sides = ["front_left", "front_right", "rear_left", "rear_right"];
+    let windowValues = sides.map((side) => stateOf(`window_${side}`)?.state ?? null);
+    if (windowValues.every((value) => value === null) && windows?.attributes) {
+      windowValues = [
+        windows.attributes.windowstatusfrontleft,
+        windows.attributes.windowstatusfrontright,
+        windows.attributes.windowstatusrearleft,
+        windows.attributes.windowstatusrearright
+      ].map((value) => value === void 0 ? null : String(value));
+    }
+    const summary = windowSummary(windowValues);
+    if (summary) {
+      nodes.windowPill.hidden = false;
+      nodes.windowPill.classList.toggle("good", summary.tone === "good");
+      nodes.windowPill.classList.toggle("bad", summary.tone === "bad");
+      nodes.windowIcon.icon = summary.tone === "good" ? "mdi:car-door-lock" : "mdi:car-door";
+      nodes.windowText.textContent = summary.text;
+    } else if (windows && windows.state !== "unavailable") {
       const closed = windows.state === "on" || windows.state === "closed";
       nodes.windowPill.hidden = false;
       nodes.windowPill.classList.toggle("good", closed);
@@ -5540,7 +5566,7 @@ var HaOsVehicleEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG7)) customElements.define(EDITOR_TAG7, HaOsVehicleEditor);
 
 // src/ha-os.js
-var VERSION = "0.15.1";
+var VERSION = "0.15.2";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

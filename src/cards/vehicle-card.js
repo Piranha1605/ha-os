@@ -293,9 +293,33 @@ export const windowLabel = (state) => {
   const value = String(state.state).toLowerCase();
   if (value === "2" || value === "closed" || value === "off") return { text: "geschlossen", tone: "good" };
   if (value === "1" || value === "open" || value === "on") return { text: "offen", tone: "bad" };
-  if (value === "0") return { text: "unbekannt", tone: "" };
+  if (value === "0") return { text: "keine Meldung", tone: "" };
   if (value === "3" || value === "4") return { text: "Lüftungsstellung", tone: "bad" };
   return { text: state.state, tone: "" };
+};
+
+/**
+ * Gesamtaussage über alle vier Fenster für die Kachel in der Kopfzeile.
+ *
+ * **Nicht** über `windows_closed`: dieser Sammelsensor verlangt, dass alle
+ * vier Fenster `2` melden. Meldet eines seit einem Tag gar nichts – Wert `0` –,
+ * steht er auf `off`, und die Kachel behauptete daraufhin „Fenster offen".
+ * Am Fahrzeug war aber kein Fenster offen, es fehlte nur eine Meldung.
+ *
+ * Deshalb hier die Einzelwerte: nur ein wirklich offenes Fenster (1, 3, 4)
+ * macht die Kachel rot. Fehlt bloss eine Meldung, sagt sie das auch.
+ */
+export const windowSummary = (values) => {
+  const known = values.filter((value) => value !== null && value !== undefined);
+  if (!known.length) return null;
+
+  const open = known.filter((value) => ["1", "3", "4", "open", "on"].includes(String(value).toLowerCase()));
+  if (open.length) return { text: open.length === 1 ? "Fenster offen" : `${open.length} Fenster offen`, tone: "bad" };
+
+  const silent = known.filter((value) => String(value) === "0");
+  if (silent.length) return { text: "Fenster unklar", tone: "" };
+
+  return { text: "Fenster zu", tone: "good" };
 };
 
 const formatNumber = (value, digits = 0) =>
@@ -599,7 +623,29 @@ class HaOsVehicleCard extends HTMLElement {
 
     // --- Fenster
     const windows = stateOf("windows");
-    if (windows && windows.state !== "unavailable") {
+
+    // Reihenfolge der Quellen: erst die vier Einzelsensoren, dann die
+    // Attribute des Sammelsensors – der führt dieselben Werte mit –, erst
+    // zuletzt dessen eigener Zustand.
+    const sides = ["front_left", "front_right", "rear_left", "rear_right"];
+    let windowValues = sides.map((side) => stateOf(`window_${side}`)?.state ?? null);
+    if (windowValues.every((value) => value === null) && windows?.attributes) {
+      windowValues = [
+        windows.attributes.windowstatusfrontleft,
+        windows.attributes.windowstatusfrontright,
+        windows.attributes.windowstatusrearleft,
+        windows.attributes.windowstatusrearright,
+      ].map((value) => (value === undefined ? null : String(value)));
+    }
+
+    const summary = windowSummary(windowValues);
+    if (summary) {
+      nodes.windowPill.hidden = false;
+      nodes.windowPill.classList.toggle("good", summary.tone === "good");
+      nodes.windowPill.classList.toggle("bad", summary.tone === "bad");
+      nodes.windowIcon.icon = summary.tone === "good" ? "mdi:car-door-lock" : "mdi:car-door";
+      nodes.windowText.textContent = summary.text;
+    } else if (windows && windows.state !== "unavailable") {
       const closed = windows.state === "on" || windows.state === "closed";
       nodes.windowPill.hidden = false;
       nodes.windowPill.classList.toggle("good", closed);
