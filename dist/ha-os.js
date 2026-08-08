@@ -1,4 +1,4 @@
-/* HA-OS 0.23.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.24.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -3264,6 +3264,16 @@ var STYLES3 = `
   .media-art { width: 52px; height: 52px; flex: 0 0 52px; border-radius: 10px; overflow: hidden; background: rgba(var(--haos-text-rgb, 255,255,255), .1); display: grid; place-items: center; }
   .media-art img { width: 100%; height: 100%; object-fit: cover; }
   .progress { height: 3px; border-radius: 2px; background: rgba(var(--haos-text-rgb, 255,255,255), .18); overflow: hidden; }
+  /* Zum Springen: mehr Hoehe zum Treffen, ohne dass der Balken dicker wirkt. */
+  .progress.seekable { cursor: pointer; height: 3px; padding: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; background-clip: padding-box; }
+  .media-fav {
+    width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%; display: grid; place-items: center;
+    color: rgba(var(--haos-text-rgb, 255,255,255), .7);
+    ${CONTROL_SURFACE_CSS}
+  }
+  .media-fav[hidden] { display: none; }
+  .media-fav:hover { color: var(--haos-bad, #ff6b6b); }
+  .media-fav ha-icon { --mdc-icon-size: 17px; }
   .progress span { display: block; height: 100%; width: 0%; background: var(--haos-accent, #0a84ff); transition: width .5s linear; }
   .media-times { display: flex; justify-content: space-between; font-size: 9px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
   .media-controls { display: flex; align-items: center; justify-content: space-between; }
@@ -3373,6 +3383,8 @@ var formatDuration = (seconds) => {
 var numeric = (value) => value === null || value === void 0 || value === "" ? NaN : Number(value);
 var MEDIA_FEATURE = {
   PAUSE: 1,
+  SEEK: 2,
+  STOP: 4096,
   VOLUME_SET: 4,
   VOLUME_MUTE: 8,
   PREVIOUS_TRACK: 16,
@@ -3991,10 +4003,28 @@ var renderers = {
       ctx.nodes.track = el3("div", "title");
       ctx.nodes.artist = el3("div", "subtitle");
       meta.append(ctx.nodes.track, ctx.nodes.artist);
-      head.append(ctx.nodes.art, meta);
+      ctx.nodes.favorite = el3("button", "media-fav");
+      ctx.nodes.favorite.append(icon2("mdi:heart-outline"));
+      ctx.nodes.favorite.title = "Titel favorisieren";
+      ctx.nodes.favorite.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const ziel = renderers.media._favoriteEntity(ctx);
+        if (ziel) ctx.hass?.callService("button", "press", { entity_id: ziel });
+      });
+      head.append(ctx.nodes.art, meta, ctx.nodes.favorite);
       ctx.nodes.progress = el3("div", "progress");
       ctx.nodes.progressBar = el3("span");
       ctx.nodes.progress.append(ctx.nodes.progressBar);
+      ctx.nodes.progress.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (!ctx.nodes.canSeek) return;
+        const dauer = Number(ctx.hass?.states?.[ctx.config.entity]?.attributes?.media_duration) || 0;
+        if (!dauer) return;
+        const kasten = ctx.nodes.progress.getBoundingClientRect();
+        if (!kasten.width) return;
+        const anteil = Math.max(0, Math.min(1, (event.clientX - kasten.left) / kasten.width));
+        call("media_seek", { seek_position: Math.round(anteil * dauer) });
+      });
       const times = el3("div", "media-times");
       ctx.nodes.elapsed = el3("span", null, "0:00");
       ctx.nodes.duration = el3("span", null, "0:00");
@@ -4026,10 +4056,11 @@ var renderers = {
       );
       const next = make("mdi:skip-next", MEDIA_FEATURE.NEXT_TRACK, () => call("media_next_track"));
       const play = make("mdi:pause", MEDIA_FEATURE.PLAY | MEDIA_FEATURE.PAUSE, () => call("media_play_pause"), "play");
+      const stop = make("mdi:stop", MEDIA_FEATURE.STOP, () => call("media_stop"));
       ctx.nodes.play = play.node;
       ctx.nodes.shuffle = shuffle;
       ctx.nodes.repeat = repeat;
-      ctx.nodes.mediaButtons = [shuffle, previous, play, next, repeat];
+      ctx.nodes.mediaButtons = [shuffle, previous, play, stop, next, repeat];
       controls.append(...ctx.nodes.mediaButtons.map((b) => b.node));
       const volumeRow = el3("div", "volume");
       ctx.nodes.muteButton = el3("button", "mute");
@@ -4071,6 +4102,15 @@ var renderers = {
       inhalt.append(head, ctx.nodes.progress, times, controls, volumeRow, ctx.nodes.sourceSelect);
       root.append(inhalt);
       return root;
+    },
+    /** Sucht die Favoriten-Knopf-Entitaet zum gewaehlten Player. */
+    _favoriteEntity(ctx) {
+      if (ctx.config.favorite_entity) return ctx.config.favorite_entity;
+      const objectId = String(ctx.config.entity || "").split(".")[1];
+      if (!objectId || !ctx.hass?.states) return "";
+      return Object.keys(ctx.hass.states).find(
+        (id) => id.startsWith(`button.${objectId}_`) && /favorit|favourite|favorisieren/i.test(id)
+      ) || "";
     },
     /**
      * Liest zwei kraeftige Farben aus dem Titelbild und faerbt damit die
@@ -4188,6 +4228,10 @@ var renderers = {
       } else {
         ctx.nodes.volumeValue.textContent = muted ? "stumm" : "–";
       }
+      ctx.nodes.canSeek = kann(MEDIA_FEATURE.SEEK) && Number(attributes.media_duration) > 0;
+      ctx.nodes.progress.classList.toggle("seekable", ctx.nodes.canSeek);
+      const favorit = renderers.media._favoriteEntity(ctx);
+      ctx.nodes.favorite.hidden = !favorit;
       const sources = Array.isArray(attributes.source_list) ? attributes.source_list : [];
       ctx.nodes.sourceSelect.hidden = !sources.length;
       if (!ctx.nodes.sourceSelect.hidden) {
@@ -7398,7 +7442,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.23.0";
+var VERSION = "0.24.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

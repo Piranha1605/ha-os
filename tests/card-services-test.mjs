@@ -107,17 +107,24 @@ const settle = () => new Promise((r) => setTimeout(r, 40));
 console.log("\n1. Media – Mischen und Wiederholen");
 const media = build({ card_type: "media", entity: "media_player.voll" });
 const knoepfe = [...sr(media).querySelectorAll(".media-controls button")];
-check("fünf Knöpfe angelegt", knoepfe.length === 5, `${knoepfe.length}`);
-check("alle sichtbar bei vollem Funktionsumfang", knoepfe.every((b) => !b.hidden));
+// Nach Symbol suchen statt nach Position: die Reihenfolge aendert sich, wenn
+// ein Knopf dazukommt - der Stopp-Knopf hat genau das getan.
+const knopf = (symbol) =>
+  knoepfe.find((b) => b.querySelector("ha-icon")?.getAttribute("icon") === symbol);
+check("sechs Knoepfe angelegt", knoepfe.length === 6, `${knoepfe.length}`);
+check("nur die unterstuetzten sind sichtbar",
+  knoepfe.filter((b) => !b.hidden).length === 5,
+  `${knoepfe.filter((b) => !b.hidden).length}`);
+check("Stopp bleibt aus, weil der Player es nicht kann", knopf("mdi:stop")?.hidden === true);
 
 calls.length = 0;
-knoepfe[0].click();
+knopf("mdi:shuffle-variant").click();
 check("Mischen sendet den Parameter mit",
   calls[0]?.dienst === "media_player.shuffle_set" && calls[0]?.daten.shuffle === true,
   JSON.stringify(calls[0]));
 
 calls.length = 0;
-knoepfe[4].click();
+knopf("mdi:repeat").click();
 check("Wiederholen sendet den Parameter mit",
   calls[0]?.dienst === "media_player.repeat_set" && calls[0]?.daten.repeat === "all",
   JSON.stringify(calls[0]));
@@ -127,14 +134,14 @@ const hassAlle = makeHass();
 hassAlle.states["media_player.voll"].attributes.repeat = "all";
 media.hass = hassAlle;
 calls.length = 0;
-knoepfe[4].click();
+knoepfe.find((b) => b.querySelector("ha-icon")?.getAttribute("icon")?.startsWith("mdi:repeat")).click();
 check("Wiederholen schaltet weiter auf eines", calls[0]?.daten.repeat === "one", JSON.stringify(calls[0]));
 
 const hassEines = makeHass();
 hassEines.states["media_player.voll"].attributes.repeat = "one";
 media.hass = hassEines;
 calls.length = 0;
-knoepfe[4].click();
+knoepfe.find((b) => b.querySelector("ha-icon")?.getAttribute("icon")?.startsWith("mdi:repeat")).click();
 check("und danach wieder aus", calls[0]?.daten.repeat === "off", JSON.stringify(calls[0]));
 
 console.log("\n2. Media – supported_features");
@@ -447,6 +454,61 @@ console.log("\n11. Farbschleier im Medienspieler");
   check("ohne Titelbild keine erfundenen Farben",
     !schleier.style.getPropertyValue("--glow-a"),
     schleier.style.getPropertyValue("--glow-a") || "(leer)");
+}
+
+console.log("\n12. Music Assistant: Springen, Stopp, Favorit");
+{
+  const bauen = (attrs, extra = {}) => {
+    const zustaende = {
+      ...makeHass().states,
+      "media_player.buro": zustand("media_player.buro", "playing", {
+        friendly_name: "Büro", media_title: "Titel", media_duration: 240, media_position: 30, ...attrs,
+      }),
+      ...extra,
+    };
+    const karte = document.createElement("ha-os-card");
+    karte.setConfig({ type: "custom:ha-os-card", card_type: "media", entity: "media_player.buro" });
+    document.body.append(karte);
+    karte.hass = { ...makeHass(), states: zustaende };
+    return karte;
+  };
+
+  // 8320575 sind die echten Feature-Bits von Music Assistant.
+  const ma = bauen({ supported_features: 8320575 }, {
+    "button.buro_aktuellen_titel_favorisieren": zustand("button.buro_aktuellen_titel_favorisieren", "unknown", {}),
+  });
+  const sr3 = ma.shadowRoot;
+
+  check("Stopp-Knopf vorhanden",
+    [...sr3.querySelectorAll(".media-controls button")].some((b) => !b.hidden &&
+      b.querySelector("ha-icon")?.getAttribute("icon") === "mdi:stop"));
+
+  check("Zeitleiste ist anklickbar", sr3.querySelector(".progress").classList.contains("seekable"));
+  calls.length = 0;
+  const leiste = sr3.querySelector(".progress");
+  leiste.getBoundingClientRect = () => ({ left: 0, width: 200 });
+  leiste.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, clientX: 100 }));
+  check("Klick in der Mitte springt zur Haelfte",
+    calls[0]?.dienst === "media_player.media_seek" && calls[0]?.daten?.seek_position === 120,
+    JSON.stringify(calls[0] || {}));
+
+  // Der Knopf wird gesucht, nicht verlangt – Music Assistant legt je Player
+  // eine eigene Entitaet an.
+  check("Favoriten-Knopf gefunden", !sr3.querySelector(".media-fav").hidden);
+  calls.length = 0;
+  sr3.querySelector(".media-fav").click();
+  check("Favorit loest den Knopf aus",
+    calls[0]?.dienst === "button.press" &&
+      calls[0]?.daten?.entity_id === "button.buro_aktuellen_titel_favorisieren",
+    JSON.stringify(calls[0] || {}));
+
+  // Apple TV: kein Stopp, kein Springen, kein Favorit.
+  // Ein Player ohne SEEK: die Leiste bleibt unbeweglich. (Apple TV taugt
+  // dafuer nicht als Beispiel - der kann springen.)
+  const ohneSeek = bauen({ supported_features: 1 | 16384 });
+  check("ohne SEEK keine anklickbare Leiste",
+    !ohneSeek.shadowRoot.querySelector(".progress").classList.contains("seekable"));
+  check("ohne Knopf-Entitaet kein Herz", ohneSeek.shadowRoot.querySelector(".media-fav").hidden);
 }
 
 console.log(failures === 0 ? "\nAlle Prüfungen bestanden.\n" : `\n${failures} Prüfung(en) fehlgeschlagen.\n`);
