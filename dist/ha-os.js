@@ -1,4 +1,4 @@
-/* HA-OS 0.24.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.25.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -3215,6 +3215,8 @@ var STYLES3 = `
 
   /* --- Wetter --- */
   .weather-head { display: flex; align-items: flex-start; gap: 10px; }
+  .weather-icon { margin-left: auto; flex: 0 0 auto; --mdc-icon-size: 46px; color: rgba(var(--haos-text-rgb, 255,255,255), .85); }
+  .weather-icon[hidden] { display: none; }
   .weather-now { font-size: 40px; font-weight: 300; letter-spacing: -.03em; line-height: 1; }
   .weather-now sup { font-size: 18px; vertical-align: super; }
   .weather-bottom { margin-top: auto; display: grid; gap: 2px; }
@@ -3381,6 +3383,24 @@ var formatDuration = (seconds) => {
   return `${Math.floor(total / 60)}:${pad(total % 60)}`;
 };
 var numeric = (value) => value === null || value === void 0 || value === "" ? NaN : Number(value);
+var CONDITION_ICONS = {
+  sunny: "mdi:weather-sunny",
+  clear: "mdi:weather-sunny",
+  "clear-night": "mdi:weather-night",
+  cloudy: "mdi:weather-cloudy",
+  partlycloudy: "mdi:weather-partly-cloudy",
+  rainy: "mdi:weather-rainy",
+  pouring: "mdi:weather-pouring",
+  snowy: "mdi:weather-snowy",
+  "snowy-rainy": "mdi:weather-snowy-rainy",
+  fog: "mdi:weather-fog",
+  windy: "mdi:weather-windy",
+  "windy-variant": "mdi:weather-windy-variant",
+  lightning: "mdi:weather-lightning",
+  "lightning-rainy": "mdi:weather-lightning-rainy",
+  hail: "mdi:weather-hail",
+  exceptional: "mdi:alert-circle-outline"
+};
 var MEDIA_FEATURE = {
   PAUSE: 1,
   SEEK: 2,
@@ -3773,7 +3793,9 @@ var renderers = {
       ctx.nodes.condition = el3("div", "title");
       ctx.nodes.wind = el3("div", "subtitle");
       meta.append(ctx.nodes.condition, ctx.nodes.wind);
-      head.append(ctx.nodes.now, meta);
+      ctx.nodes.nowIcon = icon2("mdi:weather-cloudy");
+      ctx.nodes.nowIcon.className = "weather-icon";
+      head.append(ctx.nodes.now, meta, ctx.nodes.nowIcon);
       const SVG_NS = "http://www.w3.org/2000/svg";
       ctx.nodes.graph = el3("div", "weather-graph");
       const graphSvg = document.createElementNS(SVG_NS, "svg");
@@ -3820,6 +3842,9 @@ var renderers = {
       ctx.nodes.condition.textContent = ctx.config.name || friendlyName(ctx.config.entity, state);
       const speed = state.attributes.wind_speed;
       ctx.nodes.wind.textContent = speed ? `Wind ${speed} ${state.attributes.wind_speed_unit || "km/h"}` : state.state;
+      const symbol = CONDITION_ICONS[state.state];
+      ctx.nodes.nowIcon.hidden = !symbol;
+      if (symbol) ctx.nodes.nowIcon.setAttribute("icon", symbol);
       const forecast = state.attributes.forecast || ctx.nodes.forecastData || [];
       const items = dropPastDays(forecast, ctx.config.forecast_type).slice(
         0,
@@ -3830,33 +3855,19 @@ var renderers = {
         ctx.nodes.forecastNodes = items.map(() => {
           const node = el3("div", "forecast-item");
           const value = el3("b");
-          const symbol = icon2("mdi:weather-cloudy");
+          const symbol2 = icon2("mdi:weather-cloudy");
           const label = el3("span");
-          node.append(value, symbol, label);
+          node.append(value, symbol2, label);
           ctx.nodes.forecast.append(node);
-          return { value, symbol, label };
+          return { value, symbol: symbol2, label };
         });
       }
-      const conditionIcons = {
-        sunny: "mdi:weather-sunny",
-        clear: "mdi:weather-sunny",
-        "clear-night": "mdi:weather-night",
-        cloudy: "mdi:weather-cloudy",
-        partlycloudy: "mdi:weather-partly-cloudy",
-        rainy: "mdi:weather-rainy",
-        pouring: "mdi:weather-pouring",
-        snowy: "mdi:weather-snowy",
-        fog: "mdi:weather-fog",
-        windy: "mdi:weather-windy",
-        lightning: "mdi:weather-lightning",
-        hail: "mdi:weather-hail"
-      };
       items.forEach((entry, index) => {
         const node = ctx.nodes.forecastNodes?.[index];
         if (!node) return;
         const value = Math.round(numeric(entry?.temperature));
         node.value.textContent = Number.isFinite(value) ? `${value}°` : "--";
-        node.symbol.setAttribute("icon", conditionIcons[entry.condition] || "mdi:weather-cloudy");
+        node.symbol.setAttribute("icon", CONDITION_ICONS[entry.condition] || "mdi:weather-cloudy");
         node.label.textContent = forecastLabel(entry?.datetime, ctx.config.forecast_type);
       });
       drawWeatherGraph(ctx, items);
@@ -7442,7 +7453,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.24.0";
+var VERSION = "0.25.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

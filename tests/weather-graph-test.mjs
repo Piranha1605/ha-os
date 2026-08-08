@@ -215,5 +215,42 @@ const gesternLabels = labelsOf(gestern);
 check("gestriger Tag wird ausgeblendet", gesternLabels[0] === "Heute", gesternLabels.join(" | "));
 check("drei Spalten übrig", gesternLabels.length === 3, gesternLabels.join(" | "));
 
+console.log("\n5. Grosses Symbol der aktuellen Lage");
+{
+  const bauen = (zustand) => {
+    const karte = document.createElement("ha-os-card");
+    karte.setConfig({ type: "custom:ha-os-card", card_type: "weather", entity: "weather.test" });
+    document.body.append(karte);
+    karte.hass = {
+      states: {
+        "weather.test": {
+          entity_id: "weather.test",
+          state: zustand,
+          attributes: { friendly_name: "Zuhause", temperature: 22, wind_speed: 12, forecast: [] },
+        },
+      },
+      callService: () => Promise.resolve(),
+      formatEntityState: (s2) => s2.state,
+      connection: { subscribeMessage: () => Promise.reject(new Error("nicht unterstuetzt")) },
+    };
+    return karte;
+  };
+
+  const regen = bauen("pouring");
+  const symbol = regen.shadowRoot.querySelector(".weather-icon");
+  check("Symbol vorhanden", Boolean(symbol) && !symbol.hidden);
+  check("passt zur Lage", symbol.getAttribute("icon") === "mdi:weather-pouring", symbol.getAttribute("icon"));
+
+  const nacht = bauen("clear-night");
+  check("Nacht bekommt den Mond",
+    nacht.shadowRoot.querySelector(".weather-icon").getAttribute("icon") === "mdi:weather-night",
+    nacht.shadowRoot.querySelector(".weather-icon").getAttribute("icon"));
+
+  // Lieber kein Symbol als ein falsches: eine unbekannte Lage darf nicht als
+  // Sonne durchgehen.
+  const unbekannt = bauen("meteorschauer");
+  check("unbekannte Lage zeigt nichts", unbekannt.shadowRoot.querySelector(".weather-icon").hidden);
+}
+
 console.log(failures === 0 ? "\nAlle Prüfungen bestanden.\n" : `\n${failures} FEHLER.\n`);
 process.exit(failures === 0 ? 0 : 1);

@@ -178,6 +178,8 @@ const STYLES = `
 
   /* --- Wetter --- */
   .weather-head { display: flex; align-items: flex-start; gap: 10px; }
+  .weather-icon { margin-left: auto; flex: 0 0 auto; --mdc-icon-size: 46px; color: rgba(var(--haos-text-rgb, 255,255,255), .85); }
+  .weather-icon[hidden] { display: none; }
   .weather-now { font-size: 40px; font-weight: 300; letter-spacing: -.03em; line-height: 1; }
   .weather-now sup { font-size: 18px; vertical-align: super; }
   .weather-bottom { margin-top: auto; display: grid; gap: 2px; }
@@ -369,6 +371,35 @@ const numeric = (value) =>
  * Home Assistant meldet je Entitaet, was sie beherrscht. HA-OS hat das bisher
  * nirgends gelesen und deshalb Knoepfe angeboten, die ins Leere liefen.
  */
+/**
+ * Wetterlagen von Home Assistant auf Symbole.
+ *
+ * Auf Modulebene, weil sie an zwei Stellen gebraucht wird: fuer das grosse
+ * Symbol der aktuellen Lage und fuer die Vorhersagespalten. Zweimal
+ * gepflegt wuerde sie zwangslaeufig auseinanderlaufen.
+ *
+ * Die Liste folgt den Zustaenden, die HAs Wetterintegrationen melden.
+ * `exceptional` steht fuer Unwetterwarnungen.
+ */
+const CONDITION_ICONS = {
+  sunny: "mdi:weather-sunny",
+  clear: "mdi:weather-sunny",
+  "clear-night": "mdi:weather-night",
+  cloudy: "mdi:weather-cloudy",
+  partlycloudy: "mdi:weather-partly-cloudy",
+  rainy: "mdi:weather-rainy",
+  pouring: "mdi:weather-pouring",
+  snowy: "mdi:weather-snowy",
+  "snowy-rainy": "mdi:weather-snowy-rainy",
+  fog: "mdi:weather-fog",
+  windy: "mdi:weather-windy",
+  "windy-variant": "mdi:weather-windy-variant",
+  lightning: "mdi:weather-lightning",
+  "lightning-rainy": "mdi:weather-lightning-rainy",
+  hail: "mdi:weather-hail",
+  exceptional: "mdi:alert-circle-outline",
+};
+
 const MEDIA_FEATURE = {
   PAUSE: 1,
   SEEK: 2,
@@ -884,7 +915,15 @@ const renderers = {
       ctx.nodes.condition = el("div", "title");
       ctx.nodes.wind = el("div", "subtitle");
       meta.append(ctx.nodes.condition, ctx.nodes.wind);
-      head.append(ctx.nodes.now, meta);
+
+      // Grosses Symbol der aktuellen Lage, rechts aussen. Es steht bewusst
+      // neben der Temperatur und nicht darueber: die Zeile darunter traegt
+      // schon die Vorhersage, ein zweites Symbol in der Senkrechten machte
+      // die Karte unruhig.
+      ctx.nodes.nowIcon = icon("mdi:weather-cloudy");
+      ctx.nodes.nowIcon.className = "weather-icon";
+
+      head.append(ctx.nodes.now, meta, ctx.nodes.nowIcon);
 
       // Verlaufskurve. Das DOM entsteht hier einmal und vollständig; im
       // Update-Pfad ändert sich ausschliesslich das d-Attribut der beiden Pfade.
@@ -942,6 +981,13 @@ const renderers = {
       const speed = state.attributes.wind_speed;
       ctx.nodes.wind.textContent = speed ? `Wind ${speed} ${state.attributes.wind_speed_unit || "km/h"}` : state.state;
 
+      // Die aktuelle Lage steckt im Zustand der Entitaet, nicht in einem
+      // Attribut. Unbekannte Lagen bekommen kein erfundenes Symbol - dann
+      // bleibt der Platz leer, statt Sonne zu zeigen, wo Hagel faellt.
+      const symbol = CONDITION_ICONS[state.state];
+      ctx.nodes.nowIcon.hidden = !symbol;
+      if (symbol) ctx.nodes.nowIcon.setAttribute("icon", symbol);
+
       // Vorhersage: neuere HA-Versionen liefern sie nicht mehr als Attribut.
       const forecast = state.attributes.forecast || ctx.nodes.forecastData || [];
       const items = dropPastDays(forecast, ctx.config.forecast_type).slice(
@@ -962,19 +1008,12 @@ const renderers = {
         });
       }
 
-      const conditionIcons = {
-        sunny: "mdi:weather-sunny", clear: "mdi:weather-sunny", "clear-night": "mdi:weather-night",
-        cloudy: "mdi:weather-cloudy", partlycloudy: "mdi:weather-partly-cloudy", rainy: "mdi:weather-rainy",
-        pouring: "mdi:weather-pouring", snowy: "mdi:weather-snowy", fog: "mdi:weather-fog",
-        windy: "mdi:weather-windy", lightning: "mdi:weather-lightning", hail: "mdi:weather-hail",
-      };
-
       items.forEach((entry, index) => {
         const node = ctx.nodes.forecastNodes?.[index];
         if (!node) return;
         const value = Math.round(numeric(entry?.temperature));
         node.value.textContent = Number.isFinite(value) ? `${value}°` : "--";
-        node.symbol.setAttribute("icon", conditionIcons[entry.condition] || "mdi:weather-cloudy");
+        node.symbol.setAttribute("icon", CONDITION_ICONS[entry.condition] || "mdi:weather-cloudy");
         node.label.textContent = forecastLabel(entry?.datetime, ctx.config.forecast_type);
       });
 
