@@ -63,8 +63,10 @@ const deutsch = {
   "sensor.p1s_druckbetttemperatur": state("sensor.p1s_druckbetttemperatur", "59", { unit_of_measurement: "°C" }),
   "sensor.p1s_zieltemperatur_vom_druckbett": state("sensor.p1s_zieltemperatur_vom_druckbett", "60", { unit_of_measurement: "°C" }),
   "sensor.p1s_bauteillufterdrehzahl": state("sensor.p1s_bauteillufterdrehzahl", "80", { unit_of_measurement: "%" }),
-  "sensor.p1s_ams_1_slot_1": state("sensor.p1s_ams_1_slot_1", "PLA Schwarz", { color: "#101010" }),
-  "sensor.p1s_ams_1_slot_2": state("sensor.p1s_ams_1_slot_2", "Empty"),
+  "sensor.p1s_ams_1_slot_1": state("sensor.p1s_ams_1_slot_1", "PLA Schwarz", {
+    color: "#101010FF", type: "PLA", remain: 62, remain_enabled: true, empty: false,
+  }),
+  "sensor.p1s_ams_1_slot_2": state("sensor.p1s_ams_1_slot_2", "Empty", { empty: true, remain: -1 }),
   "sensor.p1s_ams_1_temperatur": state("sensor.p1s_ams_1_temperatur", "28", { unit_of_measurement: "°C" }),
   "sensor.p1s_ams_1_luftfeuchtigkeit": state("sensor.p1s_ams_1_luftfeuchtigkeit", "22", { unit_of_measurement: "%" }),
   "sensor.p1s_aktiver_slot": state("sensor.p1s_aktiver_slot", "1"),
@@ -159,6 +161,13 @@ console.log("\n7. AMS");
 sr(voll).querySelectorAll(".rail button")[2].click();
 const slots = [...sr(voll).querySelectorAll(".slot")].filter((s) => !s.hidden);
 check("zwei Slots sichtbar", slots.length === 2, `${slots.length}`);
+check("Fuellstand als Balken", slots[0].querySelector(".slot-fill span").style.width === "62%",
+  slots[0].querySelector(".slot-fill span").style.width);
+check("Fuellstand als Text", slots[0].querySelector(".slot-remain").textContent === "62 %",
+  slots[0].querySelector(".slot-remain").textContent);
+check("Filamentart statt Slotnummer", slots[0].querySelector(".slot-label").textContent === "PLA",
+  slots[0].querySelector(".slot-label").textContent);
+check("ohne Messung kein Balken", slots[1].querySelector(".slot-fill").hidden);
 check("Filament benannt", slots[0].querySelector(".slot-name").textContent === "PLA Schwarz");
 check("leerer Slot heisst leer", slots[1].querySelector(".slot-name").textContent === "leer");
 check("aktiver Slot markiert", slots[0].classList.contains("active"));
@@ -191,12 +200,33 @@ speed.value = "Sport";
 speed.dispatchEvent(new dom.window.Event("change"));
 check("Auswahl wird gesetzt", calls[0] === "select.select_option:select.p1s_druckgeschwindigkeit", calls.join(", "));
 
-console.log("\n9. Kamera nur im sichtbaren Bereich");
-const bild = sr(voll).querySelector(".camera-wrap img");
-check("ausserhalb des Bereichs kein Bild geladen", !bild.getAttribute("src"), bild.getAttribute("src") || "");
-sr(voll).querySelectorAll(".rail button")[4].click();
-check("im Bereich wird geladen", bild.getAttribute("src")?.includes("camera_proxy"), bild.getAttribute("src") || "");
+console.log("\n9. Bild und Kamera in einer Kachel");
+sr(voll).querySelectorAll(".rail button")[0].click();
+check("nur noch vier Bereiche", sr(voll).querySelectorAll(".rail button").length === 4,
+  `${sr(voll).querySelectorAll(".rail button").length}`);
+const bild = sr(voll).querySelector(".media img");
+check("zeigt zuerst das Titelbild", bild.getAttribute("src") === "/api/image_proxy/image.p1s_titelbild",
+  bild.getAttribute("src") || "");
+check("kein Zeitstempel am Standbild", !/[?&]_=\d+/.test(bild.getAttribute("src") || ""));
+
+const [foto, kam] = sr(voll).querySelectorAll(".seg");
+check("Umschalter vorhanden", Boolean(foto) && Boolean(kam));
+check("Foto ist aktiv", foto.classList.contains("active"));
+kam.click();
+check("Kamera wird geladen", bild.getAttribute("src")?.includes("camera_proxy"), bild.getAttribute("src") || "");
 check("Zeitstempel gegen den Cache", /[?&]_=\d+/.test(bild.getAttribute("src") || ""));
+check("Kamera ist aktiv", kam.classList.contains("active"));
+
+sr(voll).querySelectorAll(".rail button")[1].click();
+check("anderer Bereich stoppt den Abruf", !bild.getAttribute("src"), bild.getAttribute("src") || "");
+sr(voll).querySelectorAll(".rail button")[0].click();
+
+console.log("\n9b. Temperaturgraph");
+check("Graph vorhanden", Boolean(sr(voll).querySelector(".graph-svg")));
+check("Duese beschriftet", sr(voll).querySelector(".tag.nozzle").textContent === "Düse 218 °C",
+  sr(voll).querySelector(".tag.nozzle").textContent);
+check("Bett beschriftet", sr(voll).querySelector(".tag.bed").textContent === "Bett 59 °C",
+  sr(voll).querySelector(".tag.bed").textContent);
 
 console.log("\n10. Teilweise eingerichtet");
 const wenig = build({ entity_progress: "sensor.p1s_druckfortschritt", entity_online: "binary_sensor.p1s_online" });

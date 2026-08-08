@@ -129,7 +129,6 @@ const SECTIONS = [
   ["temps", "mdi:thermometer", "Temperaturen"],
   ["ams", "mdi:tray-full", "AMS"],
   ["control", "mdi:gesture-tap-button", "Steuerung"],
-  ["camera", "mdi:cctv", "Kamera"],
 ];
 
 const STYLES = `
@@ -211,6 +210,12 @@ const STYLES = `
   .slot-dot { width: 22px; height: 22px; margin: 0 auto 6px; border-radius: 50%; background: rgba(var(--haos-text-rgb, 255,255,255), .25); }
   .slot-name { font-size: 12px; font-weight: var(--haos-font-weight-medium, 500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .slot-label { font-size: 10px; margin-top: 2px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
+  .slot-fill { height: 5px; margin-top: 8px; border-radius: 99px; overflow: hidden; background: rgba(var(--haos-text-rgb, 255,255,255), .16); }
+  .slot-fill[hidden] { display: none; }
+  .slot-fill span { display: block; height: 100%; width: 0; background: var(--haos-accent, #0a84ff); transition: width .3s ease; }
+  .slot-remain { font-size: 10px; margin-top: 3px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
+  .slot-remain[hidden] { display: none; }
+  .slot-remain.low { color: var(--haos-bad, #ff6b6b); }
 
   .controls { display: flex; flex-wrap: wrap; gap: 8px; }
   .ctrl {
@@ -234,10 +239,42 @@ const STYLES = `
   }
   select.speed option { color: #18212a; }
 
-  .camera-wrap { flex: 1; min-height: 0; border-radius: 12px; overflow: hidden; background: rgba(0,0,0,.35); position: relative; }
-  .camera-wrap img { width: 100%; height: 100%; object-fit: contain; display: block; }
-  .camera-note { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 12px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
-  .camera-note[hidden] { display: none; }
+  /* Zwei Spalten. Unter 620 px fallen sie untereinander - auf dem Telefon
+     stuenden sonst zwei Spalten mit je 150 px nebeneinander. */
+  .columns { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 10px; }
+  .col { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+  @media (max-width: 620px) { .columns { grid-template-columns: minmax(0, 1fr); } }
+
+  /* Bild und Kamera in einer Kachel, umschaltbar. */
+  .media { position: relative; flex: 1; min-height: 120px; border-radius: 12px; overflow: hidden; background: rgba(0,0,0,.28); }
+  .media img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .media img[hidden] { display: none; }
+  .media-note { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 12px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
+  .media-note[hidden] { display: none; }
+  .media-toggle {
+    position: absolute; top: 8px; right: 8px; display: flex; gap: 2px; padding: 2px;
+    border-radius: 999px; background: rgba(0, 0, 0, .45);
+  }
+  .seg {
+    border: 0; padding: 4px 10px; border-radius: 999px; cursor: pointer;
+    font-size: 11px; background: none; color: rgba(255, 255, 255, .7);
+  }
+  .seg.active { background: rgba(255, 255, 255, .22); color: #fff; }
+  .seg[hidden] { display: none; }
+
+  /* Temperaturverlauf. Zwei Linienzuege, kein Diagrammpaket. */
+  .graph { flex: 0 0 auto; border-radius: 12px; padding: 10px; background: rgba(var(--haos-text-rgb, 255,255,255), .10); }
+  .graph[hidden] { display: none; }
+  .graph-head { display: flex; gap: 12px; font-size: 11px; margin-bottom: 6px; }
+  .tag { display: flex; align-items: center; gap: 5px; color: rgba(var(--haos-text-rgb, 255,255,255), .75); }
+  .tag::before { content: ""; width: 8px; height: 2px; border-radius: 2px; }
+  .tag.nozzle::before { background: var(--haos-accent, #0a84ff); }
+  .tag.bed::before { background: #ff9f0a; }
+  .graph-svg { width: 100%; height: 72px; display: block; overflow: visible; }
+  .l-nozzle { stroke: var(--haos-accent, #0a84ff); }
+  .l-bed { stroke: #ff9f0a; }
+  .graph-note { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .45); }
+  .graph-note[hidden] { display: none; }
 
   .empty { flex: 1; display: grid; place-content: center; text-align: center; gap: 6px; padding: 16px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
   .empty[hidden] { display: none; }
@@ -274,6 +311,8 @@ class HaOsPrinterCard extends HTMLElement {
     this._section = "overview";
     this._lastStates = null;
     this._armed = false;
+    this._media = "photo";
+    this._series = { nozzle: [], bed: [] };
   }
 
   static getConfigElement() {
@@ -406,7 +445,39 @@ class HaOsPrinterCard extends HTMLElement {
       ],
       overviewRows
     );
-    overview.append(hero, overviewRows);
+
+    // Zwei Spalten: links der Verlauf des Auftrags, rechts Bild und
+    // Temperaturen. Auf schmalen Flaechen fallen sie untereinander.
+    const columns = el("div", "columns");
+    const left = el("div", "col");
+    const right = el("div", "col");
+    left.append(hero, overviewRows);
+
+    // Bild und Kamera teilen sich eine Kachel und werden umgeschaltet -
+    // deshalb braucht es keinen eigenen Kamerabereich mehr.
+    const media = el("div", "media");
+    const mediaImage = document.createElement("img");
+    mediaImage.alt = "";
+    const mediaNote = el("div", "media-note");
+    const mediaToggle = el("div", "media-toggle");
+    const fotoBtn = el("button", "seg active", "Foto");
+    const camBtn = el("button", "seg", "Kamera");
+    mediaToggle.append(fotoBtn, camBtn);
+    media.append(mediaImage, mediaNote, mediaToggle);
+
+    fotoBtn.addEventListener("click", () => {
+      this._media = "photo";
+      this._update();
+    });
+    camBtn.addEventListener("click", () => {
+      this._media = "camera";
+      this._update();
+    });
+
+    const graph = this._buildGraph();
+    right.append(media, graph.element);
+    columns.append(left, right);
+    overview.append(columns);
 
     // --- Temperaturen
     const temps = el("div", "panel rows");
@@ -429,9 +500,18 @@ class HaOsPrinterCard extends HTMLElement {
       const slot = el("div", "slot");
       const dot = el("div", "slot-dot");
       const name = el("div", "slot-name", "–");
-      slot.append(dot, name, el("div", "slot-label", `Slot ${number}`));
+      const kind = el("div", "slot-label", `Slot ${number}`);
+      // Fuellstand der Spule. Die Integration liefert ihn als `remain`, aber
+      // nur wenn der Drucker ihn messen kann - bei Fremdspulen ohne Chip
+      // steht dort -1 und `remain_enabled` ist falsch. Dann bleibt der
+      // Balken weg, statt eine erfundene Menge zu zeigen.
+      const fill = el("div", "slot-fill");
+      const fillBar = el("span");
+      fill.append(fillBar);
+      const fillText = el("div", "slot-remain");
+      slot.append(dot, name, kind, fill, fillText);
       slots.append(slot);
-      return { slot, dot, name };
+      return { slot, dot, name, kind, fill, fillText };
     });
     const amsRows = el("div", "rows");
     rowPanel(
@@ -494,22 +574,13 @@ class HaOsPrinterCard extends HTMLElement {
       this._hass?.callService(domain, "select_option", { entity_id: entity, option: speedSelect.value });
     });
 
-    // --- Kamera
-    const camera = el("div", "panel");
-    const cameraWrap = el("div", "camera-wrap");
-    const cameraImage = document.createElement("img");
-    cameraImage.alt = "";
-    const cameraNote = el("div", "camera-note");
-    cameraWrap.append(cameraImage, cameraNote);
-    camera.append(cameraWrap);
-
     const empty = el("div", "empty");
     empty.append(
       el("strong", null, "Noch kein Drucker gewählt"),
       el("span", null, "Im Editor oben eine Entität des Druckers wählen – die übrigen Felder füllen sich dann von selbst.")
     );
 
-    const panels = { overview, temps, ams, control, camera };
+    const panels = { overview, temps, ams, control };
     Object.values(panels).forEach((panel) => main.append(panel));
     main.prepend(head);
     main.append(empty);
@@ -520,7 +591,8 @@ class HaOsPrinterCard extends HTMLElement {
       statePill, statePillIcon, statePillText, errorPill, errorPillText,
       heroValue, barFill, footLeft, footRight, heroImage,
       rows, slotNodes, panels, empty,
-      pauseBtn, resumeBtn, stopBtn, lightBtn, speedSelect, controlNote, cameraImage, cameraNote,
+      pauseBtn, resumeBtn, stopBtn, lightBtn, speedSelect, controlNote,
+      mediaImage, mediaNote, fotoBtn, camBtn, graph,
     };
 
     this.shadowRoot.replaceChildren(style, card);
@@ -571,7 +643,8 @@ class HaOsPrinterCard extends HTMLElement {
     this._updateTemps();
     this._updateAms();
     this._updateControl();
-    this._updateCamera();
+    this._updateMedia();
+    this._updateGraph();
   }
 
   _updateHead() {
@@ -686,19 +759,35 @@ class HaOsPrinterCard extends HTMLElement {
     const active = this._state("ams_active");
     const activeIndex = numberOf(active);
 
-    this._nodes.slotNodes.forEach(({ slot, dot, name }, index) => {
+    this._nodes.slotNodes.forEach(({ slot, dot, name, kind, fill, fillText }, index) => {
       const state = this._state(`ams_slot_${index + 1}`);
       if (!state) {
         slot.hidden = true;
         return;
       }
       slot.hidden = false;
-      const empty = ["unknown", "unavailable", "", "Empty", "leer"].includes(state.state);
+      const attributes = state.attributes || {};
+      const empty = attributes.empty === true || ["unknown", "unavailable", "", "Empty", "leer"].includes(state.state);
       name.textContent = empty ? "leer" : state.state;
-      // Die Integration liefert die Filamentfarbe als Attribut – damit wird
-      // der Punkt eingefärbt, sonst bleibt er neutral.
-      const colour = state.attributes?.color || state.attributes?.colour || state.attributes?.filament_color;
-      dot.style.background = colour ? (String(colour).startsWith("#") ? colour : `#${colour}`) : "";
+      kind.textContent = empty ? `Slot ${index + 1}` : attributes.type || `Slot ${index + 1}`;
+
+      // Die Farbe kommt als #RRGGBB oder #RRGGBBAA. Die Alpha-Stellen fallen
+      // weg, sonst wird der Punkt bei manchen Filamenten durchsichtig.
+      const raw = attributes.color || attributes.colour || attributes.filament_color;
+      const colour = raw ? `#${String(raw).replace("#", "").slice(0, 6)}` : "";
+      dot.style.background = empty ? "" : colour;
+
+      const remain = Number(attributes.remain);
+      const measurable = attributes.remain_enabled !== false && Number.isFinite(remain) && remain >= 0;
+      fill.hidden = empty || !measurable;
+      fillText.hidden = empty || !measurable;
+      if (measurable && !empty) {
+        fill.firstElementChild.style.width = `${Math.max(0, Math.min(100, remain))}%`;
+        fill.firstElementChild.style.background = colour || "";
+        fillText.textContent = `${Math.round(remain)} %`;
+        fillText.classList.toggle("low", remain < 15);
+      }
+
       slot.classList.toggle("active", activeIndex !== null && activeIndex === index + 1);
     });
 
@@ -754,38 +843,214 @@ class HaOsPrinterCard extends HTMLElement {
     }
   }
 
-  _updateCamera() {
+  /**
+   * Bild und Kamera in einer Kachel, umschaltbar.
+   *
+   * Das Standbild der Kamera wird nur geholt, wenn die Kachel auf *Kamera*
+   * steht **und** die Übersicht sichtbar ist. Sonst laueft ein Bildabruf im
+   * Sekundentakt auf einer Seite weiter, die niemand ansieht.
+   */
+
+  /**
+   * Temperaturverlauf von Düse und Bett.
+   *
+   * Der Verlauf wird einmal aus Home Assistants Aufzeichnung geholt
+   * (`history/period`, letzte Stunde) und danach aus den laufenden Zuständen
+   * fortgeschrieben. Ohne den ersten Schritt wäre die Kurve nach dem Laden
+   * eine Stunde lang leer; ohne den zweiten stünde sie still.
+   *
+   * Gezeichnet wird als SVG-Linienzug – kein Diagrammpaket, das wäre für zwei
+   * Linien mehr Ballast als das ganze Bündel.
+   */
+  _buildGraph() {
+    const wrap = el("div", "graph");
+
+    const head = el("div", "graph-head");
+    const nozzleTag = el("span", "tag nozzle");
+    const bedTag = el("span", "tag bed");
+    head.append(nozzleTag, bedTag);
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 300 96");
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.classList.add("graph-svg");
+
+    const line = (className) => {
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke-width", "2");
+      path.setAttribute("stroke-linejoin", "round");
+      path.setAttribute("stroke-linecap", "round");
+      path.classList.add(className);
+      svg.append(path);
+      return path;
+    };
+    const nozzleLine = line("l-nozzle");
+    const bedLine = line("l-bed");
+
+    const note = el("div", "graph-note", "Noch keine Messwerte");
+    wrap.append(head, svg, note);
+
+    this._graph = { wrap, svg, nozzleLine, bedLine, nozzleTag, bedTag, note };
+    return { element: wrap };
+  }
+
+  /** Punkte anhängen, höchstens alle 15 Sekunden einen. */
+  _recordSeries() {
+    const now = Date.now();
+    if (this._lastPoint && now - this._lastPoint < 15000) return;
+
+    const nozzle = numberOf(this._state("nozzle"));
+    const bed = numberOf(this._state("bed"));
+    if (nozzle === null && bed === null) return;
+
+    this._lastPoint = now;
+    this._series = this._series || { nozzle: [], bed: [] };
+    if (nozzle !== null) this._series.nozzle.push({ t: now, v: nozzle });
+    if (bed !== null) this._series.bed.push({ t: now, v: bed });
+
+    const cutoff = now - 60 * 60 * 1000;
+    ["nozzle", "bed"].forEach((key) => {
+      this._series[key] = this._series[key].filter((point) => point.t >= cutoff).slice(-240);
+    });
+  }
+
+  /** Einmalig den vorhandenen Verlauf nachladen, damit die Kurve nicht leer startet. */
+  async _seedSeries() {
+    if (this._seeded || !this._hass?.callApi) return;
+    const ids = ["nozzle", "bed"].map((key) => resolveField(this._config, key)).filter(Boolean);
+    if (!ids.length) return;
+    this._seeded = true;
+
+    try {
+      const start = new Date(Date.now() - 60 * 60 * 1000);
+      const path =
+        `history/period/${encodeURIComponent(start.toISOString())}` +
+        `?filter_entity_id=${encodeURIComponent(ids.join(","))}` +
+        `&minimal_response&no_attributes`;
+      const result = await this._hass.callApi("GET", path);
+      const series = { nozzle: [], bed: [] };
+
+      (result || []).forEach((reihe) => {
+        const first = reihe?.[0]?.entity_id || "";
+        const key = first === resolveField(this._config, "nozzle") ? "nozzle" : "bed";
+        reihe.forEach((point) => {
+          const value = Number(point.state);
+          if (!Number.isFinite(value)) return;
+          series[key].push({ t: new Date(point.last_changed || point.last_updated).getTime(), v: value });
+        });
+      });
+
+      // Bereits gesammelte Punkte behalten – sie sind neuer als der Verlauf.
+      this._series = {
+        nozzle: [...series.nozzle, ...(this._series?.nozzle || [])].slice(-240),
+        bed: [...series.bed, ...(this._series?.bed || [])].slice(-240),
+      };
+      this._updateGraph();
+    } catch (_error) {
+      /* Ohne Aufzeichnung wächst die Kurve eben ab jetzt. */
+    }
+  }
+
+  _updateGraph() {
+    if (!this._graph) return;
+    const graph = this._graph;
+
+    const nozzle = this._state("nozzle");
+    const bed = this._state("bed");
+    const nozzleValue = numberOf(nozzle);
+    const bedValue = numberOf(bed);
+
+    graph.wrap.hidden = nozzleValue === null && bedValue === null;
+    if (graph.wrap.hidden) return;
+
+    graph.nozzleTag.textContent = `Düse ${nozzleValue === null ? "–" : `${formatNumber(nozzleValue)} °C`}`;
+    graph.bedTag.textContent = `Bett ${bedValue === null ? "–" : `${formatNumber(bedValue)} °C`}`;
+
+    this._recordSeries();
+    if (this._section === "overview") this._seedSeries();
+
+    const series = this._series || { nozzle: [], bed: [] };
+    const all = [...series.nozzle, ...series.bed];
+    if (all.length < 2) {
+      graph.note.hidden = false;
+      graph.nozzleLine.setAttribute("points", "");
+      graph.bedLine.setAttribute("points", "");
+      return;
+    }
+    graph.note.hidden = true;
+
+    const times = all.map((point) => point.t);
+    const values = all.map((point) => point.v);
+    const tMin = Math.min(...times);
+    const tMax = Math.max(...times);
+    // Etwas Luft nach oben und unten, sonst klebt die Linie am Rand.
+    const vMin = Math.min(...values) - 3;
+    const vMax = Math.max(...values) + 3;
+    const spanT = tMax - tMin || 1;
+    const spanV = vMax - vMin || 1;
+
+    const toPoints = (points) =>
+      points
+        .map((point) => {
+          const x = ((point.t - tMin) / spanT) * 300;
+          const y = 96 - ((point.v - vMin) / spanV) * 96;
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        })
+        .join(" ");
+
+    graph.nozzleLine.setAttribute("points", toPoints(series.nozzle));
+    graph.bedLine.setAttribute("points", toPoints(series.bed));
+  }
+
+  _updateMedia() {
     const nodes = this._nodes;
+    const cover = this._state("cover");
     const camera = this._state("camera");
-    const picture = camera?.attributes?.entity_picture;
 
-    if (!camera) {
-      nodes.cameraNote.hidden = false;
-      nodes.cameraNote.textContent = "Keine Kamera gewählt.";
-      nodes.cameraImage.hidden = true;
-      return;
-    }
-    if (!picture || camera.state === "unavailable") {
-      nodes.cameraNote.hidden = false;
-      nodes.cameraNote.textContent = "Kamera nicht erreichbar.";
-      nodes.cameraImage.hidden = true;
-      return;
-    }
+    const hasCover = Boolean(cover?.attributes?.entity_picture);
+    const hasCamera = Boolean(camera?.attributes?.entity_picture) && camera.state !== "unavailable";
 
-    nodes.cameraNote.hidden = true;
-    nodes.cameraImage.hidden = false;
+    // Ohne Kamera kein Umschalter – ein einzelner Knopf waere nur Zierde.
+    nodes.fotoBtn.hidden = !hasCamera;
+    nodes.camBtn.hidden = !hasCamera;
+    if (!hasCamera && this._media === "camera") this._media = "photo";
 
-    // Nur im sichtbaren Bereich laden – ein Standbild alle paar Sekunden
-    // reicht, und auf einer verlassenen Seite soll gar nichts laufen.
-    if (this._section !== "camera") {
-      if (nodes.cameraImage.getAttribute("src")) nodes.cameraImage.removeAttribute("src");
+    nodes.fotoBtn.classList.toggle("active", this._media !== "camera");
+    nodes.camBtn.classList.toggle("active", this._media === "camera");
+
+    const live = this._media === "camera" && hasCamera;
+    const stop = () => {
       clearInterval(this._cameraTimer);
       this._cameraTimer = null;
+    };
+
+    if (!live) {
+      stop();
+      if (hasCover) {
+        nodes.mediaImage.hidden = false;
+        nodes.mediaNote.hidden = true;
+        nodes.mediaImage.src = cover.attributes.entity_picture;
+      } else {
+        nodes.mediaImage.hidden = true;
+        nodes.mediaNote.hidden = false;
+        nodes.mediaNote.textContent = hasCamera ? "Kein Titelbild – auf Kamera umschalten." : "Kein Bild";
+      }
       return;
     }
 
+    nodes.mediaImage.hidden = false;
+    nodes.mediaNote.hidden = true;
+
+    if (this._section !== "overview") {
+      stop();
+      if (nodes.mediaImage.getAttribute("src")) nodes.mediaImage.removeAttribute("src");
+      return;
+    }
+
+    const picture = camera.attributes.entity_picture;
     const paint = () => {
-      nodes.cameraImage.src = `${picture}${picture.includes("?") ? "&" : "?"}_=${Date.now()}`;
+      nodes.mediaImage.src = `${picture}${picture.includes("?") ? "&" : "?"}_=${Date.now()}`;
     };
     paint();
     if (!this._cameraTimer) this._cameraTimer = setInterval(paint, 5000);

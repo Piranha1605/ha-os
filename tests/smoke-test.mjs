@@ -407,6 +407,23 @@ check(
 );
 
 // Hintergrundbild, getrennt fuer Hell und Dunkel.
+// Im Karteneditor rendert HA die Shell in einer Vorschau. Mit position:fixed
+// legte sich das Hintergrundbild hinter den GANZEN Dialog - man sah seine
+// Einstellungen auf dem eigenen Wandbild statt auf dem Dialog.
+const vorschau = document.createElement("hui-card-preview");
+document.body.append(vorschau);
+const shellInPreview = document.createElement("ha-os-shell");
+shellInPreview.setConfig(shellConfig);
+vorschau.append(shellInPreview);
+shellInPreview.hass = makeHass(baseStates);
+await new Promise((resolve) => setTimeout(resolve, 30));
+check("Bild bleibt in der Vorschau INNERHALB der Karte",
+  shellInPreview.shadowRoot.querySelector(".wallpaper").classList.contains("contained"));
+check("im Dashboard bleibt es hinter dem Fenster",
+  !root.querySelector(".wallpaper")?.classList.contains("contained") &&
+    !shell.shadowRoot.querySelector(".wallpaper").classList.contains("contained"));
+vorschau.remove();
+
 check("Bildschicht vorhanden", Boolean(root.querySelector(".wallpaper")));
 check("Pfadfeld fuer eigene Bilder vorhanden",
   root.querySelectorAll(".control.stacked input.path").length === 2,
@@ -500,6 +517,15 @@ const kartenBloecke = [...shellEditor.shadowRoot.querySelectorAll(".label")].fil
   l.textContent.startsWith("Karte ")
 );
 check("Raster zeigt seine Karten", kartenBloecke.length === 2, `${kartenBloecke.length}`);
+
+// Vier Taster nebeneinander hiessen alle "HA-OS · button". Ohne den Namen
+// dahinter ist die Liste nicht zu gebrauchen.
+const kartentitel = [...shellEditor.shadowRoot.querySelectorAll(".block > header .label")]
+  .map((n) => n.textContent)
+  .filter((t) => t.startsWith("Karte "));
+check("Kartenliste nennt die Entitaet",
+  kartentitel.some((t) => t.includes("Thermostat")),
+  kartentitel.join(" | "));
 
 check("Karte laesst sich aufklappen", oeffne("Karte 1"));
 const kartePfad = [...shellEditor.shadowRoot.querySelectorAll(".block.is-open")].map((b) =>

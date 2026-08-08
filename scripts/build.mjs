@@ -33,20 +33,6 @@ if (!version) {
 
 await mkdir(join(root, "dist"), { recursive: true });
 
-await build({
-  entryPoints: [entry],
-  outfile,
-  bundle: true,
-  format: "esm",
-  target: "es2021",
-  charset: "utf8",
-  legalComments: "inline",
-  minify: false,
-  banner: {
-    js: `/* HA-OS ${version} – erzeugt aus src/, nicht von Hand bearbeiten. */`,
-  },
-});
-
 /**
  * Rückstriche in CSS-Kommentaren.
  *
@@ -87,6 +73,20 @@ if (offenders.length) {
   offenders.forEach((place) => console.error(`   ${place}`));
   process.exit(1);
 }
+
+await build({
+  entryPoints: [entry],
+  outfile,
+  bundle: true,
+  format: "esm",
+  target: "es2021",
+  charset: "utf8",
+  legalComments: "inline",
+  minify: false,
+  banner: {
+    js: `/* HA-OS ${version} – erzeugt aus src/, nicht von Hand bearbeiten. */`,
+  },
+});
 
 const built = await readFile(outfile, "utf8");
 

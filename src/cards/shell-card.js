@@ -45,6 +45,7 @@ const TOPBAR_HEIGHT = 62;
 const STYLES = `
   :host {
     display: block;
+    position: relative;
     margin: var(--haos-margin, 25px);
     width: calc(100% - 2 * var(--haos-margin, 25px));
   }
@@ -61,6 +62,10 @@ const STYLES = `
     background-image: var(--haos-background-image, none);
     background-size: cover; background-position: center; background-repeat: no-repeat;
   }
+  /* In der Vorschau des Karteneditors bleibt das Bild INNERHALB der Karte.
+     Mit position:fixed legte es sich sonst hinter den ganzen Dialog - man sah
+     Einstellungen auf dem eigenen Hintergrundbild statt auf dem Dialog. */
+  .wallpaper.contained { position: absolute; }
   .wallpaper::after {
     content: ""; position: absolute; inset: 0;
     background: rgba(0, 0, 0, var(--haos-background-dim, 0));
@@ -394,6 +399,30 @@ class HaOsShell extends HTMLElement {
   connectedCallback() {
     window.addEventListener("haos-theme-changed", this._onThemeChanged);
     window.addEventListener("keydown", this._onKeyDown);
+    this._syncWallpaperScope();
+  }
+
+  /**
+   * Steckt die Karte in einer Vorschau des Karteneditors?
+   *
+   * Der Weg nach oben führt durch Shadow-Grenzen, deshalb wird bei jedem
+   * Wurzelknoten auf dessen `host` gewechselt. Gesucht sind HAs
+   * Vorschau-Elemente – findet sich eines, bleibt das Hintergrundbild
+   * innerhalb der Karte.
+   */
+  _inPreview() {
+    const marker = ["HUI-CARD-PREVIEW", "HUI-DIALOG-EDIT-CARD", "HUI-CARD-ELEMENT-EDITOR"];
+    let node = this;
+    for (let step = 0; step < 40 && node; step += 1) {
+      if (node.tagName && marker.includes(node.tagName)) return true;
+      node = node.parentNode?.host || node.parentNode || node.host;
+    }
+    return false;
+  }
+
+  _syncWallpaperScope() {
+    if (!this._wallpaper) return;
+    this._wallpaper.classList.toggle("contained", this._inPreview());
   }
 
   disconnectedCallback() {
@@ -513,6 +542,7 @@ class HaOsShell extends HTMLElement {
     this._shell.append(this._sidebar, this._topbar, this._content);
     this.shadowRoot.append(style, this._wallpaper, this._shell);
     this._built = true;
+    this._syncWallpaperScope();
   }
 
   // ---------------------------------------------------------------- Seitenleiste

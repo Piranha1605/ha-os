@@ -993,9 +993,24 @@ class HaOsShellEditor extends HTMLElement {
     return wrap;
   }
 
+  /**
+   * Beschriftung einer Karte in der Liste.
+   *
+   * Ohne Namen sehen vier Taster nebeneinander alle gleich aus – „HA-OS ·
+   * button", viermal. Deshalb kommt dahinter, was die Karte tatsächlich
+   * bedient: der eingetragene Name, sonst der Name der Entität aus Home
+   * Assistant, sonst die Entitäts-ID. Erst dann ist die Liste zu gebrauchen.
+   */
   _cardLabel(card) {
-    if (card.type === "custom:ha-os-card") return `HA-OS · ${card.card_type || "unbestimmt"}`;
-    return card.type || "Karte";
+    const base =
+      card.type === "custom:ha-os-card" ? `HA-OS · ${card.card_type || "unbestimmt"}` : card.type || "Karte";
+
+    const entity = card.entity || card.entities?.[0];
+    const named =
+      card.name ||
+      (entity ? this._hass?.states?.[entity]?.attributes?.friendly_name || entity : "");
+
+    return named ? `${base} · ${named}` : base;
   }
 
   _moveCard(pageIndex, columnIndex, cardIndex, delta) {
