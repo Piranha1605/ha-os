@@ -893,6 +893,22 @@ class HaOsShellEditor extends HTMLElement {
       }, true)
     );
 
+    // Die Fahrzeugkarte ist eine eigene Karte, kein Typ von `ha-os-card` –
+    // sie taucht deshalb nicht in dessen Typenliste auf. Ohne einen eigenen
+    // Knopf fände man sie nur über „Andere Karte wählen", wenn man weiss,
+    // dass es sie gibt.
+    const addVehicle = el("button", "add");
+    addVehicle.append(icon("mdi:car"), el("span", null, "Fahrzeug"));
+    addVehicle.addEventListener("click", () =>
+      this._mutate((draft) => {
+        draft.pages[pageIndex].grids[columnIndex].cards.push({
+          type: "custom:ha-os-vehicle",
+          entity: "",
+          haos_weight: 3,
+        });
+      }, true)
+    );
+
     const addOther = el("button", "add");
     addOther.append(icon("mdi:view-dashboard-outline"), el("span", null, "Andere Karte wählen"));
     addOther.addEventListener("click", () => {
@@ -901,7 +917,7 @@ class HaOsShellEditor extends HTMLElement {
       this._renderPanels();
     });
 
-    addRow.append(addOwn, addGrid, addOther);
+    addRow.append(addOwn, addGrid, addVehicle, addOther);
     wrap.append(addRow);
 
     if (this._openPicker === `picker-${pageIndex}-${columnIndex}`) {

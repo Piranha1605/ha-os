@@ -113,9 +113,10 @@ check("ha-os-shell-editor registriert", Boolean(customElements.get("ha-os-shell-
 check("ha-os-card-editor registriert", Boolean(customElements.get("ha-os-card-editor")));
 check("ha-os-grid registriert", Boolean(customElements.get("ha-os-grid")));
 check("ha-os-grid-editor registriert", Boolean(customElements.get("ha-os-grid-editor")));
+check("ha-os-vehicle registriert", Boolean(customElements.get("ha-os-vehicle")));
 check(
-  "alle drei Karten im HA-Auswahldialog",
-  ["ha-os-shell", "ha-os-card", "ha-os-grid"].every((type) =>
+  "alle vier Karten im HA-Auswahldialog",
+  ["ha-os-shell", "ha-os-card", "ha-os-grid", "ha-os-vehicle"].every((type) =>
     window.customCards?.some((entry) => entry.type === type)
   ),
   `gefunden: ${window.customCards?.map((c) => c.type).join(", ")}`
@@ -505,8 +506,10 @@ check("Rasterwechsel schliesst die offene Karte",
   !nachRasterwechsel.some((t) => t.startsWith("Karte ")), nachRasterwechsel.join(" | "));
 
 const knoepfe = [...shellEditor.shadowRoot.querySelectorAll(".add")].map((b) => b.textContent);
-check("drei Knoepfe zum Hinzufuegen im Raster",
-  ["HA-OS Karte", "2×2", "Andere Karte"].every((t) => knoepfe.some((k) => k.includes(t))),
+// Die Fahrzeugkarte ist kein Typ von ha-os-card und taucht deshalb nicht in
+// dessen Typenliste auf – ohne eigenen Knopf waere sie praktisch versteckt.
+check("vier Knoepfe zum Hinzufuegen im Raster",
+  ["HA-OS Karte", "2×2", "Fahrzeug", "Andere Karte"].every((t) => knoepfe.some((k) => k.includes(t))),
   knoepfe.join(" | "));
 
 reiter[0].click();
