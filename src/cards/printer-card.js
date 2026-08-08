@@ -19,7 +19,14 @@
  * keine Zeile dafür. Eine Liste voller Striche hilft niemandem.
  */
 
-import { CARD_SURFACE_CSS, ENTITY_SURFACE_CSS, registerCard } from "../shared/utils.js";
+import {
+  CARD_SURFACE_CSS,
+  CONTROL_SURFACE_CSS,
+  ENTITY_SURFACE_CSS,
+  SEGMENTED_CSS,
+  createSegmented,
+  registerCard,
+} from "../shared/utils.js";
 
 const TAG = "ha-os-printer";
 const EDITOR_TAG = "ha-os-printer-editor";
@@ -49,10 +56,16 @@ export const FIELDS = [
   { key: "nozzle_target", label: "Düse Soll", domain: "sensor", section: "temps", suffixes: ["zieltemperatur_der_duse", "target_nozzle_temperature"] },
   { key: "bed", label: "Druckbett", domain: "sensor", section: "temps", suffixes: ["druckbetttemperatur", "bed_temperature"] },
   { key: "bed_target", label: "Druckbett Soll", domain: "sensor", section: "temps", suffixes: ["zieltemperatur_vom_druckbett", "target_bed_temperature"] },
-  { key: "fan_part", label: "Bauteillüfter", domain: "sensor", section: "temps", suffixes: ["bauteillufterdrehzahl", "cooling_fan_speed"] },
-  { key: "fan_aux", label: "Druckraumlüfter", domain: "sensor", section: "temps", suffixes: ["druckraumlufterdrehzahl", "aux_fan_speed"] },
-  { key: "fan_hotend", label: "Druckkopflüfter", domain: "sensor", section: "temps", suffixes: ["druckkopflufterdrehzahl", "heatbreak_fan_speed"] },
-  { key: "nozzle_size", label: "Düsengröße", domain: "sensor", section: "temps", suffixes: ["dusengrosse", "nozzle_size"] },
+  { key: "fan_part", label: "Bauteillüfter (Drehzahl)", domain: "sensor", section: "fans", suffixes: ["bauteillufterdrehzahl", "cooling_fan_speed"] },
+  { key: "fan_aux", label: "Druckraumlüfter (Drehzahl)", domain: "sensor", section: "fans", suffixes: ["druckraumlufterdrehzahl", "aux_fan_speed"] },
+  { key: "fan_hotend", label: "Druckkopflüfter (Drehzahl)", domain: "sensor", section: "fans", suffixes: ["druckkopflufterdrehzahl", "heatbreak_fan_speed"] },
+  { key: "nozzle_size", label: "Düsengröße", domain: "sensor", section: "overview", suffixes: ["dusengrosse", "nozzle_size"] },
+
+  // Steuerbare Luefter. Die drei Eintraege oben sind reine Drehzahlmesser -
+  // diese hier sind fan-Entitaeten und nehmen set_percentage entgegen.
+  { key: "fan_part_ctrl", label: "Bauteillüfter", domain: "fan", section: "fans", suffixes: ["bauteillufter", "cooling_fan", "part_cooling_fan"] },
+  { key: "fan_aux_ctrl", label: "Druckraumlüfter", domain: "fan", section: "fans", suffixes: ["druckraumlufter", "aux_fan", "auxiliary_fan"] },
+  { key: "fan_chamber_ctrl", label: "Druckkopflüfter", domain: "fan", section: "fans", suffixes: ["druckkopflufter", "chamber_fan", "heatbreak_fan"] },
 
   { key: "ams_slot_1", label: "Slot 1", domain: "sensor", section: "ams", suffixes: ["ams_1_slot_1", "ams_1_tray_1"] },
   { key: "ams_slot_2", label: "Slot 2", domain: "sensor", section: "ams", suffixes: ["ams_1_slot_2", "ams_1_tray_2"] },
@@ -126,7 +139,7 @@ const icon = (name) => {
 
 const SECTIONS = [
   ["overview", "mdi:printer-3d", "Übersicht"],
-  ["temps", "mdi:thermometer", "Temperaturen"],
+  ["fans", "mdi:fan", "Lüfter"],
   ["ams", "mdi:tray-full", "AMS"],
 ];
 
@@ -154,7 +167,12 @@ const STYLES = `
     background: none; color: rgba(var(--haos-text-rgb, 255,255,255), .45);
     transition: background .16s ease, color .16s ease;
   }
-  .rail button.active { background: rgba(var(--haos-text-rgb, 255,255,255), .16); color: var(--haos-text, #fff); }
+  /* Der aktive Bereich sitzt als Glasflaeche in der Leiste - dieselbe
+     Sprache wie die Knoepfe in den Karten. */
+  .rail button.active {
+    color: var(--haos-text, #fff);
+    ${CONTROL_SURFACE_CSS}
+  }
   .rail ha-icon { --mdc-icon-size: 19px; }
 
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
@@ -222,6 +240,26 @@ const STYLES = `
      eigenen Tafel. Sie schiebt sich an den unteren Rand, damit die Zeilen
      darueber zusammenbleiben. */
   .control-block { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+  /* Luefter: Regler mit Verlauf in der Akzentfarbe - je schneller, desto
+     dunkler. Der native Regler laesst sich nicht zuverlaessig einfaerben,
+     deshalb liegt er unsichtbar ueber der eigenen Spur. */
+  .fan { padding: 12px; ${ENTITY_SURFACE_CSS} }
+  .fan[hidden] { display: none; }
+  .fan-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .fan-name { font-size: 13px; color: rgba(var(--haos-text-rgb, 255,255,255), .7); }
+  .fan-value { font-size: 17px; font-weight: var(--haos-font-weight-medium, 500); }
+  .fan-track {
+    position: relative; height: 14px; margin-top: 9px; border-radius: 99px; overflow: hidden;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .14);
+  }
+  .fan-fill { display: block; height: 100%; width: 0; border-radius: 99px; transition: width .18s ease; }
+  .fan-track input[type="range"] {
+    position: absolute; inset: 0; width: 100%; height: 100%; margin: 0;
+    opacity: 0; cursor: ew-resize;
+  }
+  .fan-speed { font-size: 11px; margin-top: 6px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
+  .fan-speed[hidden] { display: none; }
+
   .controls { display: flex; flex-wrap: wrap; gap: 8px; }
   .ctrl {
     flex: 1 1 120px; min-width: 0; padding: 12px 10px; cursor: pointer;
@@ -238,12 +276,6 @@ const STYLES = `
   .ctrl.on { background: color-mix(in srgb, var(--haos-accent, #0a84ff) 28%, transparent); }
   .ctrl ha-icon { --mdc-icon-size: 22px; }
 
-  select.speed {
-    width: 100%; padding: 10px 12px; border-radius: 12px; font: inherit; color: var(--haos-text, #fff);
-    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
-    border: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .14);
-  }
-  select.speed option { color: #18212a; }
 
   /* Zwei Spalten. Unter 620 px fallen sie untereinander - auf dem Telefon
      stuenden sonst zwei Spalten mit je 150 px nebeneinander. */
@@ -257,16 +289,13 @@ const STYLES = `
   .media img[hidden] { display: none; }
   .media-note { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 12px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
   .media-note[hidden] { display: none; }
-  .media-toggle {
-    position: absolute; top: 8px; right: 8px; display: flex; gap: 2px; padding: 2px;
-    border-radius: 999px; background: rgba(0, 0, 0, .45);
-  }
-  .seg {
-    border: 0; padding: 4px 10px; border-radius: 999px; cursor: pointer;
-    font-size: 11px; background: none; color: rgba(255, 255, 255, .7);
-  }
-  .seg.active { background: rgba(255, 255, 255, .22); color: #fff; }
-  .seg[hidden] { display: none; }
+  ${SEGMENTED_CSS}
+  .media-toggle { position: absolute; top: 8px; right: 8px; }
+  .media-toggle[hidden] { display: none; }
+  .speed-wrap { display: flex; }
+  .speed-wrap[hidden] { display: none; }
+  .speed-wrap .haos-seg { width: 100%; justify-content: space-between; }
+  .speed-wrap .haos-seg-option { flex: 1; }
 
   /* Temperaturen: zwei Kacheln nebeneinander unter dem Bild. */
   .graphs { flex: 0 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -393,23 +422,6 @@ class HaOsPrinterCard extends HTMLElement {
 
     const main = el("div", "main");
 
-    const head = el("div", "head");
-    const headText = el("div", "head-text");
-    const title = el("div", "title");
-    const subtitle = el("div", "subtitle");
-    headText.append(title, subtitle);
-
-    const statePill = el("div", "pill");
-    const statePillIcon = icon("mdi:printer-3d-nozzle");
-    const statePillText = el("span");
-    statePill.append(statePillIcon, statePillText);
-
-    const errorPill = el("div", "pill bad");
-    const errorPillText = el("span");
-    errorPill.append(icon("mdi:alert"), errorPillText);
-
-    head.append(headText, errorPill, statePill);
-
     // --- Übersicht
     const overview = el("div", "panel");
     const hero = el("div", "hero");
@@ -443,10 +455,12 @@ class HaOsPrinterCard extends HTMLElement {
     const overviewRows = el("div", "rows");
     rowPanel(
       [
+        { key: "status", label: "Status" },
+        { key: "error", label: "Fehler" },
         { key: "task", label: "Auftrag" },
         { key: "stage", label: "Arbeitsschritt" },
-        { key: "remaining", label: "Restzeit" },
         { key: "end_time", label: "Fertig um" },
+        { key: "nozzle_size", label: "Düse" },
         { key: "layer_of", label: "Schicht" },
       ],
       overviewRows
@@ -466,38 +480,79 @@ class HaOsPrinterCard extends HTMLElement {
     mediaImage.alt = "";
     const mediaNote = el("div", "media-note");
     const mediaToggle = el("div", "media-toggle");
-    const fotoBtn = el("button", "seg active", "Foto");
-    const camBtn = el("button", "seg", "Kamera");
-    mediaToggle.append(fotoBtn, camBtn);
+    const mediaSeg = createSegmented({
+      options: [
+        { value: "photo", label: "Foto" },
+        { value: "camera", label: "Kamera" },
+      ],
+      value: "photo",
+      ariaLabel: "Bildquelle",
+      onChange: (value) => {
+        this._media = value;
+        this._update();
+      },
+    });
+    mediaToggle.append(mediaSeg.element);
     media.append(mediaImage, mediaNote, mediaToggle);
-
-    fotoBtn.addEventListener("click", () => {
-      this._media = "photo";
-      this._update();
-    });
-    camBtn.addEventListener("click", () => {
-      this._media = "camera";
-      this._update();
-    });
 
     const graph = this._buildGraph();
     right.append(media, graph.element);
     columns.append(left, right);
     overview.append(columns);
 
-    // --- Temperaturen
-    const temps = el("div", "panel rows");
-    rowPanel(
-      [
-        { key: "nozzle_pair", label: "Düse" },
-        { key: "bed_pair", label: "Druckbett" },
-        { key: "nozzle_size", label: "Düsengröße" },
-        { key: "fan_part", label: "Bauteillüfter" },
-        { key: "fan_aux", label: "Druckraumlüfter" },
-        { key: "fan_hotend", label: "Druckkopflüfter" },
-      ],
-      temps
-    );
+    // --- Lüfter
+    //
+    // Die Temperaturen sind auf die Übersicht gewandert, hier stehen die
+    // Lüfter. `fan`-Entitäten nehmen `set_percentage` entgegen – deshalb ein
+    // Regler statt einer Anzeige.
+    const fans = el("div", "panel");
+    const fanNodes = [
+      ["fan_part_ctrl", "fan_part", "Bauteillüfter"],
+      ["fan_aux_ctrl", "fan_aux", "Druckraumlüfter"],
+      ["fan_chamber_ctrl", "fan_hotend", "Druckkopflüfter"],
+    ].map(([key, speedKey, label]) => {
+      const box = el("div", "fan");
+
+      const head = el("div", "fan-head");
+      const name = el("span", "fan-name", label);
+      const value = el("span", "fan-value", "–");
+      head.append(name, value);
+
+      // Der Regler liegt unsichtbar über der Spur. Der native Regler lässt
+      // sich nicht zuverlässig einfärben, die Spur darunter schon – dasselbe
+      // Vorgehen wie beim runden Farbwähler in den Einstellungen.
+      const track = el("div", "fan-track");
+      const fill = el("span", "fan-fill");
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = "0";
+      input.max = "100";
+      input.step = "5";
+      track.append(fill, input);
+
+      const speed = el("div", "fan-speed");
+      box.append(head, track, speed);
+      fans.append(box);
+
+      input.addEventListener("input", () => {
+        value.textContent = `${input.value} %`;
+        this._paintFan({ fill }, Number(input.value));
+      });
+      input.addEventListener("change", () => {
+        const entity = resolveField(this._config, key);
+        if (!entity) return;
+        const percentage = Number(input.value);
+        this._hass?.callService("fan", percentage === 0 ? "turn_off" : "set_percentage", {
+          entity_id: entity,
+          ...(percentage === 0 ? {} : { percentage }),
+        });
+      });
+
+      return { key, speedKey, box, value, fill, input, speed };
+    });
+
+    const fanNote = el("div", "panel-note");
+    fans.append(fanNote);
 
     // --- AMS
     const ams = el("div", "panel");
@@ -546,10 +601,19 @@ class HaOsPrinterCard extends HTMLElement {
     const resumeBtn = makeCtrl("mdi:play", "Fortsetzen");
     const stopBtn = makeCtrl("mdi:stop", "Beenden", "danger");
     const lightBtn = makeCtrl("mdi:lightbulb", "Kammerlicht");
-    const speedSelect = document.createElement("select");
-    speedSelect.className = "speed";
+    const speedWrap = el("div", "speed-wrap");
+    const speedSeg = createSegmented({
+      options: [],
+      ariaLabel: "Druckgeschwindigkeit",
+      onChange: (value) => {
+        const entity = resolveField(this._config, "speed");
+        if (!entity) return;
+        this._hass?.callService(entity.split(".")[0], "select_option", { entity_id: entity, option: value });
+      },
+    });
+    speedWrap.append(speedSeg.element);
     const controlNote = el("div", "panel-note");
-    control.append(controls, speedSelect, controlNote);
+    control.append(controls, speedWrap, controlNote);
 
     pauseBtn.addEventListener("click", () => this._press("pause"));
     resumeBtn.addEventListener("click", () => this._press("resume"));
@@ -577,13 +641,6 @@ class HaOsPrinterCard extends HTMLElement {
       this._update();
     });
 
-    speedSelect.addEventListener("change", () => {
-      const entity = resolveField(this._config, "speed");
-      if (!entity) return;
-      const domain = entity.split(".")[0];
-      this._hass?.callService(domain, "select_option", { entity_id: entity, option: speedSelect.value });
-    });
-
     const empty = el("div", "empty");
     empty.append(
       el("strong", null, "Noch kein Drucker gewählt"),
@@ -592,19 +649,17 @@ class HaOsPrinterCard extends HTMLElement {
 
     left.append(hero, overviewRows, control);
 
-    const panels = { overview, temps, ams };
+    const panels = { overview, fans, ams };
     Object.values(panels).forEach((panel) => main.append(panel));
-    main.prepend(head);
     main.append(empty);
     card.append(rail, main);
 
     this._nodes = {
-      card, rail, buttons, title, subtitle,
-      statePill, statePillIcon, statePillText, errorPill, errorPillText,
+      card, rail, buttons,
       heroValue, barFill, footLeft, footRight, heroImage,
-      rows, slotNodes, panels, empty,
-      pauseBtn, resumeBtn, stopBtn, lightBtn, speedSelect, controlNote,
-      mediaImage, mediaNote, fotoBtn, camBtn, graph,
+      rows, slotNodes, panels, empty, fanNodes, fanNote,
+      pauseBtn, resumeBtn, stopBtn, lightBtn, speedSeg, speedWrap, controlNote,
+      mediaImage, mediaNote, mediaSeg, mediaToggle, graph,
     };
 
     this.shadowRoot.replaceChildren(style, card);
@@ -643,52 +698,41 @@ class HaOsPrinterCard extends HTMLElement {
       Object.values(nodes.panels).forEach((panel) => {
         panel.hidden = true;
       });
-      nodes.title.textContent = this._config?.name || "Drucker";
-      nodes.subtitle.textContent = "";
-      nodes.statePill.hidden = true;
-      nodes.errorPill.hidden = true;
       return;
     }
 
     this._updateHead();
     this._updateOverview();
-    this._updateTemps();
+    this._updateFans();
     this._updateAms();
     this._updateControl();
     this._updateMedia();
     this._updateGraph();
   }
 
+  /**
+   * Status und Fehler als Zeilen.
+   *
+   * Die Karte hatte oben eine eigene Kopfzeile mit Name, Arbeitsschritt und
+   * zwei Pillen. Sie kostete eine ganze Zeile Hoehe und wiederholte, was
+   * ohnehin in der Liste steht – der Name steht schon im Kartentitel der
+   * Shell. Geblieben sind die beiden Angaben, die es sonst nirgends gibt.
+   */
   _updateHead() {
-    const nodes = this._nodes;
     const status = this._state("status");
     const online = this._state("online");
 
-    nodes.title.textContent =
-      this._config.name || status?.attributes?.device_name || this._deviceName() || "Drucker";
-
-    const stage = this._state("stage");
-    nodes.subtitle.textContent = stage && !["unknown", "unavailable"].includes(stage.state) ? stage.state : "";
-
     if (status && !["unknown", "unavailable"].includes(status.state)) {
       const running = ["printing", "running", "druckt", "drucken"].includes(String(status.state).toLowerCase());
-      nodes.statePill.hidden = false;
-      nodes.statePill.classList.toggle("good", running);
-      nodes.statePillIcon.icon = running ? "mdi:printer-3d-nozzle" : "mdi:printer-3d";
-      nodes.statePillText.textContent = status.state;
+      this._row("status", status.state, running ? "good" : "");
     } else if (online) {
-      nodes.statePill.hidden = false;
-      nodes.statePill.classList.toggle("good", online.state === "on");
-      nodes.statePillText.textContent = online.state === "on" ? "Online" : "Offline";
+      this._row("status", online.state === "on" ? "Online" : "Offline", online.state === "on" ? "good" : "bad");
     } else {
-      nodes.statePill.hidden = true;
+      this._row("status", "");
     }
 
-    const error = this._state("error");
-    const hms = this._state("hms");
-    const problems = [error, hms].filter((state) => state?.state === "on").length;
-    nodes.errorPill.hidden = problems === 0;
-    nodes.errorPillText.textContent = problems > 1 ? `${problems} Fehler` : "Fehler";
+    const problems = [this._state("error"), this._state("hms")].filter((state) => state?.state === "on").length;
+    this._row("error", problems ? (problems > 1 ? `${problems} Fehler` : "Fehler") : "", "bad");
   }
 
   /** Aus einer Entitäts-ID einen brauchbaren Namen ableiten, z. B. „P1S". */
@@ -716,7 +760,8 @@ class HaOsPrinterCard extends HTMLElement {
     const stage = this._state("stage");
     this._row("stage", stage && !["unknown", "unavailable"].includes(stage.state) ? stage.state : "");
 
-    this._row("remaining", remaining);
+    // Keine eigene Zeile fuer die Restzeit: sie steht schon unter dem
+    // Fortschrittsbalken. Zweimal dieselbe Zahl untereinander liest niemand.
     this._row("end_time", end && !["unknown", "unavailable"].includes(end.state) ? end.state : "");
 
     const layer = numberOf(this._state("layer"));
@@ -724,6 +769,12 @@ class HaOsPrinterCard extends HTMLElement {
     this._row(
       "layer_of",
       layer === null && layers === null ? "" : `${formatNumber(layer)} / ${formatNumber(layers)}`
+    );
+
+    const size = this._state("nozzle_size");
+    this._row(
+      "nozzle_size",
+      size && !["unknown", "unavailable"].includes(size.state) ? `${size.state} ${unitOf(size)}`.trim() : ""
     );
 
     const cover = this._state("cover");
@@ -742,29 +793,54 @@ class HaOsPrinterCard extends HTMLElement {
     }
   }
 
-  _updateTemps() {
-    const pair = (currentKey, targetKey) => {
-      const current = this._state(currentKey);
-      const target = this._state(targetKey);
-      const currentValue = numberOf(current);
-      const targetValue = numberOf(target);
-      if (currentValue === null && targetValue === null) return "";
-      const unit = unitOf(current) || unitOf(target) || "°C";
-      const shown = `${formatNumber(currentValue, 0)} ${unit}`;
-      return targetValue ? `${shown} → ${formatNumber(targetValue, 0)} ${unit}` : shown;
-    };
+  /**
+   * Färbt die Reglerspur.
+   *
+   * Je schneller, desto dunkler: die Akzentfarbe wird mit steigendem Wert
+   * zunehmend abgedunkelt. Der Verlauf innerhalb der Spur macht die Richtung
+   * sichtbar, auch wenn man den Zahlenwert nicht liest.
+   */
+  _paintFan(node, percentage) {
+    const value = Math.max(0, Math.min(100, percentage || 0));
+    node.fill.style.width = `${value}%`;
+    const dark = Math.round((value / 100) * 55);
+    node.fill.style.background =
+      `linear-gradient(90deg, ` +
+      `color-mix(in srgb, var(--haos-accent, #0a84ff) 72%, white), ` +
+      `color-mix(in srgb, var(--haos-accent, #0a84ff) ${100 - dark}%, black))`;
+  }
 
-    this._row("nozzle_pair", pair("nozzle", "nozzle_target"));
-    this._row("bed_pair", pair("bed", "bed_target"));
+  _updateFans() {
+    const nodes = this._nodes;
+    let anyFan = false;
 
-    const size = this._state("nozzle_size");
-    this._row("nozzle_size", size && !["unknown", "unavailable"].includes(size.state) ? `${size.state} ${unitOf(size)}`.trim() : "");
+    nodes.fanNodes.forEach((fan) => {
+      const entity = resolveField(this._config, fan.key);
+      const state = entity ? this._hass?.states?.[entity] : null;
+      fan.box.hidden = !state;
+      if (!state) return;
+      anyFan = true;
 
-    ["fan_part", "fan_aux", "fan_hotend"].forEach((key) => {
-      const state = this._state(key);
-      const value = numberOf(state);
-      this._row(key, value === null ? "" : `${formatNumber(value)} ${unitOf(state) || "%"}`);
+      const percentage = Number(state.attributes?.percentage);
+      const value = Number.isFinite(percentage) ? percentage : state.state === "on" ? 100 : 0;
+
+      // Nicht überschreiben, während jemand zieht – sonst springt der Regler
+      // unter dem Finger zurück, sobald eine Zustandsmeldung eintrifft.
+      if (document.activeElement !== fan.input && fan.input.value !== String(value)) {
+        fan.input.value = String(value);
+      }
+      fan.value.textContent = `${Math.round(value)} %`;
+      this._paintFan(fan, value);
+
+      const speedState = this._state(fan.speedKey);
+      const speed = numberOf(speedState);
+      fan.speed.textContent = speed === null ? "" : `${formatNumber(speed)} ${unitOf(speedState) || "U/min"}`;
+      fan.speed.hidden = speed === null;
     });
+
+    nodes.fanNote.textContent = anyFan
+      ? ""
+      : "Keine Lüfter gewählt. Im Editor unter „Lüfter“ die fan-Entitäten des Druckers setzen.";
   }
 
   _updateAms() {
@@ -837,22 +913,8 @@ class HaOsPrinterCard extends HTMLElement {
 
     const speed = this._state("speed");
     const options = speed?.attributes?.options || [];
-    nodes.speedSelect.hidden = !speed || !options.length;
-    if (speed && options.length) {
-      const current = options.join("|");
-      if (nodes.speedSelect.dataset.options !== current) {
-        nodes.speedSelect.dataset.options = current;
-        nodes.speedSelect.replaceChildren(
-          ...options.map((option) => {
-            const node = document.createElement("option");
-            node.value = option;
-            node.textContent = option;
-            return node;
-          })
-        );
-      }
-      if (nodes.speedSelect.value !== speed.state) nodes.speedSelect.value = speed.state;
-    }
+    nodes.speedWrap.hidden = !speed || !options.length;
+    if (speed && options.length) nodes.speedSeg.update(speed.state, options);
   }
 
   /**
@@ -1036,12 +1098,9 @@ class HaOsPrinterCard extends HTMLElement {
     const hasCamera = Boolean(camera?.attributes?.entity_picture) && camera.state !== "unavailable";
 
     // Ohne Kamera kein Umschalter – ein einzelner Knopf waere nur Zierde.
-    nodes.fotoBtn.hidden = !hasCamera;
-    nodes.camBtn.hidden = !hasCamera;
+    nodes.mediaToggle.hidden = !hasCamera;
     if (!hasCamera && this._media === "camera") this._media = "photo";
-
-    nodes.fotoBtn.classList.toggle("active", this._media !== "camera");
-    nodes.camBtn.classList.toggle("active", this._media === "camera");
+    nodes.mediaSeg.update(this._media);
 
     const live = this._media === "camera" && hasCamera;
     const stop = () => {

@@ -50,6 +50,10 @@ const zustand = (id, state, attributes = {}) => ({ entity_id: id, state, attribu
 
 const makeHass = (extra = {}) => ({
   states: {
+    "select.modus": zustand("select.modus", "Auto", {
+      friendly_name: "Modus",
+      options: ["Auto", "Party", "Nacht"],
+    }),
     // Player kann alles: play, pause, prev, next, shuffle, repeat
     "media_player.voll": zustand("media_player.voll", "playing", {
       friendly_name: "Wohnzimmer",
@@ -236,6 +240,56 @@ console.log("\n6. Trenner");
   check("ohne Text eine durchgehende Linie",
     leer.shadowRoot.querySelector(".sep-text").hidden &&
       !leer.shadowRoot.querySelectorAll(".sep-line")[0].hidden);
+}
+
+console.log("\n7. Auswahl als Segmentumschalter");
+{
+  const karte = document.createElement("ha-os-card");
+  karte.setConfig({
+    type: "custom:ha-os-card",
+    card_type: "select",
+    entity: "select.modus",
+    display: "buttons",
+  });
+  document.body.append(karte);
+  karte.hass = makeHass();
+
+  const optionen = [...karte.shadowRoot.querySelectorAll(".haos-seg-option")];
+  check("Optionen als Segmente", optionen.length === 3, `${optionen.length}`);
+  check("gleitende Pille", Boolean(karte.shadowRoot.querySelector(".haos-seg-pill")));
+  check("aktuelle Option hervorgehoben",
+    optionen.find((o) => o.classList.contains("active"))?.textContent === "Auto",
+    optionen.map((o) => o.textContent).join(" | "));
+
+  calls.length = 0;
+  optionen.find((o) => o.textContent === "Party").click();
+  check("Auswahl wird gesetzt mit der richtigen Option",
+    calls[0]?.dienst === "select.select_option" && calls[0]?.daten?.option === "Party",
+    JSON.stringify(calls[0] || {}));
+}
+
+console.log("\n8. Knoepfe tragen Glas");
+{
+  const karte = document.createElement("ha-os-card");
+  karte.setConfig({ type: "custom:ha-os-card", card_type: "media", entity: "media_player.voll" });
+  document.body.append(karte);
+  karte.hass = makeHass();
+
+  // Alle Bedienelemente ziehen ihre Flaeche aus denselben Theme-Variablen -
+  // vorher stand dort eine feste Fuellung, die sich nicht mitregeln liess.
+  const stil = karte.shadowRoot.querySelector("style").textContent;
+  const glasig = (selektor) => {
+    const i = stil.indexOf(selektor);
+    if (i < 0) return false;
+    const block2 = stil.slice(i, stil.indexOf("}", i));
+    return block2.includes("backdrop-filter") && block2.includes("--haos-entity-surface-rgb");
+  };
+  check("Medienknoepfe", glasig(".media-controls button"));
+  check("Taster", glasig(".press-btn"));
+  check("Rollo-Knoepfe", glasig(".cover-ctrl button"));
+  check("Thermostat-Schritte", glasig(".stepper button"));
+  check("Betriebsarten", glasig(".mode .dot"));
+  check("Abspielknopf bleibt kraeftig", stil.includes(".media-controls .play"));
 }
 
 console.log(failures === 0 ? "\nAlle Prüfungen bestanden.\n" : `\n${failures} Prüfung(en) fehlgeschlagen.\n`);

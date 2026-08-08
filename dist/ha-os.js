@@ -1,4 +1,4 @@
-/* HA-OS 0.18.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.19.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -374,6 +374,15 @@ var ENTITY_SURFACE_CSS = `
   backdrop-filter: blur(var(--haos-entity-blur, 12px)) saturate(var(--haos-entity-saturation, 180%));
   -webkit-backdrop-filter: blur(var(--haos-entity-blur, 12px)) saturate(var(--haos-entity-saturation, 180%));
 `;
+var CONTROL_SURFACE_CSS = `
+  border: 1px solid rgba(var(--haos-entity-border-rgb, 255,255,255), calc(var(--haos-entity-border-opacity, .20) * .8));
+  background:
+    var(--haos-entity-gloss, linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0))),
+    rgba(var(--haos-entity-surface-rgb, 255,255,255), calc(var(--haos-entity-opacity, .10) + .04));
+  box-shadow: var(--haos-entity-sheen, inset 0 1px 0 rgba(255,255,255,.32));
+  backdrop-filter: blur(var(--haos-entity-blur, 12px)) saturate(var(--haos-entity-saturation, 180%));
+  -webkit-backdrop-filter: blur(var(--haos-entity-blur, 12px)) saturate(var(--haos-entity-saturation, 180%));
+`;
 var CARD_SURFACE_CSS = `
   border: 1px solid rgba(var(--haos-card-border-rgb, 255,255,255), var(--haos-card-border-opacity, .22));
   border-radius: var(--haos-card-radius, 24px);
@@ -508,6 +517,102 @@ var IMAGE_FIELD_CSS = `
   .haos-image-btn.ghost { opacity: .7; }
   .haos-image-status { font-size: 11px; opacity: .7; }
   .haos-image-status.bad { color: var(--haos-bad, #ff6b6b); opacity: 1; }
+`;
+var nextFrame = (callback) => {
+  const raf = globalThis.requestAnimationFrame;
+  if (typeof raf === "function") raf(callback);
+  else setTimeout(callback, 0);
+};
+var createSegmented = ({ options = [], value = "", onChange, ariaLabel = "" } = {}) => {
+  const wrap = document.createElement("div");
+  wrap.className = "haos-seg";
+  wrap.setAttribute("role", "radiogroup");
+  if (ariaLabel) wrap.setAttribute("aria-label", ariaLabel);
+  const pill = document.createElement("span");
+  pill.className = "haos-seg-pill";
+  wrap.append(pill);
+  let current = value;
+  let buttons = [];
+  const place = () => {
+    const active2 = buttons.find((button) => button.dataset.value === current);
+    if (!active2) {
+      pill.style.opacity = "0";
+      return;
+    }
+    pill.style.opacity = "1";
+    pill.style.width = `${active2.offsetWidth}px`;
+    pill.style.transform = `translateX(${active2.offsetLeft}px)`;
+  };
+  const render = (nextOptions) => {
+    buttons.forEach((button) => button.remove());
+    buttons = nextOptions.map((option) => {
+      const { value: optionValue, label } = typeof option === "string" ? { value: option, label: option } : option;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "haos-seg-option";
+      button.dataset.value = optionValue;
+      button.textContent = label;
+      button.setAttribute("role", "radio");
+      button.addEventListener("click", () => {
+        if (optionValue === current) return;
+        current = optionValue;
+        sync();
+        onChange?.(optionValue);
+      });
+      wrap.append(button);
+      return button;
+    });
+  };
+  const sync = () => {
+    buttons.forEach((button) => {
+      const active2 = button.dataset.value === current;
+      button.classList.toggle("active", active2);
+      button.setAttribute("aria-checked", active2 ? "true" : "false");
+    });
+    place();
+  };
+  render(options);
+  sync();
+  return {
+    element: wrap,
+    /** Wert und – falls nötig – die Optionen nachziehen. */
+    update(nextValue, nextOptions) {
+      if (nextOptions && nextOptions.join("|") !== buttons.map((b) => b.dataset.value).join("|")) {
+        render(nextOptions);
+      }
+      current = nextValue;
+      sync();
+    },
+    /** Nach dem Einhängen einmal aufrufen, damit die Pille sitzt. */
+    place
+  };
+};
+var SEGMENTED_CSS = `
+  .haos-seg {
+    position: relative; display: inline-flex; align-items: center; gap: 2px; padding: 3px;
+    border-radius: 999px;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+    border: 1px solid rgba(var(--haos-entity-border-rgb, 255,255,255), var(--haos-entity-border-opacity, .20));
+    backdrop-filter: blur(var(--haos-entity-blur, 12px)) saturate(var(--haos-entity-saturation, 180%));
+    -webkit-backdrop-filter: blur(var(--haos-entity-blur, 12px)) saturate(var(--haos-entity-saturation, 180%));
+  }
+  .haos-seg-pill {
+    position: absolute; top: 3px; bottom: 3px; left: 0; width: 0;
+    border-radius: 999px; pointer-events: none; opacity: 0;
+    background: rgba(var(--haos-entity-surface-rgb, 255,255,255), calc(var(--haos-entity-opacity, .10) + .16));
+    border: 1px solid rgba(var(--haos-entity-border-rgb, 255,255,255), calc(var(--haos-entity-border-opacity, .20) + .18));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.42), 0 3px 10px rgba(0,0,0,.18);
+    transition: transform .22s cubic-bezier(.32,.72,0,1), width .22s cubic-bezier(.32,.72,0,1), opacity .16s ease;
+  }
+  .haos-seg-option {
+    position: relative; z-index: 1; border: 0; background: none; cursor: pointer;
+    padding: 6px 14px; border-radius: 999px; font: inherit; font-size: 12px;
+    color: rgba(var(--haos-text-rgb, 255,255,255), .55);
+    transition: color .16s ease;
+    white-space: nowrap;
+  }
+  .haos-seg-option.active { color: var(--haos-text, #fff); }
+  .haos-seg-option:hover { color: rgba(var(--haos-text-rgb, 255,255,255), .85); }
 `;
 
 // src/shared/config.js
@@ -733,17 +838,11 @@ var STYLES = `
     padding: 7px 12px; display: flex; align-items: center; gap: 12px;
     ${ENTITY_SURFACE_CSS}
   }
-  .tabs { min-width: 0; flex: 1; display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+  .tabs { min-width: 0; flex: 1; display: flex; align-items: center; overflow-x: auto; scrollbar-width: none; }
   .tabs::-webkit-scrollbar { display: none; }
-  .tab {
-    flex: 0 0 auto; height: 40px; padding: 0 14px; border: 1px solid transparent; border-radius: 12px;
-    background: transparent; cursor: pointer; white-space: nowrap;
-    color: rgba(var(--haos-text-rgb, 255,255,255), .52);
-    font-size: 17px; font-weight: var(--haos-font-weight-normal, 450);
-    transition: color .16s ease, background .16s ease;
-  }
-  .tab:hover { color: rgba(var(--haos-text-rgb, 255,255,255), .82); background: rgba(var(--haos-text-rgb, 255,255,255), .06); }
-  .tab.active { color: var(--haos-text, #fff); font-weight: var(--haos-font-weight-semibold, 650); }
+  ${SEGMENTED_CSS}
+  /* Die Reiter tragen denselben Umschalter wie die Karten, nur groesser. */
+  .tabs .haos-seg-option { font-size: 15px; padding: 8px 16px; }
 
   .badges { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; }
   .badge {
@@ -1162,17 +1261,26 @@ var HaOsShell = class extends HTMLElement {
     }
   }
   // ---------------------------------------------------------------- Tabs
+  /**
+   * Reiter als Segmentumschalter – dieselbe Optik wie in den Karten.
+   *
+   * Der Umschalter wird bei einer Strukturaenderung neu gebaut, nicht bei
+   * jedem Seitenwechsel: dort wandert nur die Pille. Sonst spraenge sie
+   * statt zu gleiten.
+   */
   _syncTabs() {
     this._tabList.replaceChildren();
     this._tabs.clear();
+    this._tabSeg = null;
     if (!this._config.topbar_tabs) return;
-    this._config.pages.forEach((page) => {
-      const tab = el("button", "tab", page.name);
-      tab.setAttribute("role", "tab");
-      tab.addEventListener("click", () => this._selectPage(page.id));
-      this._tabs.set(page.id, tab);
-      this._tabList.append(tab);
+    this._tabSeg = createSegmented({
+      options: this._config.pages.map((page) => ({ value: page.id, label: page.name })),
+      value: this._activePageId,
+      ariaLabel: "Seiten",
+      onChange: (pageId) => this._selectPage(pageId)
     });
+    this._tabList.append(this._tabSeg.element);
+    nextFrame(() => this._tabSeg?.place());
   }
   // ---------------------------------------------------------------- Seiten
   _dropRemovedPages(previousConfig) {
@@ -1199,7 +1307,7 @@ var HaOsShell = class extends HTMLElement {
     this._pages.forEach((entry, pageId) => {
       entry.root.hidden = pageId !== activeId;
     });
-    this._tabs.forEach((tab, pageId) => tab.classList.toggle("active", pageId === activeId));
+    this._tabSeg?.update(activeId);
     this._sidebarPages?.forEach((button, pageId) => button.classList.toggle("active", pageId === activeId));
     this._settingsButton?.classList.toggle("active", activeId === SETTINGS_PAGE_ID);
     this._syncBadges();
@@ -2803,9 +2911,8 @@ var STYLES3 = `
   .press-btn {
     width: 46px; height: 46px; flex: 0 0 46px; border-radius: 50%;
     display: grid; place-items: center;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
-    border: 1px solid rgba(var(--haos-entity-border-rgb, 255,255,255), .22);
     transition: transform .12s ease, background .18s ease, color .18s ease;
+    ${CONTROL_SURFACE_CSS}
   }
   .press-btn:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .18); }
   .press-btn:active, .press-btn.is-pressed {
@@ -2820,8 +2927,8 @@ var STYLES3 = `
   .cover-ctrl { display: flex; gap: 6px; }
   .cover-ctrl button {
     width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
     transition: background .18s ease;
+    ${CONTROL_SURFACE_CSS}
   }
   .cover-ctrl button:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .18); }
   .cover-ctrl button:active { background: var(--haos-accent, #0a84ff); color: #fff; }
@@ -2843,13 +2950,19 @@ var STYLES3 = `
   .dial-temp { font-size: 34px; font-weight: 700; letter-spacing: -.02em; }
   .dial-label { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
   .stepper { display: flex; justify-content: center; gap: 14px; }
-  .stepper button { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(var(--haos-text-rgb, 255,255,255), .09); }
+  .stepper button { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; ${CONTROL_SURFACE_CSS} }
   .stepper button:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .16); }
   .modes { display: flex; justify-content: space-around; gap: 6px; }
   .mode { display: grid; justify-items: center; gap: 5px; font-size: 10px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
-  .mode .dot { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(var(--haos-text-rgb, 255,255,255), .09); }
+  .mode .dot { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; ${CONTROL_SURFACE_CSS} }
   .mode.active { color: var(--haos-text, #fff); }
-  .mode.active .dot { background: #fff; color: #18212a; }
+  /* Die aktive Betriebsart bleibt kraeftig – sie soll sich von den uebrigen
+     abheben, nicht mit ihnen verschwimmen. */
+  .mode.active .dot {
+    background: rgba(var(--haos-entity-surface-rgb, 255,255,255), calc(var(--haos-entity-opacity, .10) + .55));
+    color: #18212a;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 4px 14px rgba(0,0,0,.18);
+  }
 
   /* --- Wetter --- */
   .weather-head { display: flex; align-items: flex-start; gap: 10px; }
@@ -2889,10 +3002,18 @@ var STYLES3 = `
   .progress span { display: block; height: 100%; width: 0%; background: var(--haos-accent, #0a84ff); transition: width .5s linear; }
   .media-times { display: flex; justify-content: space-between; font-size: 9px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
   .media-controls { display: flex; align-items: center; justify-content: space-between; }
-  .media-controls button { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: rgba(var(--haos-text-rgb, 255,255,255), .75); }
-  .media-controls button:hover { color: var(--haos-text, #fff); background: rgba(var(--haos-text-rgb, 255,255,255), .1); }
-  .media-controls .play { width: 44px; height: 44px; background: #fff; color: #18212a; }
-  .media-controls .play:hover { background: #fff; }
+  .media-controls button {
+    width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+    color: rgba(var(--haos-text-rgb, 255,255,255), .75);
+    ${CONTROL_SURFACE_CSS}
+  }
+  .media-controls button:hover { color: var(--haos-text, #fff); }
+  /* Abspielen ist die Hauptaktion und bleibt deutlich heller als der Rest. */
+  .media-controls .play {
+    width: 44px; height: 44px; color: #18212a;
+    background: rgba(var(--haos-entity-surface-rgb, 255,255,255), calc(var(--haos-entity-opacity, .10) + .70));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 5px 16px rgba(0,0,0,.20);
+  }
   .media-controls button.is-active { color: var(--haos-accent, #0a84ff); }
 
   /* --- Mitglieder --- */
@@ -2912,9 +3033,7 @@ var STYLES3 = `
   .event .what { min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* --- Auswahl --- */
-  .options { display: flex; flex-wrap: wrap; gap: 6px; }
-  .option { padding: 7px 13px; border-radius: 10px; font-size: 12px; background: rgba(var(--haos-text-rgb, 255,255,255), .09); }
-  .option.active { background: var(--haos-accent, #0a84ff); color: #fff; }
+  ${SEGMENTED_CSS}
   select.dropdown { width: 100%; padding: 10px 12px; border-radius: 12px; font: inherit; color: var(--haos-text, #fff); background: rgba(var(--haos-text-rgb, 255,255,255), .09); border: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .14); }
   select.dropdown option { color: #18212a; }
 
@@ -3804,23 +3923,19 @@ var renderers = {
           ctx.nodes.optionButtons = null;
           ctx.nodes.body.append(select);
         } else {
-          const list = el3("div", "options");
-          ctx.nodes.optionButtons = /* @__PURE__ */ new Map();
-          options.forEach((option) => {
-            const button = el3("button", "option", option);
-            button.addEventListener(
-              "click",
-              () => ctx.hass?.callService(domain, "select_option", { entity_id: entityId, option })
-            );
-            ctx.nodes.optionButtons.set(option, button);
-            list.append(button);
+          ctx.nodes.segmented = createSegmented({
+            options,
+            value: state?.state ?? "",
+            onChange: (option) => ctx.hass?.callService(domain, "select_option", { entity_id: entityId, option })
           });
+          ctx.nodes.optionButtons = null;
           ctx.nodes.select = null;
-          ctx.nodes.body.append(list);
+          ctx.nodes.body.append(ctx.nodes.segmented.element);
+          nextFrame(() => ctx.nodes.segmented.place());
         }
       }
       if (ctx.nodes.select && ctx.nodes.select.value !== state?.state) ctx.nodes.select.value = state?.state ?? "";
-      ctx.nodes.optionButtons?.forEach((button, option) => button.classList.toggle("active", option === state?.state));
+      ctx.nodes.segmented?.update(state?.state ?? "", options);
     }
   },
   // ------------------------------------------------------------- Trenner
@@ -4997,7 +5112,12 @@ var STYLES6 = `
     background: none; color: rgba(var(--haos-text-rgb, 255,255,255), .45);
     transition: background .16s ease, color .16s ease;
   }
-  .rail button.active { background: rgba(var(--haos-text-rgb, 255,255,255), .16); color: var(--haos-text, #fff); }
+  /* Der aktive Bereich sitzt als Glasflaeche in der Leiste - dieselbe
+     Sprache wie die Knoepfe in den Karten. */
+  .rail button.active {
+    color: var(--haos-text, #fff);
+    ${CONTROL_SURFACE_CSS}
+  }
   .rail button[disabled] { opacity: .3; cursor: default; }
   .rail ha-icon { --mdc-icon-size: 19px; }
 
@@ -5789,10 +5909,15 @@ var FIELDS = [
   { key: "nozzle_target", label: "Düse Soll", domain: "sensor", section: "temps", suffixes: ["zieltemperatur_der_duse", "target_nozzle_temperature"] },
   { key: "bed", label: "Druckbett", domain: "sensor", section: "temps", suffixes: ["druckbetttemperatur", "bed_temperature"] },
   { key: "bed_target", label: "Druckbett Soll", domain: "sensor", section: "temps", suffixes: ["zieltemperatur_vom_druckbett", "target_bed_temperature"] },
-  { key: "fan_part", label: "Bauteillüfter", domain: "sensor", section: "temps", suffixes: ["bauteillufterdrehzahl", "cooling_fan_speed"] },
-  { key: "fan_aux", label: "Druckraumlüfter", domain: "sensor", section: "temps", suffixes: ["druckraumlufterdrehzahl", "aux_fan_speed"] },
-  { key: "fan_hotend", label: "Druckkopflüfter", domain: "sensor", section: "temps", suffixes: ["druckkopflufterdrehzahl", "heatbreak_fan_speed"] },
-  { key: "nozzle_size", label: "Düsengröße", domain: "sensor", section: "temps", suffixes: ["dusengrosse", "nozzle_size"] },
+  { key: "fan_part", label: "Bauteillüfter (Drehzahl)", domain: "sensor", section: "fans", suffixes: ["bauteillufterdrehzahl", "cooling_fan_speed"] },
+  { key: "fan_aux", label: "Druckraumlüfter (Drehzahl)", domain: "sensor", section: "fans", suffixes: ["druckraumlufterdrehzahl", "aux_fan_speed"] },
+  { key: "fan_hotend", label: "Druckkopflüfter (Drehzahl)", domain: "sensor", section: "fans", suffixes: ["druckkopflufterdrehzahl", "heatbreak_fan_speed"] },
+  { key: "nozzle_size", label: "Düsengröße", domain: "sensor", section: "overview", suffixes: ["dusengrosse", "nozzle_size"] },
+  // Steuerbare Luefter. Die drei Eintraege oben sind reine Drehzahlmesser -
+  // diese hier sind fan-Entitaeten und nehmen set_percentage entgegen.
+  { key: "fan_part_ctrl", label: "Bauteillüfter", domain: "fan", section: "fans", suffixes: ["bauteillufter", "cooling_fan", "part_cooling_fan"] },
+  { key: "fan_aux_ctrl", label: "Druckraumlüfter", domain: "fan", section: "fans", suffixes: ["druckraumlufter", "aux_fan", "auxiliary_fan"] },
+  { key: "fan_chamber_ctrl", label: "Druckkopflüfter", domain: "fan", section: "fans", suffixes: ["druckkopflufter", "chamber_fan", "heatbreak_fan"] },
   { key: "ams_slot_1", label: "Slot 1", domain: "sensor", section: "ams", suffixes: ["ams_1_slot_1", "ams_1_tray_1"] },
   { key: "ams_slot_2", label: "Slot 2", domain: "sensor", section: "ams", suffixes: ["ams_1_slot_2", "ams_1_tray_2"] },
   { key: "ams_slot_3", label: "Slot 3", domain: "sensor", section: "ams", suffixes: ["ams_1_slot_3", "ams_1_tray_3"] },
@@ -5841,7 +5966,7 @@ var icon5 = (name) => {
 };
 var SECTIONS2 = [
   ["overview", "mdi:printer-3d", "Übersicht"],
-  ["temps", "mdi:thermometer", "Temperaturen"],
+  ["fans", "mdi:fan", "Lüfter"],
   ["ams", "mdi:tray-full", "AMS"]
 ];
 var STYLES7 = `
@@ -5868,7 +5993,12 @@ var STYLES7 = `
     background: none; color: rgba(var(--haos-text-rgb, 255,255,255), .45);
     transition: background .16s ease, color .16s ease;
   }
-  .rail button.active { background: rgba(var(--haos-text-rgb, 255,255,255), .16); color: var(--haos-text, #fff); }
+  /* Der aktive Bereich sitzt als Glasflaeche in der Leiste - dieselbe
+     Sprache wie die Knoepfe in den Karten. */
+  .rail button.active {
+    color: var(--haos-text, #fff);
+    ${CONTROL_SURFACE_CSS}
+  }
   .rail ha-icon { --mdc-icon-size: 19px; }
 
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
@@ -5936,6 +6066,26 @@ var STYLES7 = `
      eigenen Tafel. Sie schiebt sich an den unteren Rand, damit die Zeilen
      darueber zusammenbleiben. */
   .control-block { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+  /* Luefter: Regler mit Verlauf in der Akzentfarbe - je schneller, desto
+     dunkler. Der native Regler laesst sich nicht zuverlaessig einfaerben,
+     deshalb liegt er unsichtbar ueber der eigenen Spur. */
+  .fan { padding: 12px; ${ENTITY_SURFACE_CSS} }
+  .fan[hidden] { display: none; }
+  .fan-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .fan-name { font-size: 13px; color: rgba(var(--haos-text-rgb, 255,255,255), .7); }
+  .fan-value { font-size: 17px; font-weight: var(--haos-font-weight-medium, 500); }
+  .fan-track {
+    position: relative; height: 14px; margin-top: 9px; border-radius: 99px; overflow: hidden;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .14);
+  }
+  .fan-fill { display: block; height: 100%; width: 0; border-radius: 99px; transition: width .18s ease; }
+  .fan-track input[type="range"] {
+    position: absolute; inset: 0; width: 100%; height: 100%; margin: 0;
+    opacity: 0; cursor: ew-resize;
+  }
+  .fan-speed { font-size: 11px; margin-top: 6px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
+  .fan-speed[hidden] { display: none; }
+
   .controls { display: flex; flex-wrap: wrap; gap: 8px; }
   .ctrl {
     flex: 1 1 120px; min-width: 0; padding: 12px 10px; cursor: pointer;
@@ -5952,12 +6102,6 @@ var STYLES7 = `
   .ctrl.on { background: color-mix(in srgb, var(--haos-accent, #0a84ff) 28%, transparent); }
   .ctrl ha-icon { --mdc-icon-size: 22px; }
 
-  select.speed {
-    width: 100%; padding: 10px 12px; border-radius: 12px; font: inherit; color: var(--haos-text, #fff);
-    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
-    border: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .14);
-  }
-  select.speed option { color: #18212a; }
 
   /* Zwei Spalten. Unter 620 px fallen sie untereinander - auf dem Telefon
      stuenden sonst zwei Spalten mit je 150 px nebeneinander. */
@@ -5971,16 +6115,13 @@ var STYLES7 = `
   .media img[hidden] { display: none; }
   .media-note { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 12px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
   .media-note[hidden] { display: none; }
-  .media-toggle {
-    position: absolute; top: 8px; right: 8px; display: flex; gap: 2px; padding: 2px;
-    border-radius: 999px; background: rgba(0, 0, 0, .45);
-  }
-  .seg {
-    border: 0; padding: 4px 10px; border-radius: 999px; cursor: pointer;
-    font-size: 11px; background: none; color: rgba(255, 255, 255, .7);
-  }
-  .seg.active { background: rgba(255, 255, 255, .22); color: #fff; }
-  .seg[hidden] { display: none; }
+  ${SEGMENTED_CSS}
+  .media-toggle { position: absolute; top: 8px; right: 8px; }
+  .media-toggle[hidden] { display: none; }
+  .speed-wrap { display: flex; }
+  .speed-wrap[hidden] { display: none; }
+  .speed-wrap .haos-seg { width: 100%; justify-content: space-between; }
+  .speed-wrap .haos-seg-option { flex: 1; }
 
   /* Temperaturen: zwei Kacheln nebeneinander unter dem Bild. */
   .graphs { flex: 0 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -6086,19 +6227,6 @@ var HaOsPrinterCard = class extends HTMLElement {
       rail.append(button);
     });
     const main = el6("div", "main");
-    const head = el6("div", "head");
-    const headText = el6("div", "head-text");
-    const title = el6("div", "title");
-    const subtitle = el6("div", "subtitle");
-    headText.append(title, subtitle);
-    const statePill = el6("div", "pill");
-    const statePillIcon = icon5("mdi:printer-3d-nozzle");
-    const statePillText = el6("span");
-    statePill.append(statePillIcon, statePillText);
-    const errorPill = el6("div", "pill bad");
-    const errorPillText = el6("span");
-    errorPill.append(icon5("mdi:alert"), errorPillText);
-    head.append(headText, errorPill, statePill);
     const overview = el6("div", "panel");
     const hero = el6("div", "hero");
     const heroMain = el6("div", "hero-main");
@@ -6129,10 +6257,12 @@ var HaOsPrinterCard = class extends HTMLElement {
     const overviewRows = el6("div", "rows");
     rowPanel(
       [
+        { key: "status", label: "Status" },
+        { key: "error", label: "Fehler" },
         { key: "task", label: "Auftrag" },
         { key: "stage", label: "Arbeitsschritt" },
-        { key: "remaining", label: "Restzeit" },
         { key: "end_time", label: "Fertig um" },
+        { key: "nozzle_size", label: "Düse" },
         { key: "layer_of", label: "Schicht" }
       ],
       overviewRows
@@ -6145,34 +6275,63 @@ var HaOsPrinterCard = class extends HTMLElement {
     mediaImage.alt = "";
     const mediaNote = el6("div", "media-note");
     const mediaToggle = el6("div", "media-toggle");
-    const fotoBtn = el6("button", "seg active", "Foto");
-    const camBtn = el6("button", "seg", "Kamera");
-    mediaToggle.append(fotoBtn, camBtn);
+    const mediaSeg = createSegmented({
+      options: [
+        { value: "photo", label: "Foto" },
+        { value: "camera", label: "Kamera" }
+      ],
+      value: "photo",
+      ariaLabel: "Bildquelle",
+      onChange: (value) => {
+        this._media = value;
+        this._update();
+      }
+    });
+    mediaToggle.append(mediaSeg.element);
     media.append(mediaImage, mediaNote, mediaToggle);
-    fotoBtn.addEventListener("click", () => {
-      this._media = "photo";
-      this._update();
-    });
-    camBtn.addEventListener("click", () => {
-      this._media = "camera";
-      this._update();
-    });
     const graph = this._buildGraph();
     right.append(media, graph.element);
     columns.append(left, right);
     overview.append(columns);
-    const temps = el6("div", "panel rows");
-    rowPanel(
-      [
-        { key: "nozzle_pair", label: "Düse" },
-        { key: "bed_pair", label: "Druckbett" },
-        { key: "nozzle_size", label: "Düsengröße" },
-        { key: "fan_part", label: "Bauteillüfter" },
-        { key: "fan_aux", label: "Druckraumlüfter" },
-        { key: "fan_hotend", label: "Druckkopflüfter" }
-      ],
-      temps
-    );
+    const fans = el6("div", "panel");
+    const fanNodes = [
+      ["fan_part_ctrl", "fan_part", "Bauteillüfter"],
+      ["fan_aux_ctrl", "fan_aux", "Druckraumlüfter"],
+      ["fan_chamber_ctrl", "fan_hotend", "Druckkopflüfter"]
+    ].map(([key, speedKey, label]) => {
+      const box = el6("div", "fan");
+      const head = el6("div", "fan-head");
+      const name = el6("span", "fan-name", label);
+      const value = el6("span", "fan-value", "–");
+      head.append(name, value);
+      const track = el6("div", "fan-track");
+      const fill = el6("span", "fan-fill");
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = "0";
+      input.max = "100";
+      input.step = "5";
+      track.append(fill, input);
+      const speed = el6("div", "fan-speed");
+      box.append(head, track, speed);
+      fans.append(box);
+      input.addEventListener("input", () => {
+        value.textContent = `${input.value} %`;
+        this._paintFan({ fill }, Number(input.value));
+      });
+      input.addEventListener("change", () => {
+        const entity = resolveField(this._config, key);
+        if (!entity) return;
+        const percentage = Number(input.value);
+        this._hass?.callService("fan", percentage === 0 ? "turn_off" : "set_percentage", {
+          entity_id: entity,
+          ...percentage === 0 ? {} : { percentage }
+        });
+      });
+      return { key, speedKey, box, value, fill, input, speed };
+    });
+    const fanNote = el6("div", "panel-note");
+    fans.append(fanNote);
     const ams = el6("div", "panel");
     const slots = el6("div", "slots");
     const slotNodes = [1, 2, 3, 4].map((number2) => {
@@ -6209,10 +6368,19 @@ var HaOsPrinterCard = class extends HTMLElement {
     const resumeBtn = makeCtrl("mdi:play", "Fortsetzen");
     const stopBtn = makeCtrl("mdi:stop", "Beenden", "danger");
     const lightBtn = makeCtrl("mdi:lightbulb", "Kammerlicht");
-    const speedSelect = document.createElement("select");
-    speedSelect.className = "speed";
+    const speedWrap = el6("div", "speed-wrap");
+    const speedSeg = createSegmented({
+      options: [],
+      ariaLabel: "Druckgeschwindigkeit",
+      onChange: (value) => {
+        const entity = resolveField(this._config, "speed");
+        if (!entity) return;
+        this._hass?.callService(entity.split(".")[0], "select_option", { entity_id: entity, option: value });
+      }
+    });
+    speedWrap.append(speedSeg.element);
     const controlNote = el6("div", "panel-note");
-    control.append(controls, speedSelect, controlNote);
+    control.append(controls, speedWrap, controlNote);
     pauseBtn.addEventListener("click", () => this._press("pause"));
     resumeBtn.addEventListener("click", () => this._press("resume"));
     lightBtn.addEventListener("click", () => {
@@ -6235,34 +6403,20 @@ var HaOsPrinterCard = class extends HTMLElement {
       this._press("stop");
       this._update();
     });
-    speedSelect.addEventListener("change", () => {
-      const entity = resolveField(this._config, "speed");
-      if (!entity) return;
-      const domain = entity.split(".")[0];
-      this._hass?.callService(domain, "select_option", { entity_id: entity, option: speedSelect.value });
-    });
     const empty = el6("div", "empty");
     empty.append(
       el6("strong", null, "Noch kein Drucker gewählt"),
       el6("span", null, "Im Editor oben eine Entität des Druckers wählen – die übrigen Felder füllen sich dann von selbst.")
     );
     left.append(hero, overviewRows, control);
-    const panels = { overview, temps, ams };
+    const panels = { overview, fans, ams };
     Object.values(panels).forEach((panel) => main.append(panel));
-    main.prepend(head);
     main.append(empty);
     card.append(rail, main);
     this._nodes = {
       card,
       rail,
       buttons,
-      title,
-      subtitle,
-      statePill,
-      statePillIcon,
-      statePillText,
-      errorPill,
-      errorPillText,
       heroValue,
       barFill,
       footLeft,
@@ -6272,16 +6426,19 @@ var HaOsPrinterCard = class extends HTMLElement {
       slotNodes,
       panels,
       empty,
+      fanNodes,
+      fanNote,
       pauseBtn,
       resumeBtn,
       stopBtn,
       lightBtn,
-      speedSelect,
+      speedSeg,
+      speedWrap,
       controlNote,
       mediaImage,
       mediaNote,
-      fotoBtn,
-      camBtn,
+      mediaSeg,
+      mediaToggle,
       graph
     };
     this.shadowRoot.replaceChildren(style, card);
@@ -6315,45 +6472,37 @@ var HaOsPrinterCard = class extends HTMLElement {
       Object.values(nodes.panels).forEach((panel) => {
         panel.hidden = true;
       });
-      nodes.title.textContent = this._config?.name || "Drucker";
-      nodes.subtitle.textContent = "";
-      nodes.statePill.hidden = true;
-      nodes.errorPill.hidden = true;
       return;
     }
     this._updateHead();
     this._updateOverview();
-    this._updateTemps();
+    this._updateFans();
     this._updateAms();
     this._updateControl();
     this._updateMedia();
     this._updateGraph();
   }
+  /**
+   * Status und Fehler als Zeilen.
+   *
+   * Die Karte hatte oben eine eigene Kopfzeile mit Name, Arbeitsschritt und
+   * zwei Pillen. Sie kostete eine ganze Zeile Hoehe und wiederholte, was
+   * ohnehin in der Liste steht – der Name steht schon im Kartentitel der
+   * Shell. Geblieben sind die beiden Angaben, die es sonst nirgends gibt.
+   */
   _updateHead() {
-    const nodes = this._nodes;
     const status = this._state("status");
     const online = this._state("online");
-    nodes.title.textContent = this._config.name || status?.attributes?.device_name || this._deviceName() || "Drucker";
-    const stage = this._state("stage");
-    nodes.subtitle.textContent = stage && !["unknown", "unavailable"].includes(stage.state) ? stage.state : "";
     if (status && !["unknown", "unavailable"].includes(status.state)) {
       const running = ["printing", "running", "druckt", "drucken"].includes(String(status.state).toLowerCase());
-      nodes.statePill.hidden = false;
-      nodes.statePill.classList.toggle("good", running);
-      nodes.statePillIcon.icon = running ? "mdi:printer-3d-nozzle" : "mdi:printer-3d";
-      nodes.statePillText.textContent = status.state;
+      this._row("status", status.state, running ? "good" : "");
     } else if (online) {
-      nodes.statePill.hidden = false;
-      nodes.statePill.classList.toggle("good", online.state === "on");
-      nodes.statePillText.textContent = online.state === "on" ? "Online" : "Offline";
+      this._row("status", online.state === "on" ? "Online" : "Offline", online.state === "on" ? "good" : "bad");
     } else {
-      nodes.statePill.hidden = true;
+      this._row("status", "");
     }
-    const error = this._state("error");
-    const hms = this._state("hms");
-    const problems = [error, hms].filter((state) => state?.state === "on").length;
-    nodes.errorPill.hidden = problems === 0;
-    nodes.errorPillText.textContent = problems > 1 ? `${problems} Fehler` : "Fehler";
+    const problems = [this._state("error"), this._state("hms")].filter((state) => state?.state === "on").length;
+    this._row("error", problems ? problems > 1 ? `${problems} Fehler` : "Fehler" : "", "bad");
   }
   /** Aus einer Entitäts-ID einen brauchbaren Namen ableiten, z. B. „P1S". */
   _deviceName() {
@@ -6374,13 +6523,17 @@ var HaOsPrinterCard = class extends HTMLElement {
     this._row("task", task && !["unknown", "unavailable"].includes(task.state) ? task.state : "");
     const stage = this._state("stage");
     this._row("stage", stage && !["unknown", "unavailable"].includes(stage.state) ? stage.state : "");
-    this._row("remaining", remaining);
     this._row("end_time", end && !["unknown", "unavailable"].includes(end.state) ? end.state : "");
     const layer = numberOf2(this._state("layer"));
     const layers = numberOf2(this._state("layers"));
     this._row(
       "layer_of",
       layer === null && layers === null ? "" : `${formatNumber2(layer)} / ${formatNumber2(layers)}`
+    );
+    const size = this._state("nozzle_size");
+    this._row(
+      "nozzle_size",
+      size && !["unknown", "unavailable"].includes(size.state) ? `${size.state} ${unitOf2(size)}`.trim() : ""
     );
     const cover = this._state("cover");
     const picture = cover?.attributes?.entity_picture;
@@ -6397,26 +6550,41 @@ var HaOsPrinterCard = class extends HTMLElement {
       nodes.heroImage.hidden = true;
     }
   }
-  _updateTemps() {
-    const pair = (currentKey, targetKey) => {
-      const current = this._state(currentKey);
-      const target = this._state(targetKey);
-      const currentValue = numberOf2(current);
-      const targetValue = numberOf2(target);
-      if (currentValue === null && targetValue === null) return "";
-      const unit = unitOf2(current) || unitOf2(target) || "°C";
-      const shown = `${formatNumber2(currentValue, 0)} ${unit}`;
-      return targetValue ? `${shown} → ${formatNumber2(targetValue, 0)} ${unit}` : shown;
-    };
-    this._row("nozzle_pair", pair("nozzle", "nozzle_target"));
-    this._row("bed_pair", pair("bed", "bed_target"));
-    const size = this._state("nozzle_size");
-    this._row("nozzle_size", size && !["unknown", "unavailable"].includes(size.state) ? `${size.state} ${unitOf2(size)}`.trim() : "");
-    ["fan_part", "fan_aux", "fan_hotend"].forEach((key) => {
-      const state = this._state(key);
-      const value = numberOf2(state);
-      this._row(key, value === null ? "" : `${formatNumber2(value)} ${unitOf2(state) || "%"}`);
+  /**
+   * Färbt die Reglerspur.
+   *
+   * Je schneller, desto dunkler: die Akzentfarbe wird mit steigendem Wert
+   * zunehmend abgedunkelt. Der Verlauf innerhalb der Spur macht die Richtung
+   * sichtbar, auch wenn man den Zahlenwert nicht liest.
+   */
+  _paintFan(node, percentage) {
+    const value = Math.max(0, Math.min(100, percentage || 0));
+    node.fill.style.width = `${value}%`;
+    const dark = Math.round(value / 100 * 55);
+    node.fill.style.background = `linear-gradient(90deg, color-mix(in srgb, var(--haos-accent, #0a84ff) 72%, white), color-mix(in srgb, var(--haos-accent, #0a84ff) ${100 - dark}%, black))`;
+  }
+  _updateFans() {
+    const nodes = this._nodes;
+    let anyFan = false;
+    nodes.fanNodes.forEach((fan) => {
+      const entity = resolveField(this._config, fan.key);
+      const state = entity ? this._hass?.states?.[entity] : null;
+      fan.box.hidden = !state;
+      if (!state) return;
+      anyFan = true;
+      const percentage = Number(state.attributes?.percentage);
+      const value = Number.isFinite(percentage) ? percentage : state.state === "on" ? 100 : 0;
+      if (document.activeElement !== fan.input && fan.input.value !== String(value)) {
+        fan.input.value = String(value);
+      }
+      fan.value.textContent = `${Math.round(value)} %`;
+      this._paintFan(fan, value);
+      const speedState = this._state(fan.speedKey);
+      const speed = numberOf2(speedState);
+      fan.speed.textContent = speed === null ? "" : `${formatNumber2(speed)} ${unitOf2(speedState) || "U/min"}`;
+      fan.speed.hidden = speed === null;
     });
+    nodes.fanNote.textContent = anyFan ? "" : "Keine Lüfter gewählt. Im Editor unter „Lüfter“ die fan-Entitäten des Druckers setzen.";
   }
   _updateAms() {
     const active2 = this._state("ams_active");
@@ -6470,22 +6638,8 @@ var HaOsPrinterCard = class extends HTMLElement {
     nodes.lightBtn.classList.toggle("on", light?.state === "on");
     const speed = this._state("speed");
     const options = speed?.attributes?.options || [];
-    nodes.speedSelect.hidden = !speed || !options.length;
-    if (speed && options.length) {
-      const current = options.join("|");
-      if (nodes.speedSelect.dataset.options !== current) {
-        nodes.speedSelect.dataset.options = current;
-        nodes.speedSelect.replaceChildren(
-          ...options.map((option) => {
-            const node = document.createElement("option");
-            node.value = option;
-            node.textContent = option;
-            return node;
-          })
-        );
-      }
-      if (nodes.speedSelect.value !== speed.state) nodes.speedSelect.value = speed.state;
-    }
+    nodes.speedWrap.hidden = !speed || !options.length;
+    if (speed && options.length) nodes.speedSeg.update(speed.state, options);
   }
   /**
    * Bild und Kamera in einer Kachel, umschaltbar.
@@ -6627,11 +6781,9 @@ var HaOsPrinterCard = class extends HTMLElement {
     const camera = this._state("camera");
     const hasCover = Boolean(cover?.attributes?.entity_picture);
     const hasCamera = Boolean(camera?.attributes?.entity_picture) && camera.state !== "unavailable";
-    nodes.fotoBtn.hidden = !hasCamera;
-    nodes.camBtn.hidden = !hasCamera;
+    nodes.mediaToggle.hidden = !hasCamera;
     if (!hasCamera && this._media === "camera") this._media = "photo";
-    nodes.fotoBtn.classList.toggle("active", this._media !== "camera");
-    nodes.camBtn.classList.toggle("active", this._media === "camera");
+    nodes.mediaSeg.update(this._media);
     const live = this._media === "camera" && hasCamera;
     const stop = () => {
       clearInterval(this._cameraTimer);
@@ -6805,7 +6957,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.18.0";
+var VERSION = "0.19.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

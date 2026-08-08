@@ -23,6 +23,10 @@ import {
   registerCard,
   showMoreInfo,
   statusClass,
+  CONTROL_SURFACE_CSS,
+  SEGMENTED_CSS,
+  createSegmented,
+  nextFrame,
 } from "../shared/utils.js";
 
 const TAG = "ha-os-card";
@@ -119,9 +123,8 @@ const STYLES = `
   .press-btn {
     width: 46px; height: 46px; flex: 0 0 46px; border-radius: 50%;
     display: grid; place-items: center;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
-    border: 1px solid rgba(var(--haos-entity-border-rgb, 255,255,255), .22);
     transition: transform .12s ease, background .18s ease, color .18s ease;
+    ${CONTROL_SURFACE_CSS}
   }
   .press-btn:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .18); }
   .press-btn:active, .press-btn.is-pressed {
@@ -136,8 +139,8 @@ const STYLES = `
   .cover-ctrl { display: flex; gap: 6px; }
   .cover-ctrl button {
     width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
     transition: background .18s ease;
+    ${CONTROL_SURFACE_CSS}
   }
   .cover-ctrl button:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .18); }
   .cover-ctrl button:active { background: var(--haos-accent, #0a84ff); color: #fff; }
@@ -159,13 +162,19 @@ const STYLES = `
   .dial-temp { font-size: 34px; font-weight: 700; letter-spacing: -.02em; }
   .dial-label { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
   .stepper { display: flex; justify-content: center; gap: 14px; }
-  .stepper button { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(var(--haos-text-rgb, 255,255,255), .09); }
+  .stepper button { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; ${CONTROL_SURFACE_CSS} }
   .stepper button:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .16); }
   .modes { display: flex; justify-content: space-around; gap: 6px; }
   .mode { display: grid; justify-items: center; gap: 5px; font-size: 10px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
-  .mode .dot { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(var(--haos-text-rgb, 255,255,255), .09); }
+  .mode .dot { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; ${CONTROL_SURFACE_CSS} }
   .mode.active { color: var(--haos-text, #fff); }
-  .mode.active .dot { background: #fff; color: #18212a; }
+  /* Die aktive Betriebsart bleibt kraeftig – sie soll sich von den uebrigen
+     abheben, nicht mit ihnen verschwimmen. */
+  .mode.active .dot {
+    background: rgba(var(--haos-entity-surface-rgb, 255,255,255), calc(var(--haos-entity-opacity, .10) + .55));
+    color: #18212a;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 4px 14px rgba(0,0,0,.18);
+  }
 
   /* --- Wetter --- */
   .weather-head { display: flex; align-items: flex-start; gap: 10px; }
@@ -205,10 +214,18 @@ const STYLES = `
   .progress span { display: block; height: 100%; width: 0%; background: var(--haos-accent, #0a84ff); transition: width .5s linear; }
   .media-times { display: flex; justify-content: space-between; font-size: 9px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
   .media-controls { display: flex; align-items: center; justify-content: space-between; }
-  .media-controls button { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: rgba(var(--haos-text-rgb, 255,255,255), .75); }
-  .media-controls button:hover { color: var(--haos-text, #fff); background: rgba(var(--haos-text-rgb, 255,255,255), .1); }
-  .media-controls .play { width: 44px; height: 44px; background: #fff; color: #18212a; }
-  .media-controls .play:hover { background: #fff; }
+  .media-controls button {
+    width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+    color: rgba(var(--haos-text-rgb, 255,255,255), .75);
+    ${CONTROL_SURFACE_CSS}
+  }
+  .media-controls button:hover { color: var(--haos-text, #fff); }
+  /* Abspielen ist die Hauptaktion und bleibt deutlich heller als der Rest. */
+  .media-controls .play {
+    width: 44px; height: 44px; color: #18212a;
+    background: rgba(var(--haos-entity-surface-rgb, 255,255,255), calc(var(--haos-entity-opacity, .10) + .70));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 5px 16px rgba(0,0,0,.20);
+  }
   .media-controls button.is-active { color: var(--haos-accent, #0a84ff); }
 
   /* --- Mitglieder --- */
@@ -228,9 +245,7 @@ const STYLES = `
   .event .what { min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* --- Auswahl --- */
-  .options { display: flex; flex-wrap: wrap; gap: 6px; }
-  .option { padding: 7px 13px; border-radius: 10px; font-size: 12px; background: rgba(var(--haos-text-rgb, 255,255,255), .09); }
-  .option.active { background: var(--haos-accent, #0a84ff); color: #fff; }
+  ${SEGMENTED_CSS}
   select.dropdown { width: 100%; padding: 10px 12px; border-radius: 12px; font: inherit; color: var(--haos-text, #fff); background: rgba(var(--haos-text-rgb, 255,255,255), .09); border: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .14); }
   select.dropdown option { color: #18212a; }
 
@@ -1346,23 +1361,23 @@ const renderers = {
           ctx.nodes.optionButtons = null;
           ctx.nodes.body.append(select);
         } else {
-          const list = el("div", "options");
-          ctx.nodes.optionButtons = new Map();
-          options.forEach((option) => {
-            const button = el("button", "option", option);
-            button.addEventListener("click", () =>
-              ctx.hass?.callService(domain, "select_option", { entity_id: entityId, option })
-            );
-            ctx.nodes.optionButtons.set(option, button);
-            list.append(button);
+          // Segmentumschalter statt einzelner Knoepfe – dieselbe Optik wie
+          // die Reiter der Shell und die Auswahl in der Druckerkarte.
+          ctx.nodes.segmented = createSegmented({
+            options,
+            value: state?.state ?? "",
+            onChange: (option) =>
+              ctx.hass?.callService(domain, "select_option", { entity_id: entityId, option }),
           });
+          ctx.nodes.optionButtons = null;
           ctx.nodes.select = null;
-          ctx.nodes.body.append(list);
+          ctx.nodes.body.append(ctx.nodes.segmented.element);
+          nextFrame(() => ctx.nodes.segmented.place());
         }
       }
 
       if (ctx.nodes.select && ctx.nodes.select.value !== state?.state) ctx.nodes.select.value = state?.state ?? "";
-      ctx.nodes.optionButtons?.forEach((button, option) => button.classList.toggle("active", option === state?.state));
+      ctx.nodes.segmented?.update(state?.state ?? "", options);
     },
   },
 

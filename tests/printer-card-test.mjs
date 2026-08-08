@@ -62,7 +62,8 @@ const deutsch = {
   "sensor.p1s_zieltemperatur_der_duse": state("sensor.p1s_zieltemperatur_der_duse", "220", { unit_of_measurement: "°C" }),
   "sensor.p1s_druckbetttemperatur": state("sensor.p1s_druckbetttemperatur", "59", { unit_of_measurement: "°C" }),
   "sensor.p1s_zieltemperatur_vom_druckbett": state("sensor.p1s_zieltemperatur_vom_druckbett", "60", { unit_of_measurement: "°C" }),
-  "sensor.p1s_bauteillufterdrehzahl": state("sensor.p1s_bauteillufterdrehzahl", "80", { unit_of_measurement: "%" }),
+  "sensor.p1s_bauteillufterdrehzahl": state("sensor.p1s_bauteillufterdrehzahl", "80", { unit_of_measurement: "U/min" }),
+  "fan.p1s_bauteillufter": state("fan.p1s_bauteillufter", "on", { percentage: 80 }),
   "sensor.p1s_ams_1_slot_1": state("sensor.p1s_ams_1_slot_1", "PLA Schwarz", {
     color: "#101010FF", type: "PLA", remain: 62, remain_enabled: true, empty: false,
   }),
@@ -143,19 +144,54 @@ check("keine wilden Treffer", Object.keys(nichts).length === 0, JSON.stringify(n
 
 console.log("\n5. Uebersicht");
 const voll = build(Object.fromEntries(Object.entries(geraten).map(([k, v]) => [`entity_${k}`, v])));
+// Die Kopfzeile mit Name und zwei Pillen ist weg - sie kostete eine ganze
+// Zeile und wiederholte, was ohnehin in der Liste steht. Status und Fehler
+// sind als Zeilen geblieben, sie stehen sonst nirgends.
+check("keine Kopfzeile mehr", !sr(voll).querySelector(".head"));
+check("Status als Zeile", rowValue(voll, "Status") === "printing", rowValue(voll, "Status"));
+check("kein Fehler, keine Zeile", rowValue(voll, "Fehler") === undefined);
 check("Fortschritt gross", text(voll, ".hero-value") === "42 %", text(voll, ".hero-value"));
 check("Balken auf 42 %", sr(voll).querySelector(".bar span").style.width === "42%");
 check("Restzeit in Stunden und Minuten", text(voll, ".hero-foot span") === "noch 2 h 14 min", text(voll, ".hero-foot span"));
+// Die Restzeit steht nur unter dem Balken, nicht zusaetzlich als Zeile.
+check("keine doppelte Restzeit", rowValue(voll, "Restzeit") === undefined);
 check("Auftrag als Zeile", rowValue(voll, "Auftrag") === "halter.3mf", rowValue(voll, "Auftrag"));
 check("Schicht als Bruch", rowValue(voll, "Schicht") === "84 / 200", rowValue(voll, "Schicht"));
 check("Titelbild wird gezeigt", Boolean(sr(voll).querySelector(".hero-image img")));
 
-console.log("\n6. Temperaturen");
+console.log("\n6. Lüfter mit Regler");
 sr(voll).querySelectorAll(".rail button")[1].click();
-check("Duese mit Sollwert", rowValue(voll, "Düse") === "218 °C → 220 °C", rowValue(voll, "Düse"));
-check("Bett mit Sollwert", rowValue(voll, "Druckbett") === "59 °C → 60 °C", rowValue(voll, "Druckbett"));
-check("Bauteilluefter", rowValue(voll, "Bauteillüfter") === "80 %", rowValue(voll, "Bauteillüfter"));
-check("nicht gesetzte Luefter fehlen ganz", rowValue(voll, "Druckraumlüfter") === undefined);
+const luefter = [...sr(voll).querySelectorAll(".fan")].filter((f) => !f.hidden);
+check("nur gesetzte Luefter erscheinen", luefter.length === 1, `${luefter.length}`);
+check("Wert in Prozent", luefter[0].querySelector(".fan-value").textContent === "80 %",
+  luefter[0].querySelector(".fan-value").textContent);
+check("Spur zeigt den Stand", luefter[0].querySelector(".fan-fill").style.width === "80%",
+  luefter[0].querySelector(".fan-fill").style.width);
+// Je schneller, desto dunkler: bei 80 % wird die Akzentfarbe deutlich
+// abgedunkelt, bei 10 % kaum.
+const fuellung80 = luefter[0].querySelector(".fan-fill").style.background;
+check("Verlauf in der Akzentfarbe", fuellung80.includes("--haos-accent"), fuellung80.slice(0, 60));
+check("Drehzahl darunter", luefter[0].querySelector(".fan-speed").textContent.includes("80"),
+  luefter[0].querySelector(".fan-speed").textContent);
+
+const regler = luefter[0].querySelector("input[type=range]");
+check("Regler steht auf dem Wert", regler.value === "80", regler.value);
+
+calls.length = 0;
+regler.value = "40";
+regler.dispatchEvent(new dom.window.Event("input"));
+const fuellung40 = luefter[0].querySelector(".fan-fill").style.background;
+check("beim Ziehen faerbt es sofort um", fuellung40 !== fuellung80);
+check("dabei noch kein Dienstaufruf", calls.length === 0, calls.join(", "));
+
+regler.dispatchEvent(new dom.window.Event("change"));
+check("Loslassen setzt die Drehzahl", calls[0] === "fan.set_percentage:fan.p1s_bauteillufter", calls.join(", "));
+
+calls.length = 0;
+regler.value = "0";
+regler.dispatchEvent(new dom.window.Event("change"));
+check("Null schaltet aus statt 0 Prozent zu setzen",
+  calls[0] === "fan.turn_off:fan.p1s_bauteillufter", calls.join(", "));
 
 console.log("\n7. AMS");
 sr(voll).querySelectorAll(".rail button")[2].click();
@@ -196,13 +232,19 @@ calls.length = 0;
 licht.click();
 check("Licht schaltet um", calls[0] === "light.toggle:light.p1s_druckraumbeleuchtung", calls.join(", "));
 
-const speed = sr(voll).querySelector("select.speed");
-check("Geschwindigkeiten uebernommen", speed.options.length === 4, `${speed.options.length}`);
-check("aktuelle Stufe gewaehlt", speed.value === "Standard", speed.value);
+// Geschwindigkeit als Segmentumschalter statt Aufklappmenue: alle Stufen
+// sichtbar, ein Tipp statt zwei.
+const stufen = [...sr(voll).querySelectorAll(".speed-wrap .haos-seg-option")];
+check("alle Stufen sichtbar", stufen.length === 4, `${stufen.length}`);
+check("aktuelle Stufe hervorgehoben",
+  stufen.find((s2) => s2.classList.contains("active"))?.textContent === "Standard",
+  stufen.map((s2) => s2.textContent).join(" | "));
 calls.length = 0;
-speed.value = "Sport";
-speed.dispatchEvent(new dom.window.Event("change"));
+stufen.find((s2) => s2.textContent === "Sport").click();
 check("Auswahl wird gesetzt", calls[0] === "select.select_option:select.p1s_druckgeschwindigkeit", calls.join(", "));
+check("Hervorhebung wandert mit",
+  stufen.find((s2) => s2.classList.contains("active"))?.textContent === "Sport",
+  stufen.map((s2) => s2.textContent).join(" | "));
 
 console.log("\n9. Bild und Kamera in einer Kachel");
 sr(voll).querySelectorAll(".rail button")[0].click();
@@ -213,9 +255,11 @@ check("zeigt zuerst das Titelbild", bild.getAttribute("src") === "/api/image_pro
   bild.getAttribute("src") || "");
 check("kein Zeitstempel am Standbild", !/[?&]_=\d+/.test(bild.getAttribute("src") || ""));
 
-const [foto, kam] = sr(voll).querySelectorAll(".seg");
+const [foto, kam] = sr(voll).querySelectorAll(".media-toggle .haos-seg-option");
 check("Umschalter vorhanden", Boolean(foto) && Boolean(kam));
 check("Foto ist aktiv", foto.classList.contains("active"));
+check("gleitende Pille statt gefaerbtem Knopf",
+  Boolean(sr(voll).querySelector(".media-toggle .haos-seg-pill")));
 kam.click();
 check("Kamera wird geladen", bild.getAttribute("src")?.includes("camera_proxy"), bild.getAttribute("src") || "");
 check("Zeitstempel gegen den Cache", /[?&]_=\d+/.test(bild.getAttribute("src") || ""));
@@ -240,6 +284,15 @@ check("Bett beschriftet",
     graphen[1].querySelector(".graph-value").textContent === "59 °C",
   graphen[1].textContent);
 check("je eine eigene Linie", graphen[0].querySelector(".l-nozzle") && graphen[1].querySelector(".l-bed"));
+
+console.log("\n9c. Fehler wird gemeldet");
+{
+  const kaputt = build(
+    Object.fromEntries(Object.entries(geraten).map(([k, v]) => [`entity_${k}`, v])),
+    { ...deutsch, "binary_sensor.p1s_druckfehler": state("binary_sensor.p1s_druckfehler", "on") }
+  );
+  check("Fehlerzeile erscheint", rowValue(kaputt, "Fehler") === "Fehler", rowValue(kaputt, "Fehler"));
+}
 
 console.log("\n10. Teilweise eingerichtet");
 const wenig = build({ entity_progress: "sensor.p1s_druckfortschritt", entity_online: "binary_sensor.p1s_online" });

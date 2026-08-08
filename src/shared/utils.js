@@ -242,6 +242,25 @@ export const ENTITY_SURFACE_CSS = `
   -webkit-backdrop-filter: blur(var(--haos-entity-blur, 12px)) saturate(var(--haos-entity-saturation, 180%));
 `;
 
+/**
+ * Glasfläche für Bedienelemente – Taster, Rollo-Knöpfe, Betriebsarten,
+ * Medienknöpfe.
+ *
+ * Bewusst **ohne** `border-radius`: die Knöpfe behalten ihre Form – rund,
+ * eckig oder Pille – und übernehmen nur die Fläche. Etwas zurückhaltender
+ * als `ENTITY_SURFACE_CSS`, weil ein 34-Pixel-Knopf sonst mehr Rahmen als
+ * Inhalt hat.
+ */
+export const CONTROL_SURFACE_CSS = `
+  border: 1px solid rgba(var(--haos-entity-border-rgb, 255,255,255), calc(var(--haos-entity-border-opacity, .20) * .8));
+  background:
+    var(--haos-entity-gloss, linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0))),
+    rgba(var(--haos-entity-surface-rgb, 255,255,255), calc(var(--haos-entity-opacity, .10) + .04));
+  box-shadow: var(--haos-entity-sheen, inset 0 1px 0 rgba(255,255,255,.32));
+  backdrop-filter: blur(var(--haos-entity-blur, 12px)) saturate(var(--haos-entity-saturation, 180%));
+  -webkit-backdrop-filter: blur(var(--haos-entity-blur, 12px)) saturate(var(--haos-entity-saturation, 180%));
+`;
+
 /** Gemeinsames CSS für die grosse Hintergrund-Glasfläche. */
 export const CARD_SURFACE_CSS = `
   border: 1px solid rgba(var(--haos-card-border-rgb, 255,255,255), var(--haos-card-border-opacity, .22));
@@ -427,4 +446,132 @@ export const IMAGE_FIELD_CSS = `
   .haos-image-btn.ghost { opacity: .7; }
   .haos-image-status { font-size: 11px; opacity: .7; }
   .haos-image-status.bad { color: var(--haos-bad, #ff6b6b); opacity: 1; }
+`;
+
+/**
+ * Führt etwas im nächsten Anstrich aus.
+ *
+ * `requestAnimationFrame` gibt es nicht überall – in der Testumgebung etwa
+ * nicht. Ein Rückfall auf `setTimeout` genügt für den Zweck: Breiten stehen
+ * erst nach dem Einhängen fest.
+ */
+export const nextFrame = (callback) => {
+  const raf = globalThis.requestAnimationFrame;
+  if (typeof raf === "function") raf(callback);
+  else setTimeout(callback, 0);
+};
+
+/**
+ * Segmentumschalter: eine Spur, darin die Optionen, die aktive als Pille.
+ *
+ * Vorbild ist der Umschalter aus iOS. Gegenüber einem Aufklappmenü sieht man
+ * alle Möglichkeiten auf einen Blick und braucht einen Tipp statt zwei – bei
+ * drei bis fünf Optionen ist das der bessere Umgang.
+ *
+ * Die Pille ist ein eigenes Element hinter den Beschriftungen, nicht der
+ * Hintergrund des aktiven Knopfes. Nur so kann sie beim Wechsel gleiten,
+ * statt zu springen.
+ */
+export const createSegmented = ({ options = [], value = "", onChange, ariaLabel = "" } = {}) => {
+  const wrap = document.createElement("div");
+  wrap.className = "haos-seg";
+  wrap.setAttribute("role", "radiogroup");
+  if (ariaLabel) wrap.setAttribute("aria-label", ariaLabel);
+
+  const pill = document.createElement("span");
+  pill.className = "haos-seg-pill";
+  wrap.append(pill);
+
+  let current = value;
+  let buttons = [];
+
+  const place = () => {
+    const active = buttons.find((button) => button.dataset.value === current);
+    if (!active) {
+      pill.style.opacity = "0";
+      return;
+    }
+    pill.style.opacity = "1";
+    // offsetLeft/-Width sind erst nach dem Einhängen belastbar. Bis dahin
+    // sitzt die Pille auf Position 0 – sichtbar wird das nie, weil der
+    // erste Anstrich vor dem Einblenden passiert.
+    pill.style.width = `${active.offsetWidth}px`;
+    pill.style.transform = `translateX(${active.offsetLeft}px)`;
+  };
+
+  const render = (nextOptions) => {
+    buttons.forEach((button) => button.remove());
+    buttons = nextOptions.map((option) => {
+      const { value: optionValue, label } = typeof option === "string" ? { value: option, label: option } : option;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "haos-seg-option";
+      button.dataset.value = optionValue;
+      button.textContent = label;
+      button.setAttribute("role", "radio");
+      button.addEventListener("click", () => {
+        if (optionValue === current) return;
+        current = optionValue;
+        sync();
+        onChange?.(optionValue);
+      });
+      wrap.append(button);
+      return button;
+    });
+  };
+
+  const sync = () => {
+    buttons.forEach((button) => {
+      const active = button.dataset.value === current;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-checked", active ? "true" : "false");
+    });
+    place();
+  };
+
+  render(options);
+  sync();
+
+  return {
+    element: wrap,
+    /** Wert und – falls nötig – die Optionen nachziehen. */
+    update(nextValue, nextOptions) {
+      if (nextOptions && nextOptions.join("|") !== buttons.map((b) => b.dataset.value).join("|")) {
+        render(nextOptions);
+      }
+      current = nextValue;
+      sync();
+    },
+    /** Nach dem Einhängen einmal aufrufen, damit die Pille sitzt. */
+    place,
+  };
+};
+
+/** Gemeinsames CSS für `createSegmented`. */
+export const SEGMENTED_CSS = `
+  .haos-seg {
+    position: relative; display: inline-flex; align-items: center; gap: 2px; padding: 3px;
+    border-radius: 999px;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+    border: 1px solid rgba(var(--haos-entity-border-rgb, 255,255,255), var(--haos-entity-border-opacity, .20));
+    backdrop-filter: blur(var(--haos-entity-blur, 12px)) saturate(var(--haos-entity-saturation, 180%));
+    -webkit-backdrop-filter: blur(var(--haos-entity-blur, 12px)) saturate(var(--haos-entity-saturation, 180%));
+  }
+  .haos-seg-pill {
+    position: absolute; top: 3px; bottom: 3px; left: 0; width: 0;
+    border-radius: 999px; pointer-events: none; opacity: 0;
+    background: rgba(var(--haos-entity-surface-rgb, 255,255,255), calc(var(--haos-entity-opacity, .10) + .16));
+    border: 1px solid rgba(var(--haos-entity-border-rgb, 255,255,255), calc(var(--haos-entity-border-opacity, .20) + .18));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.42), 0 3px 10px rgba(0,0,0,.18);
+    transition: transform .22s cubic-bezier(.32,.72,0,1), width .22s cubic-bezier(.32,.72,0,1), opacity .16s ease;
+  }
+  .haos-seg-option {
+    position: relative; z-index: 1; border: 0; background: none; cursor: pointer;
+    padding: 6px 14px; border-radius: 999px; font: inherit; font-size: 12px;
+    color: rgba(var(--haos-text-rgb, 255,255,255), .55);
+    transition: color .16s ease;
+    white-space: nowrap;
+  }
+  .haos-seg-option.active { color: var(--haos-text, #fff); }
+  .haos-seg-option:hover { color: rgba(var(--haos-text-rgb, 255,255,255), .85); }
 `;

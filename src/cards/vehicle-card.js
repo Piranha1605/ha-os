@@ -19,7 +19,13 @@
  * Gerätenamen davor und fallen aus dem Muster.
  */
 
-import { CARD_SURFACE_CSS, ENTITY_SURFACE_CSS, registerCard, statusClass } from "../shared/utils.js";
+import {
+  CARD_SURFACE_CSS,
+  CONTROL_SURFACE_CSS,
+  ENTITY_SURFACE_CSS,
+  registerCard,
+  statusClass,
+} from "../shared/utils.js";
 
 const TAG = "ha-os-vehicle";
 const EDITOR_TAG = "ha-os-vehicle-editor";
@@ -154,7 +160,12 @@ const STYLES = `
     background: none; color: rgba(var(--haos-text-rgb, 255,255,255), .45);
     transition: background .16s ease, color .16s ease;
   }
-  .rail button.active { background: rgba(var(--haos-text-rgb, 255,255,255), .16); color: var(--haos-text, #fff); }
+  /* Der aktive Bereich sitzt als Glasflaeche in der Leiste - dieselbe
+     Sprache wie die Knoepfe in den Karten. */
+  .rail button.active {
+    color: var(--haos-text, #fff);
+    ${CONTROL_SURFACE_CSS}
+  }
   .rail button[disabled] { opacity: .3; cursor: default; }
   .rail ha-icon { --mdc-icon-size: 19px; }
 

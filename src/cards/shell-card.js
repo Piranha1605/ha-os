@@ -24,7 +24,10 @@ import {
   CARD_SURFACE_CSS,
   ENTITY_SURFACE_CSS,
   IMAGE_FIELD_CSS,
+  SEGMENTED_CSS,
   createCardElement,
+  createSegmented,
+  nextFrame,
   createImageField,
   domainIcon,
   formatState,
@@ -131,17 +134,11 @@ const STYLES = `
     padding: 7px 12px; display: flex; align-items: center; gap: 12px;
     ${ENTITY_SURFACE_CSS}
   }
-  .tabs { min-width: 0; flex: 1; display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+  .tabs { min-width: 0; flex: 1; display: flex; align-items: center; overflow-x: auto; scrollbar-width: none; }
   .tabs::-webkit-scrollbar { display: none; }
-  .tab {
-    flex: 0 0 auto; height: 40px; padding: 0 14px; border: 1px solid transparent; border-radius: 12px;
-    background: transparent; cursor: pointer; white-space: nowrap;
-    color: rgba(var(--haos-text-rgb, 255,255,255), .52);
-    font-size: 17px; font-weight: var(--haos-font-weight-normal, 450);
-    transition: color .16s ease, background .16s ease;
-  }
-  .tab:hover { color: rgba(var(--haos-text-rgb, 255,255,255), .82); background: rgba(var(--haos-text-rgb, 255,255,255), .06); }
-  .tab.active { color: var(--haos-text, #fff); font-weight: var(--haos-font-weight-semibold, 650); }
+  ${SEGMENTED_CSS}
+  /* Die Reiter tragen denselben Umschalter wie die Karten, nur groesser. */
+  .tabs .haos-seg-option { font-size: 15px; padding: 8px 16px; }
 
   .badges { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; }
   .badge {
@@ -627,19 +624,31 @@ class HaOsShell extends HTMLElement {
 
   // ---------------------------------------------------------------- Tabs
 
+  /**
+   * Reiter als Segmentumschalter – dieselbe Optik wie in den Karten.
+   *
+   * Der Umschalter wird bei einer Strukturaenderung neu gebaut, nicht bei
+   * jedem Seitenwechsel: dort wandert nur die Pille. Sonst spraenge sie
+   * statt zu gleiten.
+   */
   _syncTabs() {
     this._tabList.replaceChildren();
     this._tabs.clear();
+    this._tabSeg = null;
 
     if (!this._config.topbar_tabs) return;
 
-    this._config.pages.forEach((page) => {
-      const tab = el("button", "tab", page.name);
-      tab.setAttribute("role", "tab");
-      tab.addEventListener("click", () => this._selectPage(page.id));
-      this._tabs.set(page.id, tab);
-      this._tabList.append(tab);
+    this._tabSeg = createSegmented({
+      options: this._config.pages.map((page) => ({ value: page.id, label: page.name })),
+      value: this._activePageId,
+      ariaLabel: "Seiten",
+      onChange: (pageId) => this._selectPage(pageId),
     });
+    this._tabList.append(this._tabSeg.element);
+
+    // Die Pille braucht die Breiten der Knoepfe – die stehen erst nach dem
+    // Einhaengen fest.
+    nextFrame(() => this._tabSeg?.place());
   }
 
   // ---------------------------------------------------------------- Seiten
@@ -675,7 +684,7 @@ class HaOsShell extends HTMLElement {
       entry.root.hidden = pageId !== activeId;
     });
 
-    this._tabs.forEach((tab, pageId) => tab.classList.toggle("active", pageId === activeId));
+    this._tabSeg?.update(activeId);
     this._sidebarPages?.forEach((button, pageId) => button.classList.toggle("active", pageId === activeId));
     this._settingsButton?.classList.toggle("active", activeId === SETTINGS_PAGE_ID);
 

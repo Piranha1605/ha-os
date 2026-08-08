@@ -207,7 +207,11 @@ check("Seitenleiste vorhanden", Boolean(root.querySelector(".sidebar")));
 check("Seiten stehen in der Seitenleiste",
   shell.shadowRoot.querySelectorAll(".side-top .icon-button").length >= 3,
   `${shell.shadowRoot.querySelectorAll(".side-top .icon-button").length} Symbole`);
-check("drei Reiter erzeugt", root.querySelectorAll(".tab").length === 3);
+check("drei Reiter erzeugt", root.querySelectorAll(".tabs .haos-seg-option").length === 3,
+  `${root.querySelectorAll(".tabs .haos-seg-option").length}`);
+// Alles traegt dieselbe Optik: die Reiter der Shell sind derselbe
+// Segmentumschalter wie die Auswahl in den Karten.
+check("Reiter tragen die gleitende Pille", Boolean(root.querySelector(".tabs .haos-seg-pill")));
 check("Benutzericons sichtbar", root.querySelectorAll(".user").length === 2);
 check(
   "abwesender Benutzer bleibt sichtbar",
@@ -257,7 +261,7 @@ check(
 
 console.log("\n5. Seitenwechsel");
 
-const tabs = [...root.querySelectorAll(".tab")];
+const tabs = [...root.querySelectorAll(".tabs .haos-seg-option")];
 tabs[1].dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
 await new Promise((resolve) => setTimeout(resolve, 30));
 
