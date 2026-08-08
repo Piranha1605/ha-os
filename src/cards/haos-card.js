@@ -1334,8 +1334,17 @@ const renderers = {
         ctx.nodes.volumeValue.textContent = muted ? "stumm" : "–";
       }
 
+      /*
+       * Quellenwahl.
+       *
+       * Massgeblich ist die Liste, nicht das Feature-Bit: manche
+       * Integrationen melden `source_list`, ohne SELECT_SOURCE zu setzen –
+       * dann waere die Auswahl unsichtbar, obwohl sie funktioniert. Ohne
+       * Liste gibt es dagegen nichts zu waehlen, auch wenn das Bit gesetzt
+       * ist.
+       */
       const sources = Array.isArray(attributes.source_list) ? attributes.source_list : [];
-      ctx.nodes.sourceSelect.hidden = !kann(MEDIA_FEATURE.SELECT_SOURCE) || !sources.length;
+      ctx.nodes.sourceSelect.hidden = !sources.length;
       if (!ctx.nodes.sourceSelect.hidden) {
         const schluessel = sources.join("|");
         if (ctx.nodes.sourceKeys !== schluessel) {

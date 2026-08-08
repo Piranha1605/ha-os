@@ -1,4 +1,4 @@
-/* HA-OS 0.22.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.22.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -4110,7 +4110,7 @@ var renderers = {
         ctx.nodes.volumeValue.textContent = muted ? "stumm" : "–";
       }
       const sources = Array.isArray(attributes.source_list) ? attributes.source_list : [];
-      ctx.nodes.sourceSelect.hidden = !kann(MEDIA_FEATURE.SELECT_SOURCE) || !sources.length;
+      ctx.nodes.sourceSelect.hidden = !sources.length;
       if (!ctx.nodes.sourceSelect.hidden) {
         const schluessel = sources.join("|");
         if (ctx.nodes.sourceKeys !== schluessel) {
@@ -7317,7 +7317,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.22.0";
+var VERSION = "0.22.1";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

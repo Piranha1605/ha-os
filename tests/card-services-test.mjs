@@ -402,7 +402,13 @@ console.log("\n10. Lautstaerke, Stumm und Quelle");
   // Ein Player, der nichts davon kann, zeigt auch nichts davon.
   const karg = bauen({ supported_features: 1 | 16384 });
   check("ohne Unterstuetzung keine Lautstaerkezeile", karg.shadowRoot.querySelector(".volume").hidden);
-  check("ohne Unterstuetzung keine Quellenwahl", karg.shadowRoot.querySelector("select.source").hidden);
+  check("ohne Quellenliste keine Quellenwahl", karg.shadowRoot.querySelector("select.source").hidden);
+
+  // Manche Integrationen melden die Liste, ohne das Feature-Bit zu setzen.
+  const ohneBit = bauen({ supported_features: 1 | 16384, source_list: ["HDMI 1", "HDMI 2"], source: "HDMI 1" });
+  check("Liste ohne Feature-Bit wird trotzdem angeboten",
+    !ohneBit.shadowRoot.querySelector("select.source").hidden &&
+      ohneBit.shadowRoot.querySelector("select.source").options.length === 2);
 
   const stumm = bauen({ supported_features: 1 | 4 | 8, volume_level: 0.3, is_volume_muted: true });
   check("stumm wird benannt", stumm.shadowRoot.querySelector(".volume-value").textContent === "stumm",
