@@ -173,8 +173,12 @@ check("leerer Slot heisst leer", slots[1].querySelector(".slot-name").textConten
 check("aktiver Slot markiert", slots[0].classList.contains("active"));
 check("Luftfeuchte als Zeile", rowValue(voll, "Luftfeuchte") === "22 %", rowValue(voll, "Luftfeuchte"));
 
-console.log("\n8. Steuerung – Beenden fragt nach");
-sr(voll).querySelectorAll(".rail button")[3].click();
+console.log("\n8. Steuerung – direkt auf der Uebersicht, Beenden fragt nach");
+sr(voll).querySelectorAll(".rail button")[0].click();
+check("drei Bereiche in der Leiste", sr(voll).querySelectorAll(".rail button").length === 3,
+  `${sr(voll).querySelectorAll(".rail button").length}`);
+check("Steuerung steht in der Uebersicht",
+  Boolean(sr(voll).querySelector(".panel:not([hidden]) .control-block")));
 calls.length = 0;
 const [pause, resume, stop, licht] = sr(voll).querySelectorAll(".ctrl");
 pause.click();
@@ -202,7 +206,7 @@ check("Auswahl wird gesetzt", calls[0] === "select.select_option:select.p1s_druc
 
 console.log("\n9. Bild und Kamera in einer Kachel");
 sr(voll).querySelectorAll(".rail button")[0].click();
-check("nur noch vier Bereiche", sr(voll).querySelectorAll(".rail button").length === 4,
+check("nur noch drei Bereiche", sr(voll).querySelectorAll(".rail button").length === 3,
   `${sr(voll).querySelectorAll(".rail button").length}`);
 const bild = sr(voll).querySelector(".media img");
 check("zeigt zuerst das Titelbild", bild.getAttribute("src") === "/api/image_proxy/image.p1s_titelbild",
@@ -223,10 +227,19 @@ sr(voll).querySelectorAll(".rail button")[0].click();
 
 console.log("\n9b. Temperaturgraph");
 check("Graph vorhanden", Boolean(sr(voll).querySelector(".graph-svg")));
-check("Duese beschriftet", sr(voll).querySelector(".tag.nozzle").textContent === "Düse 218 °C",
-  sr(voll).querySelector(".tag.nozzle").textContent);
-check("Bett beschriftet", sr(voll).querySelector(".tag.bed").textContent === "Bett 59 °C",
-  sr(voll).querySelector(".tag.bed").textContent);
+// Zwei getrennte Kacheln: in einem gemeinsamen Diagramm klebt bei
+// unterschiedlichen Bereichen die eine Linie oben und die andere unten.
+const graphen = [...sr(voll).querySelectorAll(".graph")].filter((g) => !g.hidden);
+check("zwei Kacheln nebeneinander", graphen.length === 2, `${graphen.length}`);
+check("Duese beschriftet",
+  graphen[0].querySelector(".graph-label").textContent === "Düse" &&
+    graphen[0].querySelector(".graph-value").textContent === "218 °C",
+  graphen[0].textContent);
+check("Bett beschriftet",
+  graphen[1].querySelector(".graph-label").textContent === "Bett" &&
+    graphen[1].querySelector(".graph-value").textContent === "59 °C",
+  graphen[1].textContent);
+check("je eine eigene Linie", graphen[0].querySelector(".l-nozzle") && graphen[1].querySelector(".l-bed"));
 
 console.log("\n10. Teilweise eingerichtet");
 const wenig = build({ entity_progress: "sensor.p1s_druckfortschritt", entity_online: "binary_sensor.p1s_online" });

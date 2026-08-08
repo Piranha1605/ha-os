@@ -19,7 +19,7 @@
  * Gerätenamen davor und fallen aus dem Muster.
  */
 
-import { CARD_SURFACE_CSS, registerCard, statusClass } from "../shared/utils.js";
+import { CARD_SURFACE_CSS, ENTITY_SURFACE_CSS, registerCard, statusClass } from "../shared/utils.js";
 
 const TAG = "ha-os-vehicle";
 const EDITOR_TAG = "ha-os-vehicle-editor";
@@ -140,10 +140,13 @@ const STYLES = `
   }
 
   /* --- Symbolleiste links, Vorbild CarPlay --- */
+  /* Die inneren Flaechen sind selbst Glas, nicht nur eingefaerbte Rechtecke.
+     Dadurch nehmen sie Unschaerfe und Glanz aus den Einstellungen an - vorher
+     war das hier eine flache Fuellung, die neben der Shell tot wirkte. */
   .rail {
-    width: 56px; flex: 0 0 56px; border-radius: 14px; padding: 8px 0;
+    width: 56px; flex: 0 0 56px; padding: 8px 0;
     display: flex; flex-direction: column; align-items: center; gap: 6px;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .07);
+    ${ENTITY_SURFACE_CSS}
   }
   .rail button {
     width: 38px; height: 38px; border-radius: 11px; border: 0; padding: 0;
@@ -164,9 +167,10 @@ const STYLES = `
   .subtitle { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pill {
     display: flex; align-items: center; gap: 5px; flex: 0 0 auto;
-    border-radius: 999px; padding: 5px 10px; font-size: 12px;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+    padding: 5px 10px; font-size: 12px;
     color: rgba(var(--haos-text-rgb, 255,255,255), .85);
+    ${ENTITY_SURFACE_CSS}
+    border-radius: 999px;
   }
   .pill[hidden] { display: none; }
   .pill.good { color: var(--haos-good, #7ee0b0); }
@@ -175,8 +179,8 @@ const STYLES = `
 
   /* --- Reichweite --- */
   .hero {
-    border-radius: 14px; padding: 14px; display: flex; align-items: center; gap: 16px;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+    padding: 14px; display: flex; align-items: center; gap: 16px;
+    ${ENTITY_SURFACE_CSS}
   }
   .hero-main { flex: 1; min-width: 0; }
   .hero-label { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
@@ -195,7 +199,7 @@ const STYLES = `
 
   /* --- Kacheln --- */
   .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-  .tile { border-radius: 12px; padding: 10px; min-width: 0; background: rgba(var(--haos-text-rgb, 255,255,255), .10); }
+  .tile { padding: 10px; min-width: 0; ${ENTITY_SURFACE_CSS} }
   .tile-label { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tile-value { font-size: 14px; font-weight: var(--haos-font-weight-medium, 500); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tile-value.good { color: var(--haos-good, #7ee0b0); }
@@ -222,8 +226,8 @@ const STYLES = `
   /* Reifen im Grundriss: vorn oben, hinten unten. */
   .tire-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .tire {
-    border-radius: 12px; padding: 10px; display: grid; place-content: center; text-align: center;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+    padding: 10px; display: grid; place-content: center; text-align: center;
+    ${ENTITY_SURFACE_CSS}
   }
   .tire-value { font-size: 19px; font-weight: var(--haos-font-weight-medium, 500); }
   .tire-value.bad { color: var(--haos-bad, #ff6b6b); }

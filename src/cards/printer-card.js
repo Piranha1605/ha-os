@@ -19,7 +19,7 @@
  * keine Zeile dafür. Eine Liste voller Striche hilft niemandem.
  */
 
-import { CARD_SURFACE_CSS, registerCard } from "../shared/utils.js";
+import { CARD_SURFACE_CSS, ENTITY_SURFACE_CSS, registerCard } from "../shared/utils.js";
 
 const TAG = "ha-os-printer";
 const EDITOR_TAG = "ha-os-printer-editor";
@@ -128,7 +128,6 @@ const SECTIONS = [
   ["overview", "mdi:printer-3d", "Übersicht"],
   ["temps", "mdi:thermometer", "Temperaturen"],
   ["ams", "mdi:tray-full", "AMS"],
-  ["control", "mdi:gesture-tap-button", "Steuerung"],
 ];
 
 const STYLES = `
@@ -143,10 +142,11 @@ const STYLES = `
     ${CARD_SURFACE_CSS}
   }
 
+  /* Innere Flaechen als eigenes Glas - siehe Fahrzeugkarte. */
   .rail {
-    width: 56px; flex: 0 0 56px; border-radius: 14px; padding: 8px 0;
+    width: 56px; flex: 0 0 56px; padding: 8px 0;
     display: flex; flex-direction: column; align-items: center; gap: 6px;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .07);
+    ${ENTITY_SURFACE_CSS}
   }
   .rail button {
     width: 38px; height: 38px; border-radius: 11px; border: 0; padding: 0;
@@ -165,9 +165,10 @@ const STYLES = `
   .subtitle { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pill {
     display: flex; align-items: center; gap: 5px; flex: 0 0 auto;
-    border-radius: 999px; padding: 5px 10px; font-size: 12px;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+    padding: 5px 10px; font-size: 12px;
     color: rgba(var(--haos-text-rgb, 255,255,255), .85);
+    ${ENTITY_SURFACE_CSS}
+    border-radius: 999px;
   }
   .pill[hidden] { display: none; }
   .pill.good { color: var(--haos-good, #7ee0b0); }
@@ -183,7 +184,7 @@ const STYLES = `
   .rows { display: flex; flex-direction: column; }
   .panel-note { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
 
-  .hero { border-radius: 14px; padding: 14px; display: flex; align-items: center; gap: 16px; background: rgba(var(--haos-text-rgb, 255,255,255), .10); }
+  .hero { padding: 14px; display: flex; align-items: center; gap: 16px; ${ENTITY_SURFACE_CSS} }
   .hero-main { flex: 1; min-width: 0; }
   .hero-label { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hero-value { font-size: 30px; font-weight: var(--haos-font-weight-medium, 500); line-height: 1.15; }
@@ -204,7 +205,7 @@ const STYLES = `
   .row-value.bad { color: var(--haos-bad, #ff6b6b); }
 
   .slots { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-  .slot { border-radius: 12px; padding: 10px; text-align: center; background: rgba(var(--haos-text-rgb, 255,255,255), .10); }
+  .slot { padding: 10px; text-align: center; ${ENTITY_SURFACE_CSS} }
   .slot[hidden] { display: none; }
   .slot.active { box-shadow: inset 0 0 0 1px var(--haos-accent, #0a84ff); }
   .slot-dot { width: 22px; height: 22px; margin: 0 auto 6px; border-radius: 50%; background: rgba(var(--haos-text-rgb, 255,255,255), .25); }
@@ -217,12 +218,17 @@ const STYLES = `
   .slot-remain[hidden] { display: none; }
   .slot-remain.low { color: var(--haos-bad, #ff6b6b); }
 
+  /* Steuerung sitzt in der linken Spalte der Uebersicht, nicht in einer
+     eigenen Tafel. Sie schiebt sich an den unteren Rand, damit die Zeilen
+     darueber zusammenbleiben. */
+  .control-block { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
   .controls { display: flex; flex-wrap: wrap; gap: 8px; }
   .ctrl {
-    flex: 1 1 120px; min-width: 0; padding: 12px 10px; border: 0; border-radius: 12px; cursor: pointer;
+    flex: 1 1 120px; min-width: 0; padding: 12px 10px; cursor: pointer;
     display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .10); color: var(--haos-text, #fff);
+    color: var(--haos-text, #fff);
     transition: background .16s ease, transform .12s ease;
+    ${ENTITY_SURFACE_CSS}
   }
   .ctrl:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .16); }
   .ctrl:active { transform: scale(.97); }
@@ -246,7 +252,7 @@ const STYLES = `
   @media (max-width: 620px) { .columns { grid-template-columns: minmax(0, 1fr); } }
 
   /* Bild und Kamera in einer Kachel, umschaltbar. */
-  .media { position: relative; flex: 1; min-height: 120px; border-radius: 12px; overflow: hidden; background: rgba(0,0,0,.28); }
+  .media { position: relative; flex: 1; min-height: 120px; overflow: hidden; ${ENTITY_SURFACE_CSS} }
   .media img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .media img[hidden] { display: none; }
   .media-note { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 12px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
@@ -262,18 +268,18 @@ const STYLES = `
   .seg.active { background: rgba(255, 255, 255, .22); color: #fff; }
   .seg[hidden] { display: none; }
 
-  /* Temperaturverlauf. Zwei Linienzuege, kein Diagrammpaket. */
-  .graph { flex: 0 0 auto; border-radius: 12px; padding: 10px; background: rgba(var(--haos-text-rgb, 255,255,255), .10); }
+  /* Temperaturen: zwei Kacheln nebeneinander unter dem Bild. */
+  .graphs { flex: 0 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .graphs[hidden] { display: none; }
+  .graph { min-width: 0; padding: 10px; ${ENTITY_SURFACE_CSS} }
   .graph[hidden] { display: none; }
-  .graph-head { display: flex; gap: 12px; font-size: 11px; margin-bottom: 6px; }
-  .tag { display: flex; align-items: center; gap: 5px; color: rgba(var(--haos-text-rgb, 255,255,255), .75); }
-  .tag::before { content: ""; width: 8px; height: 2px; border-radius: 2px; }
-  .tag.nozzle::before { background: var(--haos-accent, #0a84ff); }
-  .tag.bed::before { background: #ff9f0a; }
-  .graph-svg { width: 100%; height: 72px; display: block; overflow: visible; }
+  .graph-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+  .graph-label { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
+  .graph-value { font-size: 17px; font-weight: var(--haos-font-weight-medium, 500); }
+  .graph-svg { width: 100%; height: 46px; display: block; overflow: visible; }
   .l-nozzle { stroke: var(--haos-accent, #0a84ff); }
   .l-bed { stroke: #ff9f0a; }
-  .graph-note { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .45); }
+  .graph-note { font-size: 10px; color: rgba(var(--haos-text-rgb, 255,255,255), .45); }
   .graph-note[hidden] { display: none; }
 
   .empty { flex: 1; display: grid; place-content: center; text-align: center; gap: 6px; padding: 16px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
@@ -451,7 +457,7 @@ class HaOsPrinterCard extends HTMLElement {
     const columns = el("div", "columns");
     const left = el("div", "col");
     const right = el("div", "col");
-    left.append(hero, overviewRows);
+    // `control` wird weiter unten gebaut und hier nachgereicht.
 
     // Bild und Kamera teilen sich eine Kachel und werden umgeschaltet -
     // deshalb braucht es keinen eigenen Kamerabereich mehr.
@@ -524,7 +530,11 @@ class HaOsPrinterCard extends HTMLElement {
     ams.append(slots, amsRows);
 
     // --- Steuerung
-    const control = el("div", "panel");
+    //
+    // Sie steht direkt auf der Uebersicht statt in einem eigenen Bereich: die
+    // Knoepfe sind das, was man am haeufigsten braucht, und links unten war
+    // ohnehin Platz. Die Leiste hat dadurch drei Symbole statt vier.
+    const control = el("div", "control-block");
     const controls = el("div", "controls");
     const makeCtrl = (iconName, label, className = "") => {
       const button = el("button", `ctrl ${className}`.trim());
@@ -580,7 +590,9 @@ class HaOsPrinterCard extends HTMLElement {
       el("span", null, "Im Editor oben eine Entität des Druckers wählen – die übrigen Felder füllen sich dann von selbst.")
     );
 
-    const panels = { overview, temps, ams, control };
+    left.append(hero, overviewRows, control);
+
+    const panels = { overview, temps, ams };
     Object.values(panels).forEach((panel) => main.append(panel));
     main.prepend(head);
     main.append(empty);
@@ -863,35 +875,43 @@ class HaOsPrinterCard extends HTMLElement {
    * Linien mehr Ballast als das ganze Bündel.
    */
   _buildGraph() {
-    const wrap = el("div", "graph");
+    // Zwei getrennte Kacheln nebeneinander statt einer gemeinsamen. Duese und
+    // Bett liegen selten im selben Bereich - in einem Diagramm klebt die eine
+    // Linie dann oben und die andere unten, und beide sind schlecht zu lesen.
+    // Jede Kachel skaliert fuer sich.
+    const wrap = el("div", "graphs");
 
-    const head = el("div", "graph-head");
-    const nozzleTag = el("span", "tag nozzle");
-    const bedTag = el("span", "tag bed");
-    head.append(nozzleTag, bedTag);
+    const build = (title, lineClass) => {
+      const box = el("div", "graph");
+      const head = el("div", "graph-head");
+      const label = el("span", "graph-label", title);
+      const value = el("span", "graph-value", "–");
+      head.append(label, value);
 
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", "0 0 300 96");
-    svg.setAttribute("preserveAspectRatio", "none");
-    svg.classList.add("graph-svg");
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 160 48");
+      svg.setAttribute("preserveAspectRatio", "none");
+      svg.classList.add("graph-svg");
 
-    const line = (className) => {
-      const path = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
-      path.setAttribute("fill", "none");
-      path.setAttribute("stroke-width", "2");
-      path.setAttribute("stroke-linejoin", "round");
-      path.setAttribute("stroke-linecap", "round");
-      path.classList.add(className);
-      svg.append(path);
-      return path;
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      line.setAttribute("fill", "none");
+      line.setAttribute("stroke-width", "2");
+      line.setAttribute("stroke-linejoin", "round");
+      line.setAttribute("stroke-linecap", "round");
+      line.classList.add(lineClass);
+      svg.append(line);
+
+      const note = el("div", "graph-note", "sammelt Werte");
+      box.append(head, svg, note);
+      wrap.append(box);
+      return { box, value, line, note };
     };
-    const nozzleLine = line("l-nozzle");
-    const bedLine = line("l-bed");
 
-    const note = el("div", "graph-note", "Noch keine Messwerte");
-    wrap.append(head, svg, note);
-
-    this._graph = { wrap, svg, nozzleLine, bedLine, nozzleTag, bedTag, note };
+    this._graph = {
+      wrap,
+      nozzle: build("Düse", "l-nozzle"),
+      bed: build("Bett", "l-bed"),
+    };
     return { element: wrap };
   }
 
@@ -954,53 +974,57 @@ class HaOsPrinterCard extends HTMLElement {
 
   _updateGraph() {
     if (!this._graph) return;
-    const graph = this._graph;
 
-    const nozzle = this._state("nozzle");
-    const bed = this._state("bed");
-    const nozzleValue = numberOf(nozzle);
-    const bedValue = numberOf(bed);
+    const nozzle = numberOf(this._state("nozzle"));
+    const bed = numberOf(this._state("bed"));
 
-    graph.wrap.hidden = nozzleValue === null && bedValue === null;
-    if (graph.wrap.hidden) return;
-
-    graph.nozzleTag.textContent = `Düse ${nozzleValue === null ? "–" : `${formatNumber(nozzleValue)} °C`}`;
-    graph.bedTag.textContent = `Bett ${bedValue === null ? "–" : `${formatNumber(bedValue)} °C`}`;
+    this._graph.wrap.hidden = nozzle === null && bed === null;
+    if (this._graph.wrap.hidden) return;
 
     this._recordSeries();
     if (this._section === "overview") this._seedSeries();
 
     const series = this._series || { nozzle: [], bed: [] };
-    const all = [...series.nozzle, ...series.bed];
-    if (all.length < 2) {
-      graph.note.hidden = false;
-      graph.nozzleLine.setAttribute("points", "");
-      graph.bedLine.setAttribute("points", "");
-      return;
-    }
-    graph.note.hidden = true;
 
-    const times = all.map((point) => point.t);
-    const values = all.map((point) => point.v);
-    const tMin = Math.min(...times);
-    const tMax = Math.max(...times);
-    // Etwas Luft nach oben und unten, sonst klebt die Linie am Rand.
-    const vMin = Math.min(...values) - 3;
-    const vMax = Math.max(...values) + 3;
-    const spanT = tMax - tMin || 1;
-    const spanV = vMax - vMin || 1;
+    const paint = (target, points, current) => {
+      target.box.hidden = current === null;
+      if (current === null) return;
+      target.value.textContent = `${formatNumber(current)} °C`;
 
-    const toPoints = (points) =>
-      points
-        .map((point) => {
-          const x = ((point.t - tMin) / spanT) * 300;
-          const y = 96 - ((point.v - vMin) / spanV) * 96;
-          return `${x.toFixed(1)},${y.toFixed(1)}`;
-        })
-        .join(" ");
+      if (points.length < 2) {
+        target.note.hidden = false;
+        target.line.setAttribute("points", "");
+        return;
+      }
+      target.note.hidden = true;
 
-    graph.nozzleLine.setAttribute("points", toPoints(series.nozzle));
-    graph.bedLine.setAttribute("points", toPoints(series.bed));
+      const times = points.map((point) => point.t);
+      const values = points.map((point) => point.v);
+      const tMin = Math.min(...times);
+      const spanT = Math.max(...times) - tMin || 1;
+      // Mindestens zehn Grad Spanne, sonst macht das Rauschen eines
+      // stehenden Druckers aus zwei Grad ein dramatisches Gebirge.
+      const vMin = Math.min(...values);
+      const vMax = Math.max(...values);
+      const mid = (vMin + vMax) / 2;
+      const half = Math.max((vMax - vMin) / 2, 5);
+      const low = mid - half;
+      const spanV = half * 2;
+
+      target.line.setAttribute(
+        "points",
+        points
+          .map((point) => {
+            const x = ((point.t - tMin) / spanT) * 160;
+            const y = 48 - ((point.v - low) / spanV) * 48;
+            return `${x.toFixed(1)},${y.toFixed(1)}`;
+          })
+          .join(" ")
+      );
+    };
+
+    paint(this._graph.nozzle, series.nozzle, nozzle);
+    paint(this._graph.bed, series.bed, bed);
   }
 
   _updateMedia() {

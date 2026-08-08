@@ -305,6 +305,15 @@ const THEME_CONTROLS = [
   // Abstufungen von dieser einen Farbe ab.
   { group: "general", key: "textDark", label: "Textfarbe Dunkel", hint: "Schrift im dunklen Modus", type: "color" },
   { group: "general", key: "textLight", label: "Textfarbe Hell", hint: "Schrift im hellen Modus", type: "color" },
+  // Getrennt für Hell und Dunkel: ein Grün, das auf dunklem Glas leuchtet,
+  // ist auf hellem nicht mehr zu lesen. Genau daran ist der frühere feste
+  // Wert gescheitert.
+  { group: "status", key: "statusGoodDark", label: "Aktiv · Dunkel", hint: "„ok“, „verriegelt“, „geschlossen“", type: "color" },
+  { group: "status", key: "statusGoodLight", label: "Aktiv · Hell", hint: "Dieselben Zustände im hellen Modus", type: "color" },
+  { group: "status", key: "statusOffDark", label: "Inaktiv · Dunkel", hint: "Ausgeschaltet, ohne Meldung", type: "color" },
+  { group: "status", key: "statusOffLight", label: "Inaktiv · Hell", hint: "Dieselben Zustände im hellen Modus", type: "color" },
+  { group: "status", key: "statusBadDark", label: "Nicht erreichbar · Dunkel", hint: "Warnung, offen, Fehler", type: "color" },
+  { group: "status", key: "statusBadLight", label: "Nicht erreichbar · Hell", hint: "Dieselben Zustände im hellen Modus", type: "color" },
   { group: "background", key: "backgroundDark", label: "Bild für Dunkel", hint: "Hintergrund im dunklen Modus", type: "image" },
   { group: "background", key: "backgroundLight", label: "Bild für Hell", hint: "Hintergrund im hellen Modus", type: "image" },
   { group: "background", key: "backgroundDim", label: "Abdunkeln", hint: "Schwarze Schicht über dem Bild", min: 0, max: 80, step: 1, unit: "%" },
@@ -328,6 +337,7 @@ const THEME_CONTROLS = [
 
 const GROUP_TITLES = {
   general: "Allgemein",
+  status: "Statusfarben",
   background: "Hintergrundbild",
   card: "Hintergrundkarte",
   entity: "Entitätskarten",

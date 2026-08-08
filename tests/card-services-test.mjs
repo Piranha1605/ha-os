@@ -204,5 +204,39 @@ check("ohne Statistik wird der Verlauf versucht",
   wsCalls.some((m) => m.type === "recorder/statistics_during_period"));
 check("kein Absturz ohne Daten", Boolean(sr(ohneStatistik).querySelector(".bars")));
 
-console.log(failures === 0 ? "\nAlle Prüfungen bestanden.\n" : `\n${failures} FEHLER.\n`);
+console.log("\n6. Trenner");
+{
+  const bauen = (config) => {
+    const karte = document.createElement("ha-os-card");
+    karte.setConfig({ type: "custom:ha-os-card", card_type: "separator", ...config });
+    document.body.append(karte);
+    karte.hass = makeHass();
+    return karte;
+  };
+
+  const mitText = bauen({ name: "Wohnzimmer", icon: "mdi:sofa" });
+  const wurzel = mitText.shadowRoot;
+  check("Trenner gebaut", Boolean(wurzel.querySelector(".sep")));
+  check("Text erscheint", wurzel.querySelector(".sep-text span").textContent === "Wohnzimmer",
+    wurzel.querySelector(".sep-text span").textContent);
+  check("Symbol erscheint", !wurzel.querySelector(".sep-text ha-icon").hidden);
+  // Ein Trenner soll gliedern, nicht wie eine weitere Karte aussehen.
+  check("keine Glasflaeche", wurzel.querySelector(".card").classList.contains("plain"));
+  check("Linie rechts vom Text", !wurzel.querySelectorAll(".sep-line")[1].hidden);
+
+  const ohneLinie = bauen({ name: "Nur Text", show_line: false });
+  check("Linie abschaltbar",
+    [...ohneLinie.shadowRoot.querySelectorAll(".sep-line")].every((l) => l.hidden));
+
+  const mittig = bauen({ name: "Mitte", align: "center" });
+  check("mittig: Linie auf beiden Seiten",
+    [...mittig.shadowRoot.querySelectorAll(".sep-line")].every((l) => !l.hidden));
+
+  const leer = bauen({});
+  check("ohne Text eine durchgehende Linie",
+    leer.shadowRoot.querySelector(".sep-text").hidden &&
+      !leer.shadowRoot.querySelectorAll(".sep-line")[0].hidden);
+}
+
+console.log(failures === 0 ? "\nAlle Prüfungen bestanden.\n" : `\n${failures} Prüfung(en) fehlgeschlagen.\n`);
 process.exit(failures === 0 ? 0 : 1);

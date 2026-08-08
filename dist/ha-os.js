@@ -1,4 +1,4 @@
-/* HA-OS 0.17.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.18.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -15,6 +15,17 @@ var THEME_DEFAULTS = Object.freeze({
   // nicht jede Karte ihre eigene Graustufe mitbringt.
   textLight: "#18212a",
   textDark: "#ffffff",
+  // Statusfarben, getrennt fuer Hell und Dunkel.
+  //
+  // Getrennt, weil ein Gruen, das auf dunklem Glas gut aussieht, auf hellem
+  // Glas nicht mehr lesbar ist - genau daran ist der Rueckfallwert #7ee0b0
+  // gescheitert. Im Hellen deshalb deutlich dunklere Toene.
+  statusGoodLight: "#1e8e5a",
+  statusGoodDark: "#7ee0b0",
+  statusOffLight: "#66717c",
+  statusOffDark: "#a8b0b8",
+  statusBadLight: "#c2413b",
+  statusBadDark: "#ff6961",
   // Hintergrundkarte = die grosse Glasflaeche der Shell
   cardSurface: "#ffffff",
   cardOpacity: 10,
@@ -76,6 +87,12 @@ var normalizeTheme = (settings = {}) => ({
   backgroundDim: clamp(settings.backgroundDim, 0, 80, THEME_DEFAULTS.backgroundDim),
   textLight: color(settings.textLight, THEME_DEFAULTS.textLight),
   textDark: color(settings.textDark, THEME_DEFAULTS.textDark),
+  statusGoodLight: color(settings.statusGoodLight, THEME_DEFAULTS.statusGoodLight),
+  statusGoodDark: color(settings.statusGoodDark, THEME_DEFAULTS.statusGoodDark),
+  statusOffLight: color(settings.statusOffLight, THEME_DEFAULTS.statusOffLight),
+  statusOffDark: color(settings.statusOffDark, THEME_DEFAULTS.statusOffDark),
+  statusBadLight: color(settings.statusBadLight, THEME_DEFAULTS.statusBadLight),
+  statusBadDark: color(settings.statusBadDark, THEME_DEFAULTS.statusBadDark),
   cardSurface: color(settings.cardSurface, THEME_DEFAULTS.cardSurface),
   cardOpacity: clamp(settings.cardOpacity, 0, 95, THEME_DEFAULTS.cardOpacity),
   cardBlur: clamp(settings.cardBlur, 0, 50, THEME_DEFAULTS.cardBlur),
@@ -128,9 +145,17 @@ var apply = (settings) => {
     "--haos-entity-gloss": glossLayer(t.entitySheen, light),
     "--haos-user-shadow": light ? "0 6px 18px rgba(25, 34, 44, .24), inset 0 1px 0 rgba(255, 255, 255, .76)" : "0 6px 18px rgba(0, 0, 0, .38), inset 0 1px 0 rgba(255, 255, 255, .28)",
     "--haos-accent": t.accent,
+    // Das Leuchten aktiver Kacheln folgt weiterhin der Akzentfarbe - die ist
+    // schon einstellbar. Die drei Statusfarben hier faerben Texte und Zeichen
+    // in den Karten: "ok", "verriegelt", "Warnung", "nicht erreichbar".
     "--haos-status-on": t.accent,
-    "--haos-status-off": light ? "#66717c" : "#a8b0b8",
-    "--haos-status-unavailable": light ? "#c2413b" : "#ff6961",
+    "--haos-status-off": light ? t.statusOffLight : t.statusOffDark,
+    "--haos-status-unavailable": light ? t.statusBadLight : t.statusBadDark,
+    // Diese beiden gab es bisher NICHT. Die Karten benutzten
+    // var(--haos-good, #7ee0b0) - und dieser Rueckfallwert war auf hellem
+    // Glas nicht zu lesen.
+    "--haos-good": light ? t.statusGoodLight : t.statusGoodDark,
+    "--haos-bad": light ? t.statusBadLight : t.statusBadDark,
     "--haos-status-home": light ? "#168a4a" : "#32d583",
     "--haos-status-away": light ? "#a06a10" : "#f7b955",
     "--haos-margin": `${t.margin}px`,
@@ -881,6 +906,15 @@ var THEME_CONTROLS = [
   // Abstufungen von dieser einen Farbe ab.
   { group: "general", key: "textDark", label: "Textfarbe Dunkel", hint: "Schrift im dunklen Modus", type: "color" },
   { group: "general", key: "textLight", label: "Textfarbe Hell", hint: "Schrift im hellen Modus", type: "color" },
+  // Getrennt für Hell und Dunkel: ein Grün, das auf dunklem Glas leuchtet,
+  // ist auf hellem nicht mehr zu lesen. Genau daran ist der frühere feste
+  // Wert gescheitert.
+  { group: "status", key: "statusGoodDark", label: "Aktiv · Dunkel", hint: "„ok“, „verriegelt“, „geschlossen“", type: "color" },
+  { group: "status", key: "statusGoodLight", label: "Aktiv · Hell", hint: "Dieselben Zustände im hellen Modus", type: "color" },
+  { group: "status", key: "statusOffDark", label: "Inaktiv · Dunkel", hint: "Ausgeschaltet, ohne Meldung", type: "color" },
+  { group: "status", key: "statusOffLight", label: "Inaktiv · Hell", hint: "Dieselben Zustände im hellen Modus", type: "color" },
+  { group: "status", key: "statusBadDark", label: "Nicht erreichbar · Dunkel", hint: "Warnung, offen, Fehler", type: "color" },
+  { group: "status", key: "statusBadLight", label: "Nicht erreichbar · Hell", hint: "Dieselben Zustände im hellen Modus", type: "color" },
   { group: "background", key: "backgroundDark", label: "Bild für Dunkel", hint: "Hintergrund im dunklen Modus", type: "image" },
   { group: "background", key: "backgroundLight", label: "Bild für Hell", hint: "Hintergrund im hellen Modus", type: "image" },
   { group: "background", key: "backgroundDim", label: "Abdunkeln", hint: "Schwarze Schicht über dem Bild", min: 0, max: 80, step: 1, unit: "%" },
@@ -903,6 +937,7 @@ var THEME_CONTROLS = [
 ];
 var GROUP_TITLES = {
   general: "Allgemein",
+  status: "Statusfarben",
   background: "Hintergrundbild",
   card: "Hintergrundkarte",
   entity: "Entitätskarten"
@@ -2691,7 +2726,8 @@ var CARD_TYPES = [
   { value: "calendar", label: "Kalender", icon: "mdi:calendar" },
   { value: "select", label: "Auswahl", icon: "mdi:form-dropdown" },
   { value: "clock", label: "Uhr", icon: "mdi:clock-outline" },
-  { value: "camera", label: "Kamera", icon: "mdi:cctv" }
+  { value: "camera", label: "Kamera", icon: "mdi:cctv" },
+  { value: "separator", label: "Trenner", icon: "mdi:format-horizontal-align-center" }
 ];
 var el3 = (tag, className, text2) => {
   const node = document.createElement(tag);
@@ -2903,6 +2939,21 @@ var STYLES3 = `
   .camera-live { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #ff453a; }
   .camera-note { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 6px; padding: 12px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
   .camera-note[hidden] { display: none; }
+
+  /* --- Trenner ---
+     Bewusst ohne Glas: ein Trenner soll gliedern, nicht wie eine weitere
+     Karte aussehen. Die Klasse plain nimmt der Flaeche Rahmen, Fuellung
+     und Schatten. */
+  .card.plain {
+    border: 0; background: none; box-shadow: none; padding: 0 4px;
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+  }
+  .sep { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .sep-text { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; font-size: 13px; color: rgba(var(--haos-text-rgb, 255,255,255), .72); }
+  .sep-text[hidden] { display: none; }
+  .sep-text ha-icon { --mdc-icon-size: 17px; }
+  .sep-line { flex: 1; height: 1px; min-width: 12px; background: rgba(var(--haos-text-rgb, 255,255,255), .18); }
+  .sep-line[hidden] { display: none; }
 
   .error { display: grid; place-content: center; height: 100%; text-align: center; gap: 6px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
 `;
@@ -3772,6 +3823,44 @@ var renderers = {
       ctx.nodes.optionButtons?.forEach((button, option) => button.classList.toggle("active", option === state?.state));
     }
   },
+  // ------------------------------------------------------------- Trenner
+  /**
+   * Eine Beschriftung mit Linie, zum Gliedern eines Rasters.
+   *
+   * Ohne Entitaet und ohne Glasflaeche – als Karte getarnt waere er genau
+   * das, was er nicht sein soll. Ein kleiner Hoehenfaktor (etwa 0,3) passt
+   * dazu; der Editor sagt das im Hilfetext.
+   */
+  separator: {
+    build(ctx) {
+      ctx.card.classList.add("plain");
+      const root = el3("div", "sep");
+      ctx.nodes.lineBefore = el3("div", "sep-line");
+      ctx.nodes.text = el3("div", "sep-text");
+      ctx.nodes.icon = icon2("mdi:tag");
+      ctx.nodes.label = el3("span");
+      ctx.nodes.text.append(ctx.nodes.icon, ctx.nodes.label);
+      ctx.nodes.lineAfter = el3("div", "sep-line");
+      root.append(ctx.nodes.lineBefore, ctx.nodes.text, ctx.nodes.lineAfter);
+      return root;
+    },
+    update(ctx) {
+      const label = ctx.config.name || "";
+      ctx.nodes.label.textContent = label;
+      ctx.nodes.label.hidden = !label;
+      ctx.nodes.icon.hidden = !ctx.config.icon;
+      if (ctx.config.icon) ctx.nodes.icon.icon = ctx.config.icon;
+      ctx.nodes.text.hidden = !label && !ctx.config.icon;
+      const align = ctx.config.align || "left";
+      const showLine = ctx.config.show_line !== false;
+      ctx.nodes.lineBefore.hidden = !showLine || align === "left" && ctx.nodes.text.hidden === false;
+      ctx.nodes.lineAfter.hidden = !showLine || align === "right" && ctx.nodes.text.hidden === false;
+      if (ctx.nodes.text.hidden) {
+        ctx.nodes.lineBefore.hidden = !showLine;
+        ctx.nodes.lineAfter.hidden = true;
+      }
+    }
+  },
   // ------------------------------------------------------------- Kamera
   /**
    * Zwei Betriebsarten, im Editor je Karte wählbar:
@@ -4167,6 +4256,24 @@ var SCHEMAS = {
     number("refresh_interval", 1, 300),
     ACTION
   ],
+  separator: [
+    text("name"),
+    { name: "icon", selector: { icon: {} } },
+    {
+      name: "align",
+      selector: {
+        select: {
+          mode: "dropdown",
+          options: [
+            { value: "left", label: "Links" },
+            { value: "center", label: "Mittig" },
+            { value: "right", label: "Rechts" }
+          ]
+        }
+      }
+    },
+    bool("show_line")
+  ],
   clock: [
     text("name"),
     {
@@ -4210,11 +4317,15 @@ var LABELS2 = {
   show_date: "Datum anzeigen",
   time_zone: "Zeitzone",
   haos_weight: "Höhenfaktor",
+  align: "Ausrichtung",
+  show_line: "Linie anzeigen",
   camera_mode: "Bildart",
   refresh_interval: "Auffrischung in Sekunden"
 };
 var HELPERS2 = {
   haos_weight: "1 entspricht der Standard-Kartenhöhe der Shell. 2 ist doppelt so hoch, 0,4 knapp die Hälfte — für flache Fremdkarten.",
+  show_line: "Ausschalten für eine reine Überschrift ohne Strich.",
+  align: "Mittig setzt die Linie auf beide Seiten. Ein Höhenfaktor um 0,3 passt gut – ein Trenner braucht keine volle Kartenhöhe.",
   camera_mode: "Standbild holt in festem Takt ein einzelnes Bild und schont die Leitung. Livebild überträgt dauerhaft – auf einem Wandtablet mit mehreren Kameras spürbar. Tippen öffnet in beiden Fällen den großen Kameradialog.",
   refresh_interval: "Nur beim Standbild. Wie oft ein neues Bild geholt wird.",
   time_zone: "Leer lassen für die Zeitzone des Browsers, z. B. Europe/Berlin.",
@@ -4872,10 +4983,13 @@ var STYLES6 = `
   }
 
   /* --- Symbolleiste links, Vorbild CarPlay --- */
+  /* Die inneren Flaechen sind selbst Glas, nicht nur eingefaerbte Rechtecke.
+     Dadurch nehmen sie Unschaerfe und Glanz aus den Einstellungen an - vorher
+     war das hier eine flache Fuellung, die neben der Shell tot wirkte. */
   .rail {
-    width: 56px; flex: 0 0 56px; border-radius: 14px; padding: 8px 0;
+    width: 56px; flex: 0 0 56px; padding: 8px 0;
     display: flex; flex-direction: column; align-items: center; gap: 6px;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .07);
+    ${ENTITY_SURFACE_CSS}
   }
   .rail button {
     width: 38px; height: 38px; border-radius: 11px; border: 0; padding: 0;
@@ -4896,9 +5010,10 @@ var STYLES6 = `
   .subtitle { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pill {
     display: flex; align-items: center; gap: 5px; flex: 0 0 auto;
-    border-radius: 999px; padding: 5px 10px; font-size: 12px;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+    padding: 5px 10px; font-size: 12px;
     color: rgba(var(--haos-text-rgb, 255,255,255), .85);
+    ${ENTITY_SURFACE_CSS}
+    border-radius: 999px;
   }
   .pill[hidden] { display: none; }
   .pill.good { color: var(--haos-good, #7ee0b0); }
@@ -4907,8 +5022,8 @@ var STYLES6 = `
 
   /* --- Reichweite --- */
   .hero {
-    border-radius: 14px; padding: 14px; display: flex; align-items: center; gap: 16px;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+    padding: 14px; display: flex; align-items: center; gap: 16px;
+    ${ENTITY_SURFACE_CSS}
   }
   .hero-main { flex: 1; min-width: 0; }
   .hero-label { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
@@ -4927,7 +5042,7 @@ var STYLES6 = `
 
   /* --- Kacheln --- */
   .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-  .tile { border-radius: 12px; padding: 10px; min-width: 0; background: rgba(var(--haos-text-rgb, 255,255,255), .10); }
+  .tile { padding: 10px; min-width: 0; ${ENTITY_SURFACE_CSS} }
   .tile-label { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tile-value { font-size: 14px; font-weight: var(--haos-font-weight-medium, 500); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tile-value.good { color: var(--haos-good, #7ee0b0); }
@@ -4954,8 +5069,8 @@ var STYLES6 = `
   /* Reifen im Grundriss: vorn oben, hinten unten. */
   .tire-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .tire {
-    border-radius: 12px; padding: 10px; display: grid; place-content: center; text-align: center;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+    padding: 10px; display: grid; place-content: center; text-align: center;
+    ${ENTITY_SURFACE_CSS}
   }
   .tire-value { font-size: 19px; font-weight: var(--haos-font-weight-medium, 500); }
   .tire-value.bad { color: var(--haos-bad, #ff6b6b); }
@@ -5727,8 +5842,7 @@ var icon5 = (name) => {
 var SECTIONS2 = [
   ["overview", "mdi:printer-3d", "Übersicht"],
   ["temps", "mdi:thermometer", "Temperaturen"],
-  ["ams", "mdi:tray-full", "AMS"],
-  ["control", "mdi:gesture-tap-button", "Steuerung"]
+  ["ams", "mdi:tray-full", "AMS"]
 ];
 var STYLES7 = `
   :host { display: block; height: 100%; }
@@ -5742,10 +5856,11 @@ var STYLES7 = `
     ${CARD_SURFACE_CSS}
   }
 
+  /* Innere Flaechen als eigenes Glas - siehe Fahrzeugkarte. */
   .rail {
-    width: 56px; flex: 0 0 56px; border-radius: 14px; padding: 8px 0;
+    width: 56px; flex: 0 0 56px; padding: 8px 0;
     display: flex; flex-direction: column; align-items: center; gap: 6px;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .07);
+    ${ENTITY_SURFACE_CSS}
   }
   .rail button {
     width: 38px; height: 38px; border-radius: 11px; border: 0; padding: 0;
@@ -5764,9 +5879,10 @@ var STYLES7 = `
   .subtitle { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pill {
     display: flex; align-items: center; gap: 5px; flex: 0 0 auto;
-    border-radius: 999px; padding: 5px 10px; font-size: 12px;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .10);
+    padding: 5px 10px; font-size: 12px;
     color: rgba(var(--haos-text-rgb, 255,255,255), .85);
+    ${ENTITY_SURFACE_CSS}
+    border-radius: 999px;
   }
   .pill[hidden] { display: none; }
   .pill.good { color: var(--haos-good, #7ee0b0); }
@@ -5782,7 +5898,7 @@ var STYLES7 = `
   .rows { display: flex; flex-direction: column; }
   .panel-note { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
 
-  .hero { border-radius: 14px; padding: 14px; display: flex; align-items: center; gap: 16px; background: rgba(var(--haos-text-rgb, 255,255,255), .10); }
+  .hero { padding: 14px; display: flex; align-items: center; gap: 16px; ${ENTITY_SURFACE_CSS} }
   .hero-main { flex: 1; min-width: 0; }
   .hero-label { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hero-value { font-size: 30px; font-weight: var(--haos-font-weight-medium, 500); line-height: 1.15; }
@@ -5803,7 +5919,7 @@ var STYLES7 = `
   .row-value.bad { color: var(--haos-bad, #ff6b6b); }
 
   .slots { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-  .slot { border-radius: 12px; padding: 10px; text-align: center; background: rgba(var(--haos-text-rgb, 255,255,255), .10); }
+  .slot { padding: 10px; text-align: center; ${ENTITY_SURFACE_CSS} }
   .slot[hidden] { display: none; }
   .slot.active { box-shadow: inset 0 0 0 1px var(--haos-accent, #0a84ff); }
   .slot-dot { width: 22px; height: 22px; margin: 0 auto 6px; border-radius: 50%; background: rgba(var(--haos-text-rgb, 255,255,255), .25); }
@@ -5816,12 +5932,17 @@ var STYLES7 = `
   .slot-remain[hidden] { display: none; }
   .slot-remain.low { color: var(--haos-bad, #ff6b6b); }
 
+  /* Steuerung sitzt in der linken Spalte der Uebersicht, nicht in einer
+     eigenen Tafel. Sie schiebt sich an den unteren Rand, damit die Zeilen
+     darueber zusammenbleiben. */
+  .control-block { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
   .controls { display: flex; flex-wrap: wrap; gap: 8px; }
   .ctrl {
-    flex: 1 1 120px; min-width: 0; padding: 12px 10px; border: 0; border-radius: 12px; cursor: pointer;
+    flex: 1 1 120px; min-width: 0; padding: 12px 10px; cursor: pointer;
     display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px;
-    background: rgba(var(--haos-text-rgb, 255,255,255), .10); color: var(--haos-text, #fff);
+    color: var(--haos-text, #fff);
     transition: background .16s ease, transform .12s ease;
+    ${ENTITY_SURFACE_CSS}
   }
   .ctrl:hover { background: rgba(var(--haos-text-rgb, 255,255,255), .16); }
   .ctrl:active { transform: scale(.97); }
@@ -5845,7 +5966,7 @@ var STYLES7 = `
   @media (max-width: 620px) { .columns { grid-template-columns: minmax(0, 1fr); } }
 
   /* Bild und Kamera in einer Kachel, umschaltbar. */
-  .media { position: relative; flex: 1; min-height: 120px; border-radius: 12px; overflow: hidden; background: rgba(0,0,0,.28); }
+  .media { position: relative; flex: 1; min-height: 120px; overflow: hidden; ${ENTITY_SURFACE_CSS} }
   .media img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .media img[hidden] { display: none; }
   .media-note { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 12px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
@@ -5861,18 +5982,18 @@ var STYLES7 = `
   .seg.active { background: rgba(255, 255, 255, .22); color: #fff; }
   .seg[hidden] { display: none; }
 
-  /* Temperaturverlauf. Zwei Linienzuege, kein Diagrammpaket. */
-  .graph { flex: 0 0 auto; border-radius: 12px; padding: 10px; background: rgba(var(--haos-text-rgb, 255,255,255), .10); }
+  /* Temperaturen: zwei Kacheln nebeneinander unter dem Bild. */
+  .graphs { flex: 0 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .graphs[hidden] { display: none; }
+  .graph { min-width: 0; padding: 10px; ${ENTITY_SURFACE_CSS} }
   .graph[hidden] { display: none; }
-  .graph-head { display: flex; gap: 12px; font-size: 11px; margin-bottom: 6px; }
-  .tag { display: flex; align-items: center; gap: 5px; color: rgba(var(--haos-text-rgb, 255,255,255), .75); }
-  .tag::before { content: ""; width: 8px; height: 2px; border-radius: 2px; }
-  .tag.nozzle::before { background: var(--haos-accent, #0a84ff); }
-  .tag.bed::before { background: #ff9f0a; }
-  .graph-svg { width: 100%; height: 72px; display: block; overflow: visible; }
+  .graph-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+  .graph-label { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
+  .graph-value { font-size: 17px; font-weight: var(--haos-font-weight-medium, 500); }
+  .graph-svg { width: 100%; height: 46px; display: block; overflow: visible; }
   .l-nozzle { stroke: var(--haos-accent, #0a84ff); }
   .l-bed { stroke: #ff9f0a; }
-  .graph-note { font-size: 11px; color: rgba(var(--haos-text-rgb, 255,255,255), .45); }
+  .graph-note { font-size: 10px; color: rgba(var(--haos-text-rgb, 255,255,255), .45); }
   .graph-note[hidden] { display: none; }
 
   .empty { flex: 1; display: grid; place-content: center; text-align: center; gap: 6px; padding: 16px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
@@ -6019,7 +6140,6 @@ var HaOsPrinterCard = class extends HTMLElement {
     const columns = el6("div", "columns");
     const left = el6("div", "col");
     const right = el6("div", "col");
-    left.append(hero, overviewRows);
     const media = el6("div", "media");
     const mediaImage = document.createElement("img");
     mediaImage.alt = "";
@@ -6077,7 +6197,7 @@ var HaOsPrinterCard = class extends HTMLElement {
       amsRows
     );
     ams.append(slots, amsRows);
-    const control = el6("div", "panel");
+    const control = el6("div", "control-block");
     const controls = el6("div", "controls");
     const makeCtrl = (iconName, label, className = "") => {
       const button = el6("button", `ctrl ${className}`.trim());
@@ -6126,7 +6246,8 @@ var HaOsPrinterCard = class extends HTMLElement {
       el6("strong", null, "Noch kein Drucker gewählt"),
       el6("span", null, "Im Editor oben eine Entität des Druckers wählen – die übrigen Felder füllen sich dann von selbst.")
     );
-    const panels = { overview, temps, ams, control };
+    left.append(hero, overviewRows, control);
+    const panels = { overview, temps, ams };
     Object.values(panels).forEach((panel) => main.append(panel));
     main.prepend(head);
     main.append(empty);
@@ -6385,30 +6506,34 @@ var HaOsPrinterCard = class extends HTMLElement {
    * Linien mehr Ballast als das ganze Bündel.
    */
   _buildGraph() {
-    const wrap = el6("div", "graph");
-    const head = el6("div", "graph-head");
-    const nozzleTag = el6("span", "tag nozzle");
-    const bedTag = el6("span", "tag bed");
-    head.append(nozzleTag, bedTag);
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", "0 0 300 96");
-    svg.setAttribute("preserveAspectRatio", "none");
-    svg.classList.add("graph-svg");
-    const line = (className) => {
-      const path = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
-      path.setAttribute("fill", "none");
-      path.setAttribute("stroke-width", "2");
-      path.setAttribute("stroke-linejoin", "round");
-      path.setAttribute("stroke-linecap", "round");
-      path.classList.add(className);
-      svg.append(path);
-      return path;
+    const wrap = el6("div", "graphs");
+    const build = (title, lineClass) => {
+      const box = el6("div", "graph");
+      const head = el6("div", "graph-head");
+      const label = el6("span", "graph-label", title);
+      const value = el6("span", "graph-value", "–");
+      head.append(label, value);
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 160 48");
+      svg.setAttribute("preserveAspectRatio", "none");
+      svg.classList.add("graph-svg");
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      line.setAttribute("fill", "none");
+      line.setAttribute("stroke-width", "2");
+      line.setAttribute("stroke-linejoin", "round");
+      line.setAttribute("stroke-linecap", "round");
+      line.classList.add(lineClass);
+      svg.append(line);
+      const note = el6("div", "graph-note", "sammelt Werte");
+      box.append(head, svg, note);
+      wrap.append(box);
+      return { box, value, line, note };
     };
-    const nozzleLine = line("l-nozzle");
-    const bedLine = line("l-bed");
-    const note = el6("div", "graph-note", "Noch keine Messwerte");
-    wrap.append(head, svg, note);
-    this._graph = { wrap, svg, nozzleLine, bedLine, nozzleTag, bedTag, note };
+    this._graph = {
+      wrap,
+      nozzle: build("Düse", "l-nozzle"),
+      bed: build("Bett", "l-bed")
+    };
     return { element: wrap };
   }
   /** Punkte anhängen, höchstens alle 15 Sekunden einen. */
@@ -6457,41 +6582,44 @@ var HaOsPrinterCard = class extends HTMLElement {
   }
   _updateGraph() {
     if (!this._graph) return;
-    const graph = this._graph;
-    const nozzle = this._state("nozzle");
-    const bed = this._state("bed");
-    const nozzleValue = numberOf2(nozzle);
-    const bedValue = numberOf2(bed);
-    graph.wrap.hidden = nozzleValue === null && bedValue === null;
-    if (graph.wrap.hidden) return;
-    graph.nozzleTag.textContent = `Düse ${nozzleValue === null ? "–" : `${formatNumber2(nozzleValue)} °C`}`;
-    graph.bedTag.textContent = `Bett ${bedValue === null ? "–" : `${formatNumber2(bedValue)} °C`}`;
+    const nozzle = numberOf2(this._state("nozzle"));
+    const bed = numberOf2(this._state("bed"));
+    this._graph.wrap.hidden = nozzle === null && bed === null;
+    if (this._graph.wrap.hidden) return;
     this._recordSeries();
     if (this._section === "overview") this._seedSeries();
     const series = this._series || { nozzle: [], bed: [] };
-    const all = [...series.nozzle, ...series.bed];
-    if (all.length < 2) {
-      graph.note.hidden = false;
-      graph.nozzleLine.setAttribute("points", "");
-      graph.bedLine.setAttribute("points", "");
-      return;
-    }
-    graph.note.hidden = true;
-    const times = all.map((point) => point.t);
-    const values = all.map((point) => point.v);
-    const tMin = Math.min(...times);
-    const tMax = Math.max(...times);
-    const vMin = Math.min(...values) - 3;
-    const vMax = Math.max(...values) + 3;
-    const spanT = tMax - tMin || 1;
-    const spanV = vMax - vMin || 1;
-    const toPoints = (points) => points.map((point) => {
-      const x = (point.t - tMin) / spanT * 300;
-      const y = 96 - (point.v - vMin) / spanV * 96;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(" ");
-    graph.nozzleLine.setAttribute("points", toPoints(series.nozzle));
-    graph.bedLine.setAttribute("points", toPoints(series.bed));
+    const paint = (target, points, current) => {
+      target.box.hidden = current === null;
+      if (current === null) return;
+      target.value.textContent = `${formatNumber2(current)} °C`;
+      if (points.length < 2) {
+        target.note.hidden = false;
+        target.line.setAttribute("points", "");
+        return;
+      }
+      target.note.hidden = true;
+      const times = points.map((point) => point.t);
+      const values = points.map((point) => point.v);
+      const tMin = Math.min(...times);
+      const spanT = Math.max(...times) - tMin || 1;
+      const vMin = Math.min(...values);
+      const vMax = Math.max(...values);
+      const mid = (vMin + vMax) / 2;
+      const half = Math.max((vMax - vMin) / 2, 5);
+      const low = mid - half;
+      const spanV = half * 2;
+      target.line.setAttribute(
+        "points",
+        points.map((point) => {
+          const x = (point.t - tMin) / spanT * 160;
+          const y = 48 - (point.v - low) / spanV * 48;
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        }).join(" ")
+      );
+    };
+    paint(this._graph.nozzle, series.nozzle, nozzle);
+    paint(this._graph.bed, series.bed, bed);
   }
   _updateMedia() {
     const nodes = this._nodes;
@@ -6677,7 +6805,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.17.0";
+var VERSION = "0.18.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

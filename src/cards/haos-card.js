@@ -40,6 +40,7 @@ export const CARD_TYPES = [
   { value: "select", label: "Auswahl", icon: "mdi:form-dropdown" },
   { value: "clock", label: "Uhr", icon: "mdi:clock-outline" },
   { value: "camera", label: "Kamera", icon: "mdi:cctv" },
+  { value: "separator", label: "Trenner", icon: "mdi:format-horizontal-align-center" },
 ];
 
 const el = (tag, className, text) => {
@@ -254,6 +255,21 @@ const STYLES = `
   .camera-live { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #ff453a; }
   .camera-note { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 6px; padding: 12px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
   .camera-note[hidden] { display: none; }
+
+  /* --- Trenner ---
+     Bewusst ohne Glas: ein Trenner soll gliedern, nicht wie eine weitere
+     Karte aussehen. Die Klasse plain nimmt der Flaeche Rahmen, Fuellung
+     und Schatten. */
+  .card.plain {
+    border: 0; background: none; box-shadow: none; padding: 0 4px;
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+  }
+  .sep { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .sep-text { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; font-size: 13px; color: rgba(var(--haos-text-rgb, 255,255,255), .72); }
+  .sep-text[hidden] { display: none; }
+  .sep-text ha-icon { --mdc-icon-size: 17px; }
+  .sep-line { flex: 1; height: 1px; min-width: 12px; background: rgba(var(--haos-text-rgb, 255,255,255), .18); }
+  .sep-line[hidden] { display: none; }
 
   .error { display: grid; place-content: center; height: 100%; text-align: center; gap: 6px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
 `;
@@ -1347,6 +1363,51 @@ const renderers = {
 
       if (ctx.nodes.select && ctx.nodes.select.value !== state?.state) ctx.nodes.select.value = state?.state ?? "";
       ctx.nodes.optionButtons?.forEach((button, option) => button.classList.toggle("active", option === state?.state));
+    },
+  },
+
+  // ------------------------------------------------------------- Trenner
+  /**
+   * Eine Beschriftung mit Linie, zum Gliedern eines Rasters.
+   *
+   * Ohne Entitaet und ohne Glasflaeche – als Karte getarnt waere er genau
+   * das, was er nicht sein soll. Ein kleiner Hoehenfaktor (etwa 0,3) passt
+   * dazu; der Editor sagt das im Hilfetext.
+   */
+  separator: {
+    build(ctx) {
+      ctx.card.classList.add("plain");
+
+      const root = el("div", "sep");
+      ctx.nodes.lineBefore = el("div", "sep-line");
+      ctx.nodes.text = el("div", "sep-text");
+      ctx.nodes.icon = icon("mdi:tag");
+      ctx.nodes.label = el("span");
+      ctx.nodes.text.append(ctx.nodes.icon, ctx.nodes.label);
+      ctx.nodes.lineAfter = el("div", "sep-line");
+
+      root.append(ctx.nodes.lineBefore, ctx.nodes.text, ctx.nodes.lineAfter);
+      return root;
+    },
+    update(ctx) {
+      const label = ctx.config.name || "";
+      ctx.nodes.label.textContent = label;
+      ctx.nodes.label.hidden = !label;
+
+      ctx.nodes.icon.hidden = !ctx.config.icon;
+      if (ctx.config.icon) ctx.nodes.icon.icon = ctx.config.icon;
+      ctx.nodes.text.hidden = !label && !ctx.config.icon;
+
+      // Ohne Text sitzt die Linie durchgehend. Mit Text liegt sie je nach
+      // Ausrichtung links, rechts oder auf beiden Seiten.
+      const align = ctx.config.align || "left";
+      const showLine = ctx.config.show_line !== false;
+      ctx.nodes.lineBefore.hidden = !showLine || (align === "left" && ctx.nodes.text.hidden === false);
+      ctx.nodes.lineAfter.hidden = !showLine || (align === "right" && ctx.nodes.text.hidden === false);
+      if (ctx.nodes.text.hidden) {
+        ctx.nodes.lineBefore.hidden = !showLine;
+        ctx.nodes.lineAfter.hidden = true;
+      }
     },
   },
 

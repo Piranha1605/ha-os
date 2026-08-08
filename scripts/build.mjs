@@ -53,6 +53,7 @@ for (const folder of ["src", "src/cards", "src/shared"]) {
     // Nur innerhalb eines Stil-Blocks suchen. Ein Rückstrich in einem
     // gewöhnlichen Dokumentationskommentar ist völlig in Ordnung.
     let inStyles = false;
+    let inComment = false;
     lines.forEach((line, index) => {
       if (!inStyles) {
         if (/=\s*`\s*$/.test(line)) inStyles = true;
@@ -60,11 +61,21 @@ for (const folder of ["src", "src/cards", "src/shared"]) {
       }
       if (/^\s*`;?\s*$/.test(line)) {
         inStyles = false;
+        inComment = false;
         return;
       }
-      if (cssComment.test(line) && line.includes("`")) {
+
+      // Mehrzeilige Kommentare mitzaehlen: der Rueckstrich stand schon in
+      // einer Fortsetzungszeile, und die erste Fassung dieser Pruefung sah
+      // nur die Zeile mit dem oeffnenden /*.
+      const opens = line.includes("/*");
+      const closes = line.includes("*/");
+      const inside = inComment || opens || cssComment.test(line);
+      if (inside && line.includes("`")) {
         offenders.push(`${file.replace(`${root}/`, "")}:${index + 1}`);
       }
+      if (opens && !closes) inComment = true;
+      if (closes) inComment = false;
     });
   }
 }

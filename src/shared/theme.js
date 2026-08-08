@@ -25,6 +25,18 @@ export const THEME_DEFAULTS = Object.freeze({
   textLight: "#18212a",
   textDark: "#ffffff",
 
+  // Statusfarben, getrennt fuer Hell und Dunkel.
+  //
+  // Getrennt, weil ein Gruen, das auf dunklem Glas gut aussieht, auf hellem
+  // Glas nicht mehr lesbar ist - genau daran ist der Rueckfallwert #7ee0b0
+  // gescheitert. Im Hellen deshalb deutlich dunklere Toene.
+  statusGoodLight: "#1e8e5a",
+  statusGoodDark: "#7ee0b0",
+  statusOffLight: "#66717c",
+  statusOffDark: "#a8b0b8",
+  statusBadLight: "#c2413b",
+  statusBadDark: "#ff6961",
+
   // Hintergrundkarte = die grosse Glasflaeche der Shell
   cardSurface: "#ffffff",
   cardOpacity: 10,
@@ -130,6 +142,12 @@ export const normalizeTheme = (settings = {}) => ({
   backgroundDim: clamp(settings.backgroundDim, 0, 80, THEME_DEFAULTS.backgroundDim),
   textLight: color(settings.textLight, THEME_DEFAULTS.textLight),
   textDark: color(settings.textDark, THEME_DEFAULTS.textDark),
+  statusGoodLight: color(settings.statusGoodLight, THEME_DEFAULTS.statusGoodLight),
+  statusGoodDark: color(settings.statusGoodDark, THEME_DEFAULTS.statusGoodDark),
+  statusOffLight: color(settings.statusOffLight, THEME_DEFAULTS.statusOffLight),
+  statusOffDark: color(settings.statusOffDark, THEME_DEFAULTS.statusOffDark),
+  statusBadLight: color(settings.statusBadLight, THEME_DEFAULTS.statusBadLight),
+  statusBadDark: color(settings.statusBadDark, THEME_DEFAULTS.statusBadDark),
 
   cardSurface: color(settings.cardSurface, THEME_DEFAULTS.cardSurface),
   cardOpacity: clamp(settings.cardOpacity, 0, 95, THEME_DEFAULTS.cardOpacity),
@@ -207,9 +225,18 @@ const apply = (settings) => {
       : "0 6px 18px rgba(0, 0, 0, .38), inset 0 1px 0 rgba(255, 255, 255, .28)",
 
     "--haos-accent": t.accent,
+    // Das Leuchten aktiver Kacheln folgt weiterhin der Akzentfarbe - die ist
+    // schon einstellbar. Die drei Statusfarben hier faerben Texte und Zeichen
+    // in den Karten: "ok", "verriegelt", "Warnung", "nicht erreichbar".
     "--haos-status-on": t.accent,
-    "--haos-status-off": light ? "#66717c" : "#a8b0b8",
-    "--haos-status-unavailable": light ? "#c2413b" : "#ff6961",
+    "--haos-status-off": light ? t.statusOffLight : t.statusOffDark,
+    "--haos-status-unavailable": light ? t.statusBadLight : t.statusBadDark,
+
+    // Diese beiden gab es bisher NICHT. Die Karten benutzten
+    // var(--haos-good, #7ee0b0) - und dieser Rueckfallwert war auf hellem
+    // Glas nicht zu lesen.
+    "--haos-good": light ? t.statusGoodLight : t.statusGoodDark,
+    "--haos-bad": light ? t.statusBadLight : t.statusBadDark,
     "--haos-status-home": light ? "#168a4a" : "#32d583",
     "--haos-status-away": light ? "#a06a10" : "#f7b955",
 

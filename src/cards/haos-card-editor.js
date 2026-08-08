@@ -127,6 +127,24 @@ const SCHEMAS = {
     number("refresh_interval", 1, 300),
     ACTION,
   ],
+  separator: [
+    text("name"),
+    { name: "icon", selector: { icon: {} } },
+    {
+      name: "align",
+      selector: {
+        select: {
+          mode: "dropdown",
+          options: [
+            { value: "left", label: "Links" },
+            { value: "center", label: "Mittig" },
+            { value: "right", label: "Rechts" },
+          ],
+        },
+      },
+    },
+    bool("show_line"),
+  ],
   clock: [
     text("name"),
     {
@@ -171,12 +189,17 @@ const LABELS = {
   show_date: "Datum anzeigen",
   time_zone: "Zeitzone",
   haos_weight: "Höhenfaktor",
+  align: "Ausrichtung",
+  show_line: "Linie anzeigen",
   camera_mode: "Bildart",
   refresh_interval: "Auffrischung in Sekunden",
 };
 
 const HELPERS = {
   haos_weight: "1 entspricht der Standard-Kartenhöhe der Shell. 2 ist doppelt so hoch, 0,4 knapp die Hälfte — für flache Fremdkarten.",
+  show_line: "Ausschalten für eine reine Überschrift ohne Strich.",
+  align:
+    "Mittig setzt die Linie auf beide Seiten. Ein Höhenfaktor um 0,3 passt gut – ein Trenner braucht keine volle Kartenhöhe.",
   camera_mode:
     "Standbild holt in festem Takt ein einzelnes Bild und schont die Leitung. Livebild überträgt dauerhaft – auf einem Wandtablet mit mehreren Kameras spürbar. Tippen öffnet in beiden Fällen den großen Kameradialog.",
   refresh_interval: "Nur beim Standbild. Wie oft ein neues Bild geholt wird.",

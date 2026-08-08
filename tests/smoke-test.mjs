@@ -371,6 +371,21 @@ window.HaOsTheme.save({ mode: "light", textLight: "#223344" });
 check("Hell hat eine eigene Farbe", cssVar("--haos-text") === "#223344", cssVar("--haos-text"));
 window.HaOsTheme.save({ mode: "dark", textDark: "#ffffff", textLight: "#18212a" });
 
+// Statusfarben. Vorher gab es --haos-good gar nicht: die Karten fielen auf
+// ein festes Hellgruen zurueck, das auf hellem Glas nicht zu lesen war.
+check("Gut-Farbe kommt aus dem Theme", cssVar("--haos-good") === "#7ee0b0", cssVar("--haos-good"));
+check("Schlecht-Farbe kommt aus dem Theme", cssVar("--haos-bad") === "#ff6961", cssVar("--haos-bad"));
+window.HaOsTheme.save({ mode: "light" });
+check("Hell hat dunklere Statusfarben", cssVar("--haos-good") === "#1e8e5a", cssVar("--haos-good"));
+check("Nicht erreichbar ebenfalls dunkler", cssVar("--haos-bad") === "#c2413b", cssVar("--haos-bad"));
+window.HaOsTheme.save({ mode: "dark", statusGoodDark: "#00ff00" });
+check("eigene Statusfarbe wirkt", cssVar("--haos-good") === "#00ff00", cssVar("--haos-good"));
+check("Inaktiv folgt mit", cssVar("--haos-status-off") === "#a8b0b8", cssVar("--haos-status-off"));
+window.HaOsTheme.save({ statusGoodDark: "#7ee0b0" });
+
+const statusGruppe = [...root.querySelectorAll(".group h3")].map((n) => n.textContent);
+check("eigene Gruppe im Menue", statusGruppe.includes("Statusfarben"), statusGruppe.join(" | "));
+
 // Die Bildauswahl hing frueher an `ha-selector`. War das Element beim Bauen
 // der Seite noch nicht geladen - reine Zeitfrage -, fehlte sie ganz, ohne
 // jede Meldung. Deshalb wird hier ausdruecklich geprueft, dass sie da ist
