@@ -628,6 +628,29 @@ check("fuenf Knoepfe zum Hinzufuegen im Raster",
 reiter[0].click();
 check("Shell-Editor zeigt Allgemein-Formular", Boolean(shellEditor.shadowRoot.querySelector("ha-form")));
 
+// Der haeufige Fall: das Wallpaper steckt laengst im localStorage dieses
+// Browsers und erscheint auf keinem anderen Geraet. Ohne einen Weg, es in die
+// Karte zu heben, muesste man es erneut hochladen.
+{
+  window.HaOsTheme.save({ backgroundDark: "/local/wallpaper/vom-geraet.jpg" });
+  shellEditor.setConfig(shellConfig);
+  reiter[0].click();
+
+  const knopf = [...shellEditor.shadowRoot.querySelectorAll(".add")]
+    .find((b) => b.textContent.includes("übernehmen"));
+  check("Knopf zum Uebernehmen erscheint", Boolean(knopf),
+    [...shellEditor.shadowRoot.querySelectorAll(".add")].map((b) => b.textContent).join(" | "));
+
+  let uebernommen = null;
+  shellEditor.addEventListener("config-changed", (event) => { uebernommen = event.detail.config; });
+  knopf?.click();
+  check("Bild landet in der Karte",
+    uebernommen?.background_dark === "/local/wallpaper/vom-geraet.jpg",
+    uebernommen?.background_dark || "(leer)");
+
+  window.HaOsTheme.save({ backgroundDark: "" });
+}
+
 // ---------------------------------------------------------------- Grösse
 
 console.log("\n8. Höhe und HA-Sections");

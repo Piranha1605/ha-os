@@ -22,6 +22,7 @@ import {
   MAX_GRIDS,
 } from "../shared/config.js";
 import { IMAGE_FIELD_CSS, createImageField, isEqualConfig, deepClone } from "../shared/utils.js";
+import { HaOsTheme } from "../shared/theme.js";
 import { cardCatalog, stubConfigFor, createCardEditorWithCode } from "../shared/card-catalog.js";
 
 const EDITOR_TAG = "ha-os-shell-editor";
@@ -484,6 +485,37 @@ class HaOsShellEditor extends HTMLElement {
       wrap.append(field.element);
       this._panel.append(wrap);
     });
+
+    /*
+     * Uebernehmen aus den Einstellungen.
+     *
+     * Der haeufige Fall: jemand hat sein Wallpaper laengst ueber die interne
+     * Einstellungsseite gesetzt. Das liegt im localStorage dieses Browsers und
+     * erscheint deshalb auf keinem anderen Geraet. Ohne diesen Knopf muesste
+     * man das Bild erneut hochladen, um es in die Karte zu bekommen - und
+     * genau daran ist es gescheitert.
+     */
+    const theme = HaOsTheme.get();
+    const uebertragbar = ["backgroundDark", "backgroundLight"].some(
+      (key) => theme[key] && theme[key] !== this._config[key === "backgroundDark" ? "background_dark" : "background_light"]
+    );
+
+    if (uebertragbar) {
+      const knopf = el("button", "add");
+      knopf.append(icon("mdi:content-copy"), el("span", null, "Bild dieses Geräts übernehmen"));
+      knopf.addEventListener("click", () => {
+        const current = HaOsTheme.get();
+        this._config = normalizeShellConfig({
+          ...this._config,
+          background_dark: current.backgroundDark || this._config.background_dark,
+          background_light: current.backgroundLight || this._config.background_light,
+          background_dim: current.backgroundDim || this._config.background_dim,
+        });
+        this._emit();
+        this._renderPanels();
+      });
+      this._panel.append(knopf);
+    }
 
     this._panel.append(
       el(

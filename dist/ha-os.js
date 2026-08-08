@@ -1,4 +1,4 @@
-/* HA-OS 0.20.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.20.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -2337,6 +2337,26 @@ var HaOsShellEditor = class extends HTMLElement {
       wrap.append(field.element);
       this._panel.append(wrap);
     });
+    const theme = HaOsTheme.get();
+    const uebertragbar = ["backgroundDark", "backgroundLight"].some(
+      (key) => theme[key] && theme[key] !== this._config[key === "backgroundDark" ? "background_dark" : "background_light"]
+    );
+    if (uebertragbar) {
+      const knopf = el2("button", "add");
+      knopf.append(icon("mdi:content-copy"), el2("span", null, "Bild dieses Geräts übernehmen"));
+      knopf.addEventListener("click", () => {
+        const current = HaOsTheme.get();
+        this._config = normalizeShellConfig({
+          ...this._config,
+          background_dark: current.backgroundDark || this._config.background_dark,
+          background_light: current.backgroundLight || this._config.background_light,
+          background_dim: current.backgroundDim || this._config.background_dim
+        });
+        this._emit();
+        this._renderPanels();
+      });
+      this._panel.append(knopf);
+    }
     this._panel.append(
       el2(
         "p",
@@ -7043,7 +7063,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.20.0";
+var VERSION = "0.20.1";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",
