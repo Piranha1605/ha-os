@@ -9,9 +9,9 @@ Rastern — in die jede installierte Lovelace-Karte passt.
 
 [![Release](https://img.shields.io/github/v/release/Piranha1605/ha-os?style=flat-square&color=0a84ff)](https://github.com/Piranha1605/ha-os/releases)
 [![HACS](https://img.shields.io/badge/HACS-Dashboard-41BDF5?style=flat-square)](https://hacs.xyz)
-[![Lizenz](https://img.shields.io/badge/Lizenz-MIT-black?style=flat-square)](LICENSE)
+[![Lizenz](https://img.shields.io/badge/Lizenz-MIT-black?style=flat-square)](https://github.com/Piranha1605/ha-os/blob/main/LICENSE)
 
-<img src="docs/bilder/dashboard.png" alt="HA-OS Dashboard mit Seitenleiste, Medienkarte, Uhr, Wetter, Kalender und Thermostat" width="100%">
+<img src="https://raw.githubusercontent.com/Piranha1605/ha-os/main/docs/bilder/dashboard.png" alt="HA-OS Dashboard mit Seitenleiste, Medienkarte, Uhr, Wetter, Kalender und Thermostat" width="100%">
 
 </div>
 
@@ -53,15 +53,16 @@ Typ **JavaScript-Modul**.
 > alte, ist es fast immer der Service-Worker-Cache des Frontends — Browserdaten
 > löschen hilft, ein Neustart von Home Assistant nicht.
 
-## Die drei Karten
+## Die vier Karten
 
 | Karte | Wofür |
 |---|---|
 | `custom:ha-os-shell` | Das Grundgerüst: Glasfläche, Seitenleiste, Kopfzeile mit Reitern und Badges, drei gewichtete Raster, iFrame-Seiten und eine eingebaute Einstellungsseite. |
 | `custom:ha-os-card` | Eine Karte für elf Typen. Oben ein Auswahlfeld, darunter nur die Felder des gewählten Typs. |
 | `custom:ha-os-grid` | Ein 2×2-Raster: vier Plätze, jeder frei mit einer beliebigen installierten Karte belegbar. |
+| `custom:ha-os-vehicle` | Fahrzeugübersicht für Mercedes-Benz über die Integration `mbapi2020`. |
 
-Alle drei erscheinen im normalen Kartenauswahldialog.
+Alle vier erscheinen im normalen Kartenauswahldialog.
 
 ### Die elf Typen der generischen Karte
 
@@ -84,6 +85,25 @@ kommt. So drückt die Kachel das Garagentor und zeigt zugleich, ob es offen ist.
 Einzelbild, Livebild überträgt dauerhaft — je Karte wählbar. Ein Livebild auf
 einer Seite, die gerade niemand sieht, wird angehalten. Tippen öffnet in
 beiden Fällen den großen Kameradialog.
+
+### Die Fahrzeugkarte
+
+Für Mercedes-Benz über [`mbapi2020`](https://github.com/ReneNulschDE/mbapi2020).
+Links eine Symbolleiste im Zuschnitt von CarPlay, daneben fünf Bereiche:
+
+**Übersicht** mit Reichweite, Tankbalken, Kilometerstand, Verriegelung und
+Fenstern · **Fahrt** mit Strecke, Tempo und Verbrauch, je seit Start und seit
+Zurücksetzen · **Status** mit jedem Fenster und jeder Warnleuchte einzeln ·
+**Reifen** mit den vier Drücken im Grundriss des Wagens · **Eco** mit den
+Fahrstil-Werten.
+
+Eingerichtet wird sie mit **einer** Entität: aus deren Kennung findet die
+Karte die übrigen dreißig selbst — auch die, die den Gerätenamen vor der
+Kennung tragen. Jedes Feld bleibt einzeln überschreibbar.
+
+Zuschnitt und Feldbelegung sind von
+[`vehicle-info-card`](https://github.com/ngocjohn/vehicle-info-card) (MIT)
+übernommen, der Code ist neu geschrieben.
 
 <details>
 <summary><b>Beispielkonfiguration zum Ausprobieren</b></summary>
@@ -130,9 +150,9 @@ Für flache Fremdkarten wie Mushroom sind Werte um 0,4 richtig.
 
 | Dokument | Inhalt |
 |---|---|
-| [docs/editor.md](docs/editor.md) | Wie der Editor aufgebaut ist, Seiten und Navigation, Fremdkarten ohne YAML |
-| [docs/gestaltung.md](docs/gestaltung.md) | Woraus die Glasoptik besteht, Hintergrundbild |
-| [docs/architektur.md](docs/architektur.md) | Warum gebündelt wird, was gegenüber dem Vorgänger anders läuft, Aufbau des Quelltextes |
+| [docs/editor.md](https://github.com/Piranha1605/ha-os/blob/main/docs/editor.md) | Wie der Editor aufgebaut ist, Seiten und Navigation, Fremdkarten ohne YAML |
+| [docs/gestaltung.md](https://github.com/Piranha1605/ha-os/blob/main/docs/gestaltung.md) | Woraus die Glasoptik besteht, Hintergrundbild |
+| [docs/architektur.md](https://github.com/Piranha1605/ha-os/blob/main/docs/architektur.md) | Warum gebündelt wird, was gegenüber dem Vorgänger anders läuft, Aufbau des Quelltextes |
 
 ## Entwickeln
 
