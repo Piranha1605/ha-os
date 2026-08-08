@@ -27,7 +27,7 @@
  * sind verschieden.
  */
 
-export const VERSION = "0.12.2";
+export const VERSION = "0.13.0";
 
 import "./shared/theme.js";
 import "./cards/shell-card.js";
@@ -40,6 +40,9 @@ import "./cards/vehicle-card.js";
 import "./cards/vehicle-editor.js";
 
 export { CARD_TYPES } from "./cards/haos-card.js";
+// Für die Tests: der Upload wird sonst nur über eine Dateiauswahl erreichbar,
+// die sich in jsdom nicht sinnvoll füllen lässt.
+export { uploadImage } from "./shared/utils.js";
 
 console.info(
   `%c HA-OS %c ${VERSION} `,

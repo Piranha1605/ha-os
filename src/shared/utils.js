@@ -261,3 +261,150 @@ export const registerCard = (entry) => {
   window.customCards = window.customCards || [];
   if (!window.customCards.some((card) => card.type === entry.type)) window.customCards.push(entry);
 };
+
+/**
+ * Lädt eine Datei in Home Assistants Bildablage und gibt die Adresse zurück.
+ *
+ * Das ist dieselbe Schnittstelle, die HAs eigener Uploader benutzt. Der Token
+ * steckt je nach Version an zwei Stellen im `hass`-Objekt – beide werden
+ * probiert. Ohne Token bricht es mit klarer Meldung ab, statt eine Anfrage
+ * ohne Anmeldung zu schicken.
+ */
+export const uploadImage = async (hass, file) => {
+  const token = hass?.auth?.data?.access_token || hass?.connection?.options?.auth?.accessToken;
+  if (!token) throw new Error("kein Zugangstoken im hass-Objekt");
+
+  const body = new FormData();
+  body.append("file", file);
+
+  const response = await fetch("/api/image/upload", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body,
+  });
+
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText || ""}`.trim());
+
+  const data = await response.json();
+  if (!data?.id) throw new Error("Antwort ohne Bild-Kennung");
+  return `/api/image/serve/${data.id}/original`;
+};
+
+/**
+ * Baut ein Feld zur Bildauswahl: Vorschau, Knopf zum Hochladen, Entfernen und
+ * darunter eine Pfadeingabe.
+ *
+ * Bewusst ohne `ha-selector` und ohne `ha-form`. Beide zeigten in
+ * Kartendialogen nichts an – `ha-form` liess ein Feld mit
+ * `selector: { image: {} }` stillschweigend weg, und ob `ha-selector` beim
+ * Bauen schon geladen ist, ist Zufall. Genau daran ist die Bildauswahl in den
+ * Einstellungen der Shell zeitweise verschwunden.
+ *
+ * `onChange` bekommt die neue Adresse oder einen leeren Text.
+ */
+export const createImageField = ({ getHass, getValue, onChange, placeholder = "/local/bild.jpg" }) => {
+  const wrap = document.createElement("div");
+  wrap.className = "haos-image";
+
+  const row = document.createElement("div");
+  row.className = "haos-image-row";
+
+  const preview = document.createElement("div");
+  preview.className = "haos-image-preview";
+  row.append(preview);
+
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = "image/png,image/jpeg,image/gif,image/webp";
+  fileInput.className = "haos-image-file";
+
+  const uploadButton = document.createElement("button");
+  uploadButton.type = "button";
+  uploadButton.className = "haos-image-btn";
+  uploadButton.textContent = "Bild hochladen";
+  uploadButton.addEventListener("click", () => fileInput.click());
+
+  const clearButton = document.createElement("button");
+  clearButton.type = "button";
+  clearButton.className = "haos-image-btn ghost";
+  clearButton.textContent = "Entfernen";
+  clearButton.addEventListener("click", () => set(""));
+
+  const buttons = document.createElement("div");
+  buttons.className = "haos-image-buttons";
+  buttons.append(uploadButton, clearButton);
+  row.append(buttons);
+
+  const pathInput = document.createElement("input");
+  pathInput.type = "text";
+  pathInput.className = "path";
+  pathInput.placeholder = placeholder;
+
+  const status = document.createElement("span");
+  status.className = "haos-image-status";
+
+  const paint = () => {
+    const value = getValue() || "";
+    pathInput.value = value;
+    if (!value) {
+      preview.replaceChildren();
+      preview.classList.add("empty");
+      return;
+    }
+    preview.classList.remove("empty");
+    let img = preview.firstElementChild;
+    if (img?.tagName !== "IMG") {
+      img = document.createElement("img");
+      img.alt = "";
+      preview.replaceChildren(img);
+    }
+    img.src = value;
+  };
+
+  const set = (value) => {
+    onChange(value);
+    paint();
+  };
+
+  pathInput.addEventListener("change", () => set(pathInput.value.trim()));
+
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files?.[0];
+    fileInput.value = "";
+    if (!file) return;
+    status.textContent = `${file.name} wird hochgeladen …`;
+    status.classList.remove("bad");
+    try {
+      set(await uploadImage(getHass(), file));
+      status.textContent = "Hochgeladen.";
+    } catch (error) {
+      status.textContent = `Upload fehlgeschlagen: ${error.message}`;
+      status.classList.add("bad");
+    }
+  });
+
+  wrap.append(row, fileInput, pathInput, status);
+  paint();
+  return { element: wrap, refresh: paint };
+};
+
+/** Gemeinsames CSS für `createImageField`. */
+export const IMAGE_FIELD_CSS = `
+  .haos-image { display: flex; flex-direction: column; gap: 8px; }
+  .haos-image-row { display: flex; align-items: center; gap: 12px; }
+  .haos-image-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+  .haos-image-preview {
+    width: 84px; height: 52px; flex: 0 0 84px; border-radius: 8px; overflow: hidden;
+    background: rgba(127,127,127,.15); border: 1px solid rgba(127,127,127,.35);
+  }
+  .haos-image-preview.empty { border-style: dashed; }
+  .haos-image-preview img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .haos-image-file { display: none; }
+  .haos-image-btn {
+    font: inherit; font-size: 12px; padding: 7px 12px; border-radius: 8px; cursor: pointer;
+    color: inherit; background: none; border: 1px solid rgba(127,127,127,.35);
+  }
+  .haos-image-btn.ghost { opacity: .7; }
+  .haos-image-status { font-size: 11px; opacity: .7; }
+  .haos-image-status.bad { color: var(--haos-bad, #ff6b6b); opacity: 1; }
+`;

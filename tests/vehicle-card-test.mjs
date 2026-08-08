@@ -42,6 +42,7 @@ const TARGET = process.env.HAOS_TARGET
   : new URL("../dist/ha-os.js", import.meta.url).href;
 console.log(`  (geprueft wird: ${TARGET.replace("file://", "")})`);
 await import(TARGET);
+const { uploadImage } = await import(TARGET);
 
 const ID = "clpef165";
 const state = (id, value, attributes = {}) => ({
@@ -335,10 +336,10 @@ check("Pfadeingabe als Rueckfallebene", Boolean(feld?.querySelector("input.path"
 // Der Knopf darf an keinem Element von Home Assistant haengen. In 0.10.1 bis
 // 0.10.3 fehlte er, weil er ha-selector brauchte - das blieb im Kartendialog
 // leer. Hier ist bewusst kein einziges ha-* Element im Spiel.
-check("Knopf zum Hochladen vorhanden", feld?.querySelector("button.upload")?.textContent === "Bild hochladen",
-  feld?.querySelector("button.upload")?.textContent || "keiner");
-check("Dateiauswahl vorhanden", feld?.querySelector("input.file")?.type === "file");
-check("Vorschau vorhanden", Boolean(feld?.querySelector(".preview")));
+check("Knopf zum Hochladen vorhanden", feld?.querySelector("button.haos-image-btn")?.textContent === "Bild hochladen",
+  feld?.querySelector("button.haos-image-btn")?.textContent || "keiner");
+check("Dateiauswahl vorhanden", feld?.querySelector("input.haos-image-file")?.type === "file");
+check("Vorschau vorhanden", Boolean(feld?.querySelector(".haos-image-preview")));
 check("haengt an keinem ha-Element", !feld?.querySelector("ha-selector, ha-picture-upload"));
 check("Bild steht NICHT im Formularschema",
   !editor.shadowRoot.querySelector("ha-form")?.schema?.some((f) => f.name === "image"));
@@ -371,7 +372,7 @@ globalThis.File = dom.window.File;
 let neu = null;
 editor2.addEventListener("config-changed", (event) => { neu = event.detail.config; });
 
-const upload = await editor2._upload(new dom.window.File(["x"], "auto.png", { type: "image/png" }));
+const upload = await uploadImage(editor2.hass, new dom.window.File(["x"], "auto.png", { type: "image/png" }));
 check("richtige Adresse", anfrage?.url === "/api/image/upload", anfrage?.url || "keine Anfrage");
 check("Methode POST", anfrage?.options?.method === "POST", anfrage?.options?.method || "");
 check("Token wird mitgeschickt", anfrage?.options?.headers?.Authorization === "Bearer TOKEN123",
@@ -380,7 +381,7 @@ check("liefert die Serve-Adresse", upload === "/api/image/serve/abc123/original"
 
 globalThis.fetch = async () => ({ ok: false, status: 401, statusText: "Unauthorized" });
 let fehler = "";
-try { await editor2._upload(new dom.window.File(["x"], "auto.png", { type: "image/png" })); }
+try { await uploadImage(editor2.hass, new dom.window.File(["x"], "auto.png", { type: "image/png" })); }
 catch (error) { fehler = error.message; }
 check("Fehler wird durchgereicht statt verschluckt", fehler === "401 Unauthorized", fehler);
 
@@ -389,7 +390,7 @@ ohneToken.setConfig({ type: "custom:ha-os-vehicle", entity: `sensor.${ID}_odomet
 document.body.append(ohneToken);
 ohneToken.hass = makeHass();
 let tokenFehler = "";
-try { await ohneToken._upload(new dom.window.File(["x"], "a.png", { type: "image/png" })); }
+try { await uploadImage(ohneToken.hass, new dom.window.File(["x"], "a.png", { type: "image/png" })); }
 catch (error) { tokenFehler = error.message; }
 check("ohne Token klare Meldung", tokenFehler.includes("Zugangstoken"), tokenFehler);
 

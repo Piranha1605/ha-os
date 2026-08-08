@@ -23,7 +23,9 @@ import {
 import {
   CARD_SURFACE_CSS,
   ENTITY_SURFACE_CSS,
+  IMAGE_FIELD_CSS,
   createCardElement,
+  createImageField,
   domainIcon,
   formatState,
   friendlyName,
@@ -224,6 +226,7 @@ const STYLES = `
     background: rgba(var(--haos-text-rgb, 255,255,255), .08);
     border: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .16); border-radius: 8px;
   }
+  ${IMAGE_FIELD_CSS}
   .control b { display: block; font-size: 12px; }
   .control small { display: block; margin-top: 3px; font-size: 9px; color: rgba(var(--haos-text-rgb, 255,255,255), .53); }
   .control output { text-align: right; font-size: 11px; font-weight: 750; color: rgba(var(--haos-text-rgb, 255,255,255), .82); }
@@ -1151,8 +1154,12 @@ class HaOsShell extends HTMLElement {
    *
    * Eine Lovelace-Karte darf nicht in `config/www/` schreiben – dafür gibt es
    * keine Schnittstelle. Home Assistant bringt aber eine eigene Bildablage
-   * samt Upload mit, erreichbar über `ha-selector` mit dem Typ `image`. Das
-   * hochgeladene Bild liegt danach unter `/api/image/serve/…`.
+   * mit, und `createImageField` spricht deren Schnittstelle direkt an.
+   *
+   * Früher hing das an `ha-selector`. Ob das Element beim Bauen der
+   * Einstellungsseite schon geladen ist, ist jedoch Zufall – war es das
+   * nicht, fehlte die Bildauswahl **ganz**, ohne jede Meldung. Genau so ist
+   * sie zeitweise verschwunden.
    *
    * Das Textfeld darunter bleibt für alle, die ihre Bilder lieber selbst nach
    * `config/www/wallpaper/` legen und `/local/wallpaper/…` eintragen.
@@ -1163,35 +1170,19 @@ class HaOsShell extends HTMLElement {
     text.append(el("b", null, control.label), el("small", null, control.hint));
     wrap.append(text);
 
-    const current = () => HaOsTheme.get()[control.key] || "";
-
-    if (customElements.get("ha-selector")) {
-      const selector = document.createElement("ha-selector");
-      selector.hass = this._hass;
-      selector.selector = { image: {} };
-      selector.value = current();
-      selector.addEventListener("value-changed", (event) => {
-        event.stopPropagation();
-        HaOsTheme.save({ [control.key]: event.detail.value || "" });
-        pathInput.value = HaOsTheme.get()[control.key] || "";
-      });
-      wrap.append(selector);
-      this._settingsImages.set(control.key, { selector, control });
-    }
-
-    const pathInput = document.createElement("input");
-    pathInput.type = "text";
-    pathInput.className = "path";
-    pathInput.placeholder = "/local/wallpaper/bild.jpg";
-    pathInput.value = current();
-    pathInput.addEventListener("change", () => {
-      HaOsTheme.save({ [control.key]: pathInput.value.trim() });
-      // Ungültige Adressen verwirft das Theme – Feld auf den echten Stand.
-      pathInput.value = HaOsTheme.get()[control.key] || "";
+    const field = createImageField({
+      getHass: () => this._hass,
+      getValue: () => HaOsTheme.get()[control.key] || "",
+      placeholder: "/local/wallpaper/bild.jpg",
+      onChange: (value) => {
+        HaOsTheme.save({ [control.key]: value });
+      },
     });
-    wrap.append(pathInput);
 
-    this._settingsPaths.set(control.key, pathInput);
+    wrap.append(field.element);
+    // Ungültige Adressen verwirft das Theme – deshalb nach dem Speichern
+    // einmal aus dem echten Stand nachzeichnen, nicht aus der Eingabe.
+    this._settingsImages.set(control.key, { field, control });
     return wrap;
   }
 
@@ -1207,9 +1198,9 @@ class HaOsShell extends HTMLElement {
     this._settingsPaths?.forEach((input, key) => {
       input.value = theme[key] || "";
     });
-    this._settingsImages?.forEach(({ selector }, key) => {
-      selector.value = theme[key] || "";
-    });
+    // Zeichnet Vorschau und Pfadfeld aus dem echten Theme-Stand nach – wichtig
+    // nach „Zurücksetzen" und wenn das Theme eine Adresse verworfen hat.
+    this._settingsImages?.forEach(({ field }) => field.refresh());
   }
 }
 

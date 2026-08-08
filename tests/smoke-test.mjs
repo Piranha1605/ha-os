@@ -289,6 +289,28 @@ check("keine Popup-Dialoge", document.querySelectorAll("dialog").length === 0);
 check("Regler vorhanden", root.querySelectorAll('.control input[type="range"]').length > 5);
 check("Farbwähler vorhanden", root.querySelectorAll('.control input[type="color"]').length >= 5);
 
+// Die Bildauswahl hing frueher an `ha-selector`. War das Element beim Bauen
+// der Seite noch nicht geladen - reine Zeitfrage -, fehlte sie ganz, ohne
+// jede Meldung. Deshalb wird hier ausdruecklich geprueft, dass sie da ist
+// und an keinem nachgeladenen Element haengt.
+check("zwei Bildauswahlen (Hell und Dunkel)", root.querySelectorAll(".haos-image").length === 2,
+  `${root.querySelectorAll(".haos-image").length} gefunden`);
+check("je ein Knopf zum Hochladen",
+  [...root.querySelectorAll(".haos-image")].every((f) => f.querySelector("button.haos-image-btn")));
+check("je eine Pfadeingabe",
+  [...root.querySelectorAll(".haos-image")].every((f) => f.querySelector("input.path")));
+check("haengt an keinem ha-Element", !root.querySelector(".haos-image ha-selector"));
+
+const bildPfad = root.querySelector(".haos-image input.path");
+bildPfad.value = "/local/wallpaper/test.jpg";
+bildPfad.dispatchEvent(new window.Event("change", { bubbles: true }));
+check("Pfad landet im Theme",
+  Object.values(window.HaOsTheme.get()).includes("/local/wallpaper/test.jpg"),
+  JSON.stringify(window.HaOsTheme.get()).slice(0, 120));
+check("Vorschau zeigt das Bild",
+  root.querySelector(".haos-image-preview img")?.getAttribute("src") === "/local/wallpaper/test.jpg",
+  root.querySelector(".haos-image-preview img")?.getAttribute("src") || "kein Bild");
+
 const accentInput = root.querySelector('.control input[type="color"]');
 accentInput.value = "#ff0000";
 accentInput.dispatchEvent(new window.Event("input", { bubbles: true }));
