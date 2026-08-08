@@ -12,6 +12,15 @@ const STORAGE_KEY = "ha-os-theme-v1";
 export const THEME_DEFAULTS = Object.freeze({
   mode: "dark",
   accent: "#0a84ff",
+
+  // Farben von Home Assistant uebernehmen.
+  //
+  // HA legt sein Theme als CSS-Variablen auf <html> ab. Ist das hier an,
+  // holt sich HA-OS Akzent, Text, Statusfarben und Hintergrund von dort -
+  // und folgt damit automatisch jedem Themewechsel, auf jedem Geraet.
+  // Glas (Unschaerfe, Deckkraft, Glanz, Rundung) bleibt in jedem Fall hier:
+  // dafuer kennt Home Assistant keine Entsprechung.
+  follow_ha: false,
   margin: 25,
 
   // Hintergrundbilder, getrennt fuer Hell und Dunkel. Leer = kein Bild.
@@ -81,6 +90,33 @@ export const imageUrl = (value) => {
   return /^\/(local|api|media|hacsfiles)\//.test(text) ? text : "";
 };
 
+/**
+ * Liest eine Farbe von Home Assistant und gibt sie als "r, g, b" zurueck.
+ *
+ * Der Umweg ueber ein Hilfselement ist noetig, weil ein Theme jede
+ * Schreibweise verwenden darf – #fff, rgb(), hsl(), color-mix(). Der Browser
+ * rechnet sie beim Setzen in eine einheitliche Form um, und die laesst sich
+ * zerlegen.
+ */
+const readHaColor = (name) => {
+  // `document.defaultView` statt des globalen `getComputedStyle`: den gibt es
+  // nicht in jeder Umgebung, und die Karte soll auch dort bauen.
+  const view = typeof document !== "undefined" ? document.defaultView : null;
+  if (!view || !document.body) return "";
+  const raw = view.getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  if (!raw) return "";
+
+  const probe = document.createElement("span");
+  probe.style.color = raw;
+  probe.style.display = "none";
+  document.body.append(probe);
+  const computed = view.getComputedStyle(probe).color;
+  probe.remove();
+
+  const parts = computed.match(/\d+(\.\d+)?/g);
+  return parts && parts.length >= 3 ? parts.slice(0, 3).map((n) => Math.round(Number(n))).join(", ") : "";
+};
+
 const hexToRgb = (hex) => {
   const value = String(hex).replace("#", "");
   return [0, 2, 4].map((start) => Number.parseInt(value.slice(start, start + 2), 16)).join(", ");
@@ -136,6 +172,7 @@ const glossLayer = (strength, light) => {
 export const normalizeTheme = (settings = {}) => ({
   mode: settings.mode === "light" ? "light" : "dark",
   accent: color(settings.accent, THEME_DEFAULTS.accent),
+  follow_ha: Boolean(settings.follow_ha),
   margin: clamp(settings.margin, 0, 60, THEME_DEFAULTS.margin),
   backgroundLight: imageUrl(settings.backgroundLight),
   backgroundDark: imageUrl(settings.backgroundDark),
@@ -274,6 +311,48 @@ const apply = (settings) => {
 
   const root = document.documentElement;
   root.dataset.haosTheme = t.mode;
+  /*
+   * Farben von Home Assistant.
+   *
+   * Wird ganz zum Schluss angewandt, damit es die eigenen Werte ueberschreibt
+   * und nicht umgekehrt. Was HA nicht liefert, bleibt beim eigenen Wert -
+   * ein Theme ohne `success-color` soll nicht dazu fuehren, dass die
+   * Ok-Meldungen farblos werden.
+   */
+  if (t.follow_ha) {
+    const uebernehmen = (ziel, quelle) => {
+      const rgb = readHaColor(quelle);
+      if (rgb) values[ziel] = `rgb(${rgb})`;
+      return rgb;
+    };
+
+    uebernehmen("--haos-accent", "--primary-color");
+    uebernehmen("--haos-status-on", "--primary-color");
+    uebernehmen("--haos-good", "--success-color");
+    uebernehmen("--haos-bad", "--error-color");
+    uebernehmen("--haos-status-unavailable", "--error-color");
+    uebernehmen("--haos-status-off", "--disabled-text-color");
+
+    const textRgb = readHaColor("--primary-text-color");
+    if (textRgb) {
+      values["--haos-text"] = `rgb(${textRgb})`;
+      // Die Abstufungen der Beschriftungen laufen ueber rgba(...) und
+      // brauchen die Zahlen einzeln, nicht die fertige Farbe.
+      values["--haos-text-rgb"] = textRgb;
+    }
+
+    // `lovelace-background` ist bei vielen Themes ein Farbverlauf, kein Bild.
+    // Als `background-image` funktioniert beides; eine reine Farbe fiele
+    // durch, deshalb bleibt der eigene Wert dann bestehen.
+    const view = typeof document !== "undefined" ? document.defaultView : null;
+    const haBackground = view
+      ? view.getComputedStyle(document.documentElement).getPropertyValue("--lovelace-background").trim()
+      : "";
+    if (haBackground && !(light ? t.backgroundLight : t.backgroundDark) && /url\(|gradient\(/i.test(haBackground)) {
+      values["--haos-background-image"] = haBackground;
+    }
+  }
+
   Object.entries(values).forEach(([key, value]) => root.style.setProperty(key, value));
   return t;
 };
@@ -290,6 +369,25 @@ const apply = (settings) => {
 let fallbacks = {};
 
 let active = apply(read());
+
+/**
+ * Home Assistant schreibt sein Theme als Stil-Attribut auf <html>. Wechselt
+ * der Anwender das Theme, aendert sich genau dieses Attribut – ein eigenes
+ * Ereignis gibt es dafuer nicht. Deshalb wird es beobachtet, solange die
+ * Uebernahme eingeschaltet ist.
+ */
+if (typeof MutationObserver === "function" && typeof document !== "undefined") {
+  let pending = false;
+  new MutationObserver(() => {
+    if (!active.follow_ha || pending) return;
+    pending = true;
+    setTimeout(() => {
+      pending = false;
+      active = apply(active);
+      window.dispatchEvent(new CustomEvent("haos-theme-changed", { detail: { ...active } }));
+    }, 60);
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+}
 
 export const HaOsTheme = {
   defaults: THEME_DEFAULTS,

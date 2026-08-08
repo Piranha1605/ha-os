@@ -1,10 +1,18 @@
-/* HA-OS 0.20.2 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.21.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
 var THEME_DEFAULTS = Object.freeze({
   mode: "dark",
   accent: "#0a84ff",
+  // Farben von Home Assistant uebernehmen.
+  //
+  // HA legt sein Theme als CSS-Variablen auf <html> ab. Ist das hier an,
+  // holt sich HA-OS Akzent, Text, Statusfarben und Hintergrund von dort -
+  // und folgt damit automatisch jedem Themewechsel, auf jedem Geraet.
+  // Glas (Unschaerfe, Deckkraft, Glanz, Rundung) bleibt in jedem Fall hier:
+  // dafuer kennt Home Assistant keine Entsprechung.
+  follow_ha: false,
   margin: 25,
   // Hintergrundbilder, getrennt fuer Hell und Dunkel. Leer = kein Bild.
   backgroundLight: "",
@@ -55,6 +63,20 @@ var imageUrl = (value) => {
   if (!text2) return "";
   return /^\/(local|api|media|hacsfiles)\//.test(text2) ? text2 : "";
 };
+var readHaColor = (name) => {
+  const view = typeof document !== "undefined" ? document.defaultView : null;
+  if (!view || !document.body) return "";
+  const raw = view.getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  if (!raw) return "";
+  const probe = document.createElement("span");
+  probe.style.color = raw;
+  probe.style.display = "none";
+  document.body.append(probe);
+  const computed = view.getComputedStyle(probe).color;
+  probe.remove();
+  const parts = computed.match(/\d+(\.\d+)?/g);
+  return parts && parts.length >= 3 ? parts.slice(0, 3).map((n) => Math.round(Number(n))).join(", ") : "";
+};
 var hexToRgb = (hex) => {
   const value = String(hex).replace("#", "");
   return [0, 2, 4].map((start) => Number.parseInt(value.slice(start, start + 2), 16)).join(", ");
@@ -81,6 +103,7 @@ var glossLayer = (strength, light) => {
 var normalizeTheme = (settings = {}) => ({
   mode: settings.mode === "light" ? "light" : "dark",
   accent: color(settings.accent, THEME_DEFAULTS.accent),
+  follow_ha: Boolean(settings.follow_ha),
   margin: clamp(settings.margin, 0, 60, THEME_DEFAULTS.margin),
   backgroundLight: imageUrl(settings.backgroundLight),
   backgroundDark: imageUrl(settings.backgroundDark),
@@ -184,11 +207,46 @@ var apply = (settings) => {
   };
   const root = document.documentElement;
   root.dataset.haosTheme = t.mode;
+  if (t.follow_ha) {
+    const uebernehmen = (ziel, quelle) => {
+      const rgb = readHaColor(quelle);
+      if (rgb) values[ziel] = `rgb(${rgb})`;
+      return rgb;
+    };
+    uebernehmen("--haos-accent", "--primary-color");
+    uebernehmen("--haos-status-on", "--primary-color");
+    uebernehmen("--haos-good", "--success-color");
+    uebernehmen("--haos-bad", "--error-color");
+    uebernehmen("--haos-status-unavailable", "--error-color");
+    uebernehmen("--haos-status-off", "--disabled-text-color");
+    const textRgb = readHaColor("--primary-text-color");
+    if (textRgb) {
+      values["--haos-text"] = `rgb(${textRgb})`;
+      values["--haos-text-rgb"] = textRgb;
+    }
+    const view = typeof document !== "undefined" ? document.defaultView : null;
+    const haBackground = view ? view.getComputedStyle(document.documentElement).getPropertyValue("--lovelace-background").trim() : "";
+    if (haBackground && !(light ? t.backgroundLight : t.backgroundDark) && /url\(|gradient\(/i.test(haBackground)) {
+      values["--haos-background-image"] = haBackground;
+    }
+  }
   Object.entries(values).forEach(([key, value]) => root.style.setProperty(key, value));
   return t;
 };
 var fallbacks = {};
 var active = apply(read());
+if (typeof MutationObserver === "function" && typeof document !== "undefined") {
+  let pending = false;
+  new MutationObserver(() => {
+    if (!active.follow_ha || pending) return;
+    pending = true;
+    setTimeout(() => {
+      pending = false;
+      active = apply(active);
+      window.dispatchEvent(new CustomEvent("haos-theme-changed", { detail: { ...active } }));
+    }, 60);
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+}
 var HaOsTheme = {
   defaults: THEME_DEFAULTS,
   /**
@@ -983,6 +1041,20 @@ var STYLES = `
     border: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .16); border-radius: 8px;
   }
   ${IMAGE_FIELD_CSS}
+  .control.dimmed { opacity: .45; }
+  .switch {
+    position: relative; width: 46px; height: 27px; flex: 0 0 46px; justify-self: end;
+    border-radius: 999px; cursor: pointer;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .18);
+    transition: background .18s ease;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 21px; height: 21px;
+    border-radius: 50%; background: #fff; transition: transform .18s ease;
+  }
+  .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+  .switch:has(input:checked) { background: var(--haos-accent, #0a84ff); }
+  .switch:has(input:checked)::after { transform: translateX(19px); }
   .control b { display: block; font-size: 12px; }
   .control small { display: block; margin-top: 3px; font-size: 9px; color: rgba(var(--haos-text-rgb, 255,255,255), .53); }
   .control output { text-align: right; font-size: 11px; font-weight: 750; color: rgba(var(--haos-text-rgb, 255,255,255), .82); }
@@ -1044,6 +1116,13 @@ var STYLES = `
   }
 `;
 var THEME_CONTROLS = [
+  {
+    group: "general",
+    key: "follow_ha",
+    label: "Farben von Home Assistant",
+    hint: "Akzent, Text, Statusfarben und Hintergrund folgen dem HA-Theme. Glas bleibt hier einstellbar.",
+    type: "switch"
+  },
   { group: "general", key: "accent", label: "Akzentfarbe", hint: "Aktive Elemente", type: "color" },
   { group: "general", key: "margin", label: "Außenabstand", hint: "Abstand um die Shell", min: 0, max: 60, step: 1, unit: "px" },
   // Gilt für alle Karten: sämtliche Beschriftungen und Werte leiten ihre
@@ -1729,6 +1808,7 @@ var HaOsShell = class extends HTMLElement {
     this._settingsInputs = /* @__PURE__ */ new Map();
     this._settingsPaths = /* @__PURE__ */ new Map();
     this._settingsImages = /* @__PURE__ */ new Map();
+    this._settingsSwitches = /* @__PURE__ */ new Map();
     Object.keys(GROUP_TITLES).forEach((groupId) => {
       const group = el("section", "group");
       const toggle = document.createElement("button");
@@ -1767,6 +1847,7 @@ var HaOsShell = class extends HTMLElement {
   }
   _buildThemeControl(control) {
     if (control.type === "image") return this._buildImageControl(control);
+    if (control.type === "switch") return this._buildSwitchControl(control);
     const label = document.createElement("label");
     label.className = control.type === "color" ? "control color" : "control";
     const text2 = el("span");
@@ -1795,6 +1876,31 @@ var HaOsShell = class extends HTMLElement {
       if (record?.swatch) record.swatch.style.setProperty("--swatch-color", value);
     });
     label.append(swatch || input);
+    return label;
+  }
+  /**
+   * Schalter in der Einstellungsseite.
+   *
+   * Bewusst ein eigenes Element und kein `ha-switch`: die Seite laeuft im
+   * Shadow-DOM der Karte, und ob HAs Elemente dort schon geladen sind, ist
+   * Zufall - dieselbe Falle wie bei der Bildauswahl.
+   */
+  _buildSwitchControl(control) {
+    const label = document.createElement("label");
+    label.className = "control";
+    const text2 = el("span");
+    text2.append(el("b", null, control.label), el("small", null, control.hint));
+    const track = el("span", "switch");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = Boolean(HaOsTheme.get()[control.key]);
+    track.append(input);
+    input.addEventListener("change", () => {
+      HaOsTheme.save({ [control.key]: input.checked });
+      this._syncSettingsValues();
+    });
+    label.append(text2, track);
+    this._settingsSwitches.set(control.key, input);
     return label;
   }
   /**
@@ -1843,6 +1949,26 @@ var HaOsShell = class extends HTMLElement {
       input.value = theme[key] || "";
     });
     this._settingsImages?.forEach(({ field }) => field.refresh());
+    this._settingsSwitches?.forEach((input, key) => {
+      input.checked = Boolean(theme[key]);
+    });
+    const uebernommen = Boolean(theme.follow_ha);
+    this._settingsInputs.forEach(({ input, control }) => {
+      if (control.type !== "color") return;
+      const haGesteuert = [
+        "accent",
+        "textLight",
+        "textDark",
+        "statusGoodLight",
+        "statusGoodDark",
+        "statusOffLight",
+        "statusOffDark",
+        "statusBadLight",
+        "statusBadDark"
+      ].includes(control.key);
+      const feld = input.closest(".control");
+      if (feld) feld.classList.toggle("dimmed", uebernommen && haGesteuert);
+    });
   }
 };
 if (!customElements.get(TAG)) customElements.define(TAG, HaOsShell);
@@ -7071,7 +7197,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.20.2";
+var VERSION = "0.21.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

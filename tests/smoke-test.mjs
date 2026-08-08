@@ -403,6 +403,30 @@ check("eigene Statusfarbe wirkt", cssVar("--haos-good") === "#00ff00", cssVar("-
 check("Inaktiv folgt mit", cssVar("--haos-status-off") === "#a8b0b8", cssVar("--haos-status-off"));
 window.HaOsTheme.save({ statusGoodDark: "#7ee0b0" });
 
+// Farben von Home Assistant uebernehmen. HA legt sein Theme als CSS-Variablen
+// auf <html>; wir lesen sie und ueberschreiben damit die eigenen Farben.
+// Glas bleibt in jedem Fall bei uns - dafuer gibt es in HA nichts.
+{
+  document.documentElement.style.setProperty("--primary-color", "#2f80ed");
+  document.documentElement.style.setProperty("--primary-text-color", "#ffffff");
+  document.documentElement.style.setProperty("--error-color", "#d32f2f");
+
+  window.HaOsTheme.save({ mode: "dark", follow_ha: false, accent: "#0a84ff" });
+  check("ohne Uebernahme gilt die eigene Farbe", cssVar("--haos-accent") === "#0a84ff", cssVar("--haos-accent"));
+
+  window.HaOsTheme.save({ follow_ha: true });
+  check("Akzent kommt von HA", cssVar("--haos-accent") === "rgb(47, 128, 237)", cssVar("--haos-accent"));
+  check("Fehlerfarbe kommt von HA", cssVar("--haos-bad") === "rgb(211, 47, 47)", cssVar("--haos-bad"));
+  check("Textabstufungen als Zahlen", cssVar("--haos-text-rgb") === "255, 255, 255", cssVar("--haos-text-rgb"));
+  check("Glas bleibt bei uns", cssVar("--haos-entity-blur") !== "", cssVar("--haos-entity-blur"));
+
+  window.HaOsTheme.save({ follow_ha: false });
+  check("Abschalten stellt die eigene Farbe wieder her", cssVar("--haos-accent") === "#0a84ff", cssVar("--haos-accent"));
+
+  const schalter = [...root.querySelectorAll(".control .switch input")];
+  check("Schalter in den Einstellungen", schalter.length >= 1, `${schalter.length}`);
+}
+
 const statusGruppe = [...root.querySelectorAll(".group h3")].map((n) => n.textContent);
 check("eigene Gruppe im Menue", statusGruppe.includes("Statusfarben"), statusGruppe.join(" | "));
 

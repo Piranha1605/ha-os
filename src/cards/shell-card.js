@@ -242,6 +242,20 @@ const STYLES = `
     border: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .16); border-radius: 8px;
   }
   ${IMAGE_FIELD_CSS}
+  .control.dimmed { opacity: .45; }
+  .switch {
+    position: relative; width: 46px; height: 27px; flex: 0 0 46px; justify-self: end;
+    border-radius: 999px; cursor: pointer;
+    background: rgba(var(--haos-text-rgb, 255,255,255), .18);
+    transition: background .18s ease;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 21px; height: 21px;
+    border-radius: 50%; background: #fff; transition: transform .18s ease;
+  }
+  .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+  .switch:has(input:checked) { background: var(--haos-accent, #0a84ff); }
+  .switch:has(input:checked)::after { transform: translateX(19px); }
   .control b { display: block; font-size: 12px; }
   .control small { display: block; margin-top: 3px; font-size: 9px; color: rgba(var(--haos-text-rgb, 255,255,255), .53); }
   .control output { text-align: right; font-size: 11px; font-weight: 750; color: rgba(var(--haos-text-rgb, 255,255,255), .82); }
@@ -304,6 +318,13 @@ const STYLES = `
 `;
 
 const THEME_CONTROLS = [
+  {
+    group: "general",
+    key: "follow_ha",
+    label: "Farben von Home Assistant",
+    hint: "Akzent, Text, Statusfarben und Hintergrund folgen dem HA-Theme. Glas bleibt hier einstellbar.",
+    type: "switch",
+  },
   { group: "general", key: "accent", label: "Akzentfarbe", hint: "Aktive Elemente", type: "color" },
   { group: "general", key: "margin", label: "Außenabstand", hint: "Abstand um die Shell", min: 0, max: 60, step: 1, unit: "px" },
   // Gilt für alle Karten: sämtliche Beschriftungen und Werte leiten ihre
@@ -1166,6 +1187,7 @@ class HaOsShell extends HTMLElement {
     this._settingsInputs = new Map();
     this._settingsPaths = new Map();
     this._settingsImages = new Map();
+    this._settingsSwitches = new Map();
 
     // Aus GROUP_TITLES ableiten statt fest verdrahtet – eine neue Gruppe in
     // THEME_CONTROLS erschien sonst nirgends, ohne dass es auffiel.
@@ -1214,6 +1236,7 @@ class HaOsShell extends HTMLElement {
 
   _buildThemeControl(control) {
     if (control.type === "image") return this._buildImageControl(control);
+    if (control.type === "switch") return this._buildSwitchControl(control);
 
     const label = document.createElement("label");
     label.className = control.type === "color" ? "control color" : "control";
@@ -1248,6 +1271,38 @@ class HaOsShell extends HTMLElement {
     });
 
     label.append(swatch || input);
+    return label;
+  }
+
+  /**
+   * Schalter in der Einstellungsseite.
+   *
+   * Bewusst ein eigenes Element und kein `ha-switch`: die Seite laeuft im
+   * Shadow-DOM der Karte, und ob HAs Elemente dort schon geladen sind, ist
+   * Zufall - dieselbe Falle wie bei der Bildauswahl.
+   */
+  _buildSwitchControl(control) {
+    const label = document.createElement("label");
+    label.className = "control";
+
+    const text = el("span");
+    text.append(el("b", null, control.label), el("small", null, control.hint));
+
+    const track = el("span", "switch");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = Boolean(HaOsTheme.get()[control.key]);
+    track.append(input);
+
+    input.addEventListener("change", () => {
+      HaOsTheme.save({ [control.key]: input.checked });
+      // Die Farbwaehler zeigen weiter ihre eigenen Werte – sie gelten wieder,
+      // sobald die Uebernahme ausgeschaltet wird. Deshalb nur ausgrauen.
+      this._syncSettingsValues();
+    });
+
+    label.append(text, track);
+    this._settingsSwitches.set(control.key, input);
     return label;
   }
 
@@ -1304,6 +1359,21 @@ class HaOsShell extends HTMLElement {
     // Zeichnet Vorschau und Pfadfeld aus dem echten Theme-Stand nach – wichtig
     // nach „Zurücksetzen" und wenn das Theme eine Adresse verworfen hat.
     this._settingsImages?.forEach(({ field }) => field.refresh());
+    this._settingsSwitches?.forEach((input, key) => {
+      input.checked = Boolean(theme[key]);
+    });
+
+    // Was Home Assistant steuert, laesst sich hier nicht mehr sinnvoll
+    // einstellen – ausgrauen statt verstecken, damit erkennbar bleibt, dass
+    // es die Regler weiterhin gibt.
+    const uebernommen = Boolean(theme.follow_ha);
+    this._settingsInputs.forEach(({ input, control }) => {
+      if (control.type !== "color") return;
+      const haGesteuert = ["accent", "textLight", "textDark", "statusGoodLight", "statusGoodDark",
+        "statusOffLight", "statusOffDark", "statusBadLight", "statusBadDark"].includes(control.key);
+      const feld = input.closest(".control");
+      if (feld) feld.classList.toggle("dimmed", uebernommen && haGesteuert);
+    });
   }
 }
 
