@@ -1,4 +1,4 @@
-/* HA-OS 0.12.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.12.2 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -5487,7 +5487,7 @@ var HaOsVehicleEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG7)) customElements.define(EDITOR_TAG7, HaOsVehicleEditor);
 
 // src/ha-os.js
-var VERSION = "0.12.1";
+var VERSION = "0.12.2";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

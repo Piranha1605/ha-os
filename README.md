@@ -1,5 +1,3 @@
-<div align="center">
-
 # HA-OS
 
 **Ein Dashboard für Home Assistant, das aussieht wie ein Betriebssystem.**
@@ -7,13 +5,11 @@
 Eine durchgehende Glasfläche mit Seitenleiste, Kopfzeile und frei gewichteten
 Rastern — in die jede installierte Lovelace-Karte passt.
 
+![HA-OS Dashboard mit Seitenleiste, Medienkarte, Uhr, Wetter, Kalender und Thermostat](https://raw.githubusercontent.com/Piranha1605/ha-os/main/docs/bilder/dashboard.png)
+
 [![Release](https://img.shields.io/github/v/release/Piranha1605/ha-os?style=flat-square&color=0a84ff)](https://github.com/Piranha1605/ha-os/releases)
 [![HACS](https://img.shields.io/badge/HACS-Dashboard-41BDF5?style=flat-square)](https://hacs.xyz)
 [![Lizenz](https://img.shields.io/badge/Lizenz-MIT-black?style=flat-square)](https://github.com/Piranha1605/ha-os/blob/main/LICENSE)
-
-<img src="https://raw.githubusercontent.com/Piranha1605/ha-os/main/docs/bilder/dashboard.png" alt="HA-OS Dashboard mit Seitenleiste, Medienkarte, Uhr, Wetter, Kalender und Thermostat" width="100%">
-
-</div>
 
 ---
 
