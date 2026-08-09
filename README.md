@@ -150,6 +150,17 @@ Für flache Fremdkarten wie Mushroom sind Werte um 0,4 richtig.
 | [docs/gestaltung.md](https://github.com/Piranha1605/ha-os/blob/main/docs/gestaltung.md) | Woraus die Glasoptik besteht, Hintergrundbild |
 | [docs/architektur.md](https://github.com/Piranha1605/ha-os/blob/main/docs/architektur.md) | Warum gebündelt wird, was gegenüber dem Vorgänger anders läuft, Aufbau des Quelltextes |
 
+## Blueprint: Ton beim Ablaufen eines Timers
+
+Die Uhrkarte kann einen Kurzzeitwecker stellen und beim Ablaufen selbst einen
+Ton abspielen — aber nur auf dem Gerät, das gerade hinsieht. Für eine Ansage
+über einen Lautsprecher gibt es einen Blueprint dazu:
+
+[![Blueprint importieren](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FPiranha1605%2Fha-os%2Fblob%2Fmain%2Fblueprints%2Ftimer-ton.yaml)
+
+Timer, Lautsprecher, Tondatei, Lautstärke und Wiederholungen sind darin
+auswählbar. Quelle: [`blueprints/timer-ton.yaml`](https://github.com/Piranha1605/ha-os/blob/main/blueprints/timer-ton.yaml)
+
 ## Entwickeln
 
 ```sh

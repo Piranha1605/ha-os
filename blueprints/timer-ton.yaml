@@ -1,0 +1,121 @@
+blueprint:
+  name: HA-OS · Ton beim Ablaufen eines Timers
+  description: >-
+    Spielt eine Tondatei über einen Lautsprecher, sobald ein Timer abläuft.
+
+
+    Gedacht als Ergänzung zum Kurzzeitwecker der HA-OS-Uhrkarte. Die Karte
+    kann selbst einen Ton abspielen, aber nur auf dem Gerät, das gerade
+    hinsieht — ist das Tablet aus, hört niemand etwas. Diese Automation läuft
+    im Server und ist deshalb der verlässliche Weg.
+
+
+    Die Tondatei gehört nach `config/www/` und wird dann als `/local/datei.mp3`
+    eingetragen.
+  domain: automation
+  source_url: https://github.com/Piranha1605/ha-os/blob/main/blueprints/timer-ton.yaml
+  input:
+    timer_entity:
+      name: Timer
+      description: Der Timer-Helfer, auf den gehört wird.
+      selector:
+        entity:
+          filter:
+            domain: timer
+
+    lautsprecher:
+      name: Ausgabegerät
+      description: Wo der Ton zu hören sein soll.
+      selector:
+        entity:
+          filter:
+            domain: media_player
+
+    tondatei:
+      name: Tondatei
+      description: >-
+        Pfad innerhalb dieser Installation, etwa /local/gong.mp3. Dateien
+        unter config/www/ sind über /local/ erreichbar.
+      default: /local/gong.mp3
+      selector:
+        text:
+
+    lautstaerke:
+      name: Lautstärke
+      description: >-
+        Wird vor dem Abspielen gesetzt. Auf 0 lassen, um die eingestellte
+        Lautstärke des Geräts nicht anzutasten — praktisch bei Lautsprechern,
+        die abends leiser stehen.
+      default: 60
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 5
+          unit_of_measurement: "%"
+
+    wiederholungen:
+      name: Wiederholungen
+      description: Wie oft der Ton abgespielt wird.
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 5
+          step: 1
+
+    pause:
+      name: Pause zwischen den Wiederholungen
+      description: Nur wirksam ab zwei Wiederholungen.
+      default: 3
+      selector:
+        number:
+          min: 1
+          max: 30
+          step: 1
+          unit_of_measurement: s
+
+# Ein zweiter Ablauf waehrend des ersten waere nur Laerm.
+mode: single
+
+triggers:
+  # `timer.finished` feuert genau einmal beim regulaeren Ablauf. Ein
+  # abgebrochener Timer loest es NICHT aus - genau richtig, sonst gaebe es
+  # beim Abbrechen ebenfalls einen Gong.
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: !input timer_entity
+
+actions:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ lautstaerke | int(0) > 0 }}"
+        sequence:
+          - action: media_player.volume_set
+            target:
+              entity_id: !input lautsprecher
+            data:
+              volume_level: "{{ (lautstaerke | int(60)) / 100 }}"
+
+  - repeat:
+      count: !input wiederholungen
+      sequence:
+        - action: media_player.play_media
+          target:
+            entity_id: !input lautsprecher
+          data:
+            media_content_id: !input tondatei
+            media_content_type: music
+        # Die Pause nach dem letzten Durchgang waere vergeudet, deshalb nur
+        # zwischen den Wiederholungen.
+        - if:
+            - condition: template
+              value_template: "{{ repeat.index < repeat.iterations }}"
+          then:
+            - delay:
+                seconds: !input pause
+
+variables:
+  lautstaerke: !input lautstaerke
