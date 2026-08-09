@@ -565,9 +565,23 @@ console.log("\n13. Kurzzeitwecker in der Uhr");
   // Laeuft er, steht die Restzeit in der Karte und Abbrechen ist moeglich.
   const laeuft = bauen({ timer_entity: "timer.kueche" },
     zustand("timer.kueche", "active", { finishes_at: new Date(Date.now() + 12 * 60000).toISOString() }));
-  check("Restzeit steht in der Karte",
-    laeuft.shadowRoot.querySelector(".clock-timer").textContent.includes("12"),
+  // Sekundengenau, und die Karte zaehlt selbst herunter: Home Assistant
+  // meldet beim Timer nur Start und Ende.
+  check("Restzeit sekundengenau",
+    /^Wecker 1[12]:\d\d$/.test(laeuft.shadowRoot.querySelector(".clock-timer").textContent),
     laeuft.shadowRoot.querySelector(".clock-timer").textContent);
+
+  const gleich = bauen({ timer_entity: "timer.kueche" },
+    zustand("timer.kueche", "active", { finishes_at: new Date(Date.now() + 40000).toISOString() }));
+  check("letzte Minute faellt auf",
+    gleich.shadowRoot.querySelector(".clock-timer").classList.contains("is-soon"),
+    gleich.shadowRoot.querySelector(".clock-timer").textContent);
+
+  const angehalten = bauen({ timer_entity: "timer.kueche" },
+    zustand("timer.kueche", "paused", { remaining: "0:07:30" }));
+  check("angehalten zeigt den Rest",
+    angehalten.shadowRoot.querySelector(".clock-timer").textContent === "Wecker angehalten · 7:30",
+    angehalten.shadowRoot.querySelector(".clock-timer").textContent);
   calls.length = 0;
   laeuft.shadowRoot.querySelector(".clock-timer-btn").click();
   laeuft.shadowRoot.querySelector(".sheet-btn.danger").click();

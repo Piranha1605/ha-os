@@ -305,7 +305,10 @@ const STYLES = `
   .clock-time { font-size: 44px; font-weight: 300; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
   .clock-date { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .55); }
   .clock { position: relative; }
-  .clock-timer { margin-top: 6px; font-size: 12px; color: var(--haos-accent, #0a84ff); }
+  .clock-timer { margin-top: 6px; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--haos-accent, #0a84ff); }
+  /* Die letzte Minute faellt auf – ohne zu blinken, das nervt auf einem
+     Geraet, das den ganzen Tag an der Wand haengt. */
+  .clock-timer.is-soon { color: var(--haos-bad, #ff6b6b); }
   .clock-timer[hidden] { display: none; }
   .clock-timer-btn {
     position: absolute; top: -4px; right: -4px;
@@ -2141,6 +2144,8 @@ const renderers = {
           ctx.nodes.time.textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
           ctx.nodes.date.textContent = "";
         }
+
+        renderers.clock._paintRemaining(ctx);
       };
 
       renderers.clock.reconnect(ctx);
@@ -2173,13 +2178,69 @@ const renderers = {
       }
     },
 
-    /** Restminuten des laufenden Weckers, aufgerundet. */
+    /** Restminuten des laufenden Weckers, aufgerundet – fuer den Drehregler. */
     _remaining(ctx) {
+      return Math.ceil(renderers.clock._remainingSeconds(ctx) / 60);
+    },
+
+    /**
+     * Restsekunden.
+     *
+     * Home Assistant meldet beim Timer nur Start und Ende, nicht jede
+     * Sekunde. Der Rest wird deshalb aus `finishes_at` gegen die aktuelle
+     * Zeit gerechnet und vom Takt der Uhr fortgeschrieben – sonst stuende
+     * die Zahl still, bis irgendwann eine andere Meldung eintrifft.
+     *
+     * Im angehaltenen Zustand gibt es kein `finishes_at`; dort steht die
+     * verbleibende Dauer im Attribut `remaining` als "H:MM:SS".
+     */
+    _remainingSeconds(ctx) {
       const state = ctx.hass?.states?.[ctx.config.timer_entity];
-      if (!state || state.state !== "active") return 0;
+      if (!state) return 0;
+
+      if (state.state === "paused") {
+        const teile = String(state.attributes?.remaining || "").split(":").map(Number);
+        if (teile.length === 3 && teile.every(Number.isFinite)) {
+          return teile[0] * 3600 + teile[1] * 60 + teile[2];
+        }
+        return 0;
+      }
+
+      if (state.state !== "active") return 0;
       const ende = Date.parse(state.attributes?.finishes_at || "");
       if (!Number.isFinite(ende)) return 0;
-      return Math.max(0, Math.ceil((ende - Date.now()) / 60000));
+      return Math.max(0, Math.round((ende - Date.now()) / 1000));
+    },
+
+    /** "12:34" – bei ueber einer Stunde mit Stundenanteil. */
+    _formatRemaining(sekunden) {
+      const gesamt = Math.max(0, Math.round(sekunden));
+      const std = Math.floor(gesamt / 3600);
+      const min = Math.floor((gesamt % 3600) / 60);
+      const sek = gesamt % 60;
+      return std
+        ? `${std}:${String(min).padStart(2, "0")}:${String(sek).padStart(2, "0")}`
+        : `${min}:${String(sek).padStart(2, "0")}`;
+    },
+
+    /** Schreibt die Restzeit in die Karte. Laeuft im Takt der Uhr mit. */
+    _paintRemaining(ctx) {
+      if (!ctx.nodes.timerLine) return;
+      const state = ctx.config.timer_entity ? ctx.hass?.states?.[ctx.config.timer_entity] : null;
+
+      if (state?.state === "active") {
+        ctx.nodes.timerLine.textContent = `Wecker ${renderers.clock._formatRemaining(
+          renderers.clock._remainingSeconds(ctx)
+        )}`;
+      } else if (state?.state === "paused") {
+        ctx.nodes.timerLine.textContent = `Wecker angehalten · ${renderers.clock._formatRemaining(
+          renderers.clock._remainingSeconds(ctx)
+        )}`;
+      } else {
+        ctx.nodes.timerLine.textContent = "";
+      }
+      ctx.nodes.timerLine.hidden = !ctx.nodes.timerLine.textContent;
+      ctx.nodes.timerLine.classList.toggle("is-soon", renderers.clock._remainingSeconds(ctx) <= 60 && state?.state === "active");
     },
 
     /** Zeichnet den Ring und die Zahl im Fenster. */
@@ -2205,25 +2266,20 @@ const renderers = {
       ctx.nodes.timerCancel.hidden = !laeuft;
       ctx.nodes.timerButton.classList.toggle("is-active", laeuft);
 
-      if (laeuft) {
-        const rest = renderers.clock._remaining(ctx);
-        ctx.nodes.timerLine.textContent = `Wecker in ${rest} ${rest === 1 ? "Minute" : "Minuten"}`;
-      } else if (timer?.state === "paused") {
-        ctx.nodes.timerLine.textContent = "Wecker angehalten";
-      } else {
-        ctx.nodes.timerLine.textContent = "";
-      }
-      ctx.nodes.timerLine.hidden = !ctx.nodes.timerLine.textContent;
+      renderers.clock._paintRemaining(ctx);
 
       // Die Anzeige läuft über den eigenen Timer. Hier wird nur geprüft, ob
       // die Taktrate wegen der Sekundenanzeige angepasst werden muss.
-      const wanted = ctx.config.show_seconds ? 1000 : 15000;
+      // Laeuft ein Wecker, muss die Uhr im Sekundentakt schlagen – sonst
+      // springt die Restzeit in Fuenfzehnersaetzen.
+      const wanted = ctx.config.show_seconds || laeuft ? 1000 : 15000;
       if (ctx.nodes.interval !== wanted) renderers.clock.reconnect(ctx);
     },
     reconnect(ctx) {
       if (!ctx.nodes.tick) return;
       clearInterval(ctx.nodes.timer);
-      ctx.nodes.interval = ctx.config.show_seconds ? 1000 : 15000;
+      ctx.nodes.interval =
+        ctx.config.show_seconds || ctx.hass?.states?.[ctx.config.timer_entity]?.state === "active" ? 1000 : 15000;
       ctx.nodes.tick();
       ctx.nodes.timer = setInterval(ctx.nodes.tick, ctx.nodes.interval);
     },
