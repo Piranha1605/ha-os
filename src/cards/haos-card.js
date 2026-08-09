@@ -363,6 +363,26 @@ const STYLES = `
   .sheet-btn.danger { color: var(--haos-bad, #ff6b6b); }
   .sheet-btn[hidden] { display: none; }
 
+  /* --- Trenner ---
+     Bewusst ohne Glas: ein Trenner soll gliedern, nicht wie eine weitere
+     Karte aussehen. Die Klasse plain nimmt der Flaeche Rahmen, Fuellung
+     und Schatten.
+
+     Diese Regeln waren beim Umbau des Weckerfensters versehentlich
+     mitgeloescht worden - dadurch bekamen alle Trenner ploetzlich einen
+     Rahmen. Die Pruefung dazu sah nur die Klasse am Element, nicht ob es
+     die Regel noch gibt; genau das prueft sie jetzt auch. */
+  .card.plain {
+    border: 0; background: none; box-shadow: none; padding: 0 4px;
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+  }
+  .sep { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .sep-text { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; font-size: 13px; color: rgba(var(--haos-text-rgb, 255,255,255), .72); }
+  .sep-text[hidden] { display: none; }
+  .sep-text ha-icon { --mdc-icon-size: 17px; }
+  .sep-line { flex: 1; height: 1px; min-width: 12px; background: rgba(var(--haos-text-rgb, 255,255,255), .18); }
+  .sep-line[hidden] { display: none; }
+
   .error { display: grid; place-content: center; height: 100%; text-align: center; gap: 6px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
 `;
 

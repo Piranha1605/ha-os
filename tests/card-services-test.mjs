@@ -233,6 +233,16 @@ console.log("\n6. Trenner");
   check("Symbol erscheint", !wurzel.querySelector(".sep-text ha-icon").hidden);
   // Ein Trenner soll gliedern, nicht wie eine weitere Karte aussehen.
   check("keine Glasflaeche", wurzel.querySelector(".card").classList.contains("plain"));
+  // Die Klasse allein genuegt nicht: die Regel dazu muss es auch geben. Sie
+  // war einmal beim Umbau eines anderen Bereichs mitgeloescht worden, und
+  // alle Trenner bekamen dadurch einen Rahmen.
+  {
+    const stil = mitText.shadowRoot.querySelector("style").textContent;
+    const plainCss = stil.slice(stil.indexOf(".card.plain"), stil.indexOf("}", stil.indexOf(".card.plain")));
+    check("Regel fuer plain ist vorhanden", plainCss.includes("border: 0") && plainCss.includes("background: none"),
+      plainCss.trim().slice(0, 70) || "(fehlt)");
+    check("Trennlinie hat einen Stil", stil.includes(".sep-line {"));
+  }
   check("Linie rechts vom Text", !wurzel.querySelectorAll(".sep-line")[1].hidden);
 
   const ohneLinie = bauen({ name: "Nur Text", show_line: false });
