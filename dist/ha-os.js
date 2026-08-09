@@ -1,4 +1,4 @@
-/* HA-OS 0.26.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.27.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -158,6 +158,16 @@ var apply = (settings) => {
     "--haos-text": light ? t.textLight : t.textDark,
     "--haos-text-rgb": hexToRgb(light ? t.textLight : t.textDark),
     "--haos-text-inverse": light ? t.textDark : t.textLight,
+    /*
+     * Abdeckung fuer Fenster ueber einer Karte.
+     *
+     * Bewusst GEGENLAEUFIG zur Schrift: im dunklen Modus dunkel, im hellen
+     * hell. Die Kartenfarbe taugt dafuer nicht - sie ist in beiden Modi
+     * weiss, und ein weisser Schleier vor weisser Schrift laesst diese
+     * lesbar. Genau daran ist die erste Fassung des Weckerfensters
+     * gescheitert.
+     */
+    "--haos-scrim": light ? "rgba(244, 246, 249, .93)" : "rgba(14, 18, 24, .90)",
     "--haos-font-family": "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif",
     "--haos-font-weight-normal": "450",
     "--haos-font-weight-semibold": "650",
@@ -3354,75 +3364,38 @@ var STYLES3 = `
   .clock-timer-btn.is-active { color: var(--haos-accent, #0a84ff); }
   .clock-timer-btn ha-icon { --mdc-icon-size: 17px; }
 
-  /* Fenster ueber der Karte. Innerhalb, nicht am Fenster: die Karte ist durch
-     ihren backdrop-filter selbst der Bezugsrahmen fuer fixe Kinder. */
-  /* Fenster ueber der Karte.
-     Nebeneinander statt untereinander: die Uhr ist breit und flach, ein
-     Drehregler mit Knoepfen darunter passt dort nicht hinein. Und deutlich
-     deckender als eine Glasflaeche - sonst liest man die Uhrzeit durch den
-     Regler hindurch. */
+  /* Echtes Fenster: <dialog> mit showModal(). Es liegt in der Top Layer des
+     Browsers, also ueber allem - unabhaengig davon, was die Karte an
+     overflow, Stapelkontexten oder backdrop-filter mitbringt. */
   .sheet {
-    position: absolute; inset: 0; z-index: 5; border-radius: inherit;
-    display: flex; flex-direction: row; align-items: center; justify-content: center;
-    gap: 12px; padding: 8px;
-    background: rgba(var(--haos-entity-surface-rgb, 255,255,255), calc(var(--haos-entity-opacity, .10) + .55));
-    backdrop-filter: blur(26px) saturate(180%);
-    -webkit-backdrop-filter: blur(26px) saturate(180%);
+    border: 0; padding: 0; max-width: min(320px, 92vw); width: max-content;
+    border-radius: var(--haos-entity-radius, 20px);
+    color: var(--haos-text, #fff);
+    background: var(--haos-scrim, rgba(14, 18, 24, .92));
+    box-shadow: 0 24px 60px rgba(0, 0, 0, .38);
+    overflow: visible;
   }
-  .sheet[hidden] { display: none; }
+  .sheet::backdrop {
+    background: rgba(0, 0, 0, .45);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+  .sheet-inner { display: flex; align-items: center; gap: 14px; padding: 14px 16px; }
   .timer-dial {
-    flex: 0 1 auto; width: auto; height: 100%; max-height: 108px; aspect-ratio: 1;
+    flex: 0 0 auto; width: 122px; aspect-ratio: 1;
     cursor: pointer; touch-action: none;
   }
-  .timer-dial .dial-temp { font-size: 24px; font-weight: 650; }
-  .timer-dial .dial-label { font-size: 9px; }
-  .sheet-actions { display: flex; flex-direction: column; gap: 5px; }
+  .timer-dial .dial-temp { font-size: 26px; font-weight: 650; }
+  .timer-dial .dial-label { font-size: 10px; }
+  .sheet-actions { display: flex; flex-direction: column; gap: 6px; }
   .sheet-btn {
-    padding: 6px 11px; border-radius: 9px; font-size: 11px; cursor: pointer; white-space: nowrap;
+    padding: 7px 12px; border-radius: 10px; font-size: 12px; cursor: pointer; white-space: nowrap;
     color: var(--haos-text, #fff);
     ${CONTROL_SURFACE_CSS}
-  }
-  /* Sehr schmale Karten: dann doch untereinander, sonst wird der Regler
-     unbedienbar klein. */
-  @media (max-width: 260px) {
-    .sheet { flex-direction: column; gap: 6px; }
-    .sheet-actions { flex-direction: row; }
   }
   .sheet-btn.primary { color: var(--haos-accent, #0a84ff); }
   .sheet-btn.danger { color: var(--haos-bad, #ff6b6b); }
   .sheet-btn[hidden] { display: none; }
-
-  /* --- Kamera ---
-     Das Bild füllt die Karte randlos. Die 16 px Polsterung der Karte werden
-     über negative Ränder zurückgenommen, damit die Glaskante sauber bleibt. */
-  .camera { position: relative; flex: 1; min-height: 0; margin: -16px; border-radius: inherit; overflow: hidden; background: rgba(0, 0, 0, .35); }
-  .camera-image { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .camera-image[hidden] { display: none; }
-  .camera-label {
-    position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 14px 10px;
-    display: flex; align-items: center; gap: 7px; font-size: 13px;
-    background: linear-gradient(to top, rgba(0, 0, 0, .55), transparent);
-    pointer-events: none;
-  }
-  .camera-label[hidden] { display: none; }
-  .camera-live { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #ff453a; }
-  .camera-note { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 6px; padding: 12px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
-  .camera-note[hidden] { display: none; }
-
-  /* --- Trenner ---
-     Bewusst ohne Glas: ein Trenner soll gliedern, nicht wie eine weitere
-     Karte aussehen. Die Klasse plain nimmt der Flaeche Rahmen, Fuellung
-     und Schatten. */
-  .card.plain {
-    border: 0; background: none; box-shadow: none; padding: 0 4px;
-    backdrop-filter: none; -webkit-backdrop-filter: none;
-  }
-  .sep { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
-  .sep-text { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; font-size: 13px; color: rgba(var(--haos-text-rgb, 255,255,255), .72); }
-  .sep-text[hidden] { display: none; }
-  .sep-text ha-icon { --mdc-icon-size: 17px; }
-  .sep-line { flex: 1; height: 1px; min-width: 12px; background: rgba(var(--haos-text-rgb, 255,255,255), .18); }
-  .sep-line[hidden] { display: none; }
 
   .error { display: grid; place-content: center; height: 100%; text-align: center; gap: 6px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
 `;
@@ -4637,11 +4610,12 @@ var renderers = {
       ctx.nodes.timerButton.addEventListener("click", (event) => {
         event.stopPropagation();
         ctx.nodes.minutes = renderers.clock._remaining(ctx) || 5;
-        ctx.nodes.sheet.hidden = false;
+        renderers.clock._openSheet(ctx);
         renderers.clock._paintDial(ctx);
       });
       root.append(ctx.nodes.timerButton);
-      const sheet = el3("div", "sheet");
+      const sheet = document.createElement("dialog");
+      sheet.className = "sheet";
       const dial = el3("div", "dial timer-dial");
       const SVG = "http://www.w3.org/2000/svg";
       const svg = document.createElementNS(SVG, "svg");
@@ -4705,7 +4679,7 @@ var renderers = {
       knoepfe.append(ctx.nodes.timerCancel, abbrechen, ctx.nodes.timerStart);
       abbrechen.addEventListener("click", (event) => {
         event.stopPropagation();
-        sheet.hidden = true;
+        renderers.clock._closeSheet(ctx);
       });
       ctx.nodes.timerStart.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -4716,15 +4690,19 @@ var renderers = {
           entity_id: ziel,
           duration: `00:${String(minuten).padStart(2, "0")}:00`
         });
-        sheet.hidden = true;
+        renderers.clock._closeSheet(ctx);
       });
       ctx.nodes.timerCancel.addEventListener("click", (event) => {
         event.stopPropagation();
         if (ctx.config.timer_entity) ctx.hass?.callService("timer", "cancel", { entity_id: ctx.config.timer_entity });
-        sheet.hidden = true;
+        renderers.clock._closeSheet(ctx);
       });
-      sheet.append(dial, knoepfe);
-      sheet.hidden = true;
+      const inhalt = el3("div", "sheet-inner");
+      inhalt.append(dial, knoepfe);
+      sheet.append(inhalt);
+      sheet.addEventListener("click", (event) => {
+        if (event.target === sheet) renderers.clock._closeSheet(ctx);
+      });
       ctx.nodes.sheet = sheet;
       root.append(sheet);
       ctx.nodes.tick = () => {
@@ -4752,6 +4730,31 @@ var renderers = {
       renderers.clock.reconnect(ctx);
       return root;
     },
+    /**
+     * Oeffnen und Schliessen.
+     *
+     * `showModal` gibt es nicht ueberall - in der Testumgebung etwa nicht.
+     * Dann wird das `open`-Attribut gesetzt; der Dialog erscheint dadurch
+     * ohne Top Layer, aber er erscheint.
+     */
+    _openSheet(ctx) {
+      const sheet = ctx.nodes.sheet;
+      if (sheet.open) return;
+      try {
+        sheet.showModal();
+      } catch (_error) {
+        sheet.open = true;
+      }
+    },
+    _closeSheet(ctx) {
+      const sheet = ctx.nodes.sheet;
+      if (!sheet.open) return;
+      try {
+        sheet.close();
+      } catch (_error) {
+        sheet.open = false;
+      }
+    },
     /** Restminuten des laufenden Weckers, aufgerundet. */
     _remaining(ctx) {
       const state = ctx.hass?.states?.[ctx.config.timer_entity];
@@ -4774,7 +4777,7 @@ var renderers = {
     update(ctx) {
       const timer = ctx.config.timer_entity ? ctx.hass?.states?.[ctx.config.timer_entity] : null;
       ctx.nodes.timerButton.hidden = !ctx.config.timer_entity;
-      if (!ctx.config.timer_entity) ctx.nodes.sheet.hidden = true;
+      if (!ctx.config.timer_entity) renderers.clock._closeSheet(ctx);
       const laeuft = timer?.state === "active";
       ctx.nodes.timerCancel.hidden = !laeuft;
       ctx.nodes.timerButton.classList.toggle("is-active", laeuft);
@@ -7637,7 +7640,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.26.1";
+var VERSION = "0.27.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

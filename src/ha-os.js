@@ -28,7 +28,7 @@
  * sind verschieden.
  */
 
-export const VERSION = "0.26.1";
+export const VERSION = "0.27.0";
 
 import "./shared/theme.js";
 import "./cards/shell-card.js";

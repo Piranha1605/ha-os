@@ -531,7 +531,7 @@ console.log("\n13. Kurzzeitwecker in der Uhr");
     zustand("timer.kueche", "idle", { duration: "0:00:00" }));
   const sr4 = mit.shadowRoot;
   check("Symbol erscheint", !sr4.querySelector(".clock-timer-btn").hidden);
-  check("Fenster ist zu", sr4.querySelector(".sheet").hidden);
+  check("Fenster ist zu", !sr4.querySelector(".sheet").open);
 
   sr4.querySelector(".clock-timer-btn").click();
   check("Symbol oeffnet das Fenster", !sr4.querySelector(".sheet").hidden);
@@ -560,7 +560,7 @@ console.log("\n13. Kurzzeitwecker in der Uhr");
   check("Starten schickt die Dauer",
     calls[0]?.dienst === "timer.start" && calls[0]?.daten?.duration === "00:50:00",
     JSON.stringify(calls[0] || {}));
-  check("Fenster schliesst nach dem Start", sr4.querySelector(".sheet").hidden);
+  check("Fenster schliesst nach dem Start", !sr4.querySelector(".sheet").open);
 
   // Laeuft er, steht die Restzeit in der Karte und Abbrechen ist moeglich.
   const laeuft = bauen({ timer_entity: "timer.kueche" },
@@ -573,14 +573,19 @@ console.log("\n13. Kurzzeitwecker in der Uhr");
   laeuft.shadowRoot.querySelector(".sheet-btn.danger").click();
   check("Abbrechen stoppt den Wecker", calls[0]?.dienst === "timer.cancel", JSON.stringify(calls[0] || {}));
 
-  // Das Fenster deckt die Karte ab: die Uhrzeit soll nicht durch den
-  // Drehregler hindurchscheinen, und es darf nicht ueber die Karte
-  // hinausragen.
+  // Ein echtes Fenster: <dialog> in der Top Layer, nicht eine Schicht in der
+  // Karte. Nur so entkommt es overflow, Stapelkontext und backdrop-filter.
+  check("ist ein echtes Dialogfenster", sr4.querySelector(".sheet")?.tagName === "DIALOG",
+    sr4.querySelector(".sheet")?.tagName);
   const stil = mit.shadowRoot.querySelector("style").textContent;
   const sheetCss = stil.slice(stil.indexOf("  .sheet {"), stil.indexOf("}", stil.indexOf("  .sheet {")));
-  check("Fenster bleibt in der Karte", sheetCss.includes("inset: 0"), sheetCss.trim().slice(0, 60));
-  check("Fenster ist deckend", sheetCss.includes("+ .55"), sheetCss.trim().slice(0, 90));
-  check("Regler und Knoepfe nebeneinander", sheetCss.includes("flex-direction: row"));
+  check("Fenster ist deckend", sheetCss.includes("--haos-scrim"), sheetCss.trim().slice(0, 90));
+  check("eigener Hintergrund ueber der Seite", stil.includes(".sheet::backdrop"));
+
+  // Klick daneben schliesst.
+  sr4.querySelector(".clock-timer-btn").click();
+  sr4.querySelector(".sheet").dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+  check("Klick auf den Hintergrund schliesst", !sr4.querySelector(".sheet").open);
 }
 
 console.log(failures === 0 ? "\nAlle Prüfungen bestanden.\n" : `\n${failures} Prüfung(en) fehlgeschlagen.\n`);

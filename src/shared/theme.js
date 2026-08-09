@@ -244,6 +244,17 @@ const apply = (settings) => {
     "--haos-text": light ? t.textLight : t.textDark,
     "--haos-text-rgb": hexToRgb(light ? t.textLight : t.textDark),
     "--haos-text-inverse": light ? t.textDark : t.textLight,
+
+    /*
+     * Abdeckung fuer Fenster ueber einer Karte.
+     *
+     * Bewusst GEGENLAEUFIG zur Schrift: im dunklen Modus dunkel, im hellen
+     * hell. Die Kartenfarbe taugt dafuer nicht - sie ist in beiden Modi
+     * weiss, und ein weisser Schleier vor weisser Schrift laesst diese
+     * lesbar. Genau daran ist die erste Fassung des Weckerfensters
+     * gescheitert.
+     */
+    "--haos-scrim": light ? "rgba(244, 246, 249, .93)" : "rgba(14, 18, 24, .90)",
     "--haos-font-family":
       "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif",
     "--haos-font-weight-normal": "450",
