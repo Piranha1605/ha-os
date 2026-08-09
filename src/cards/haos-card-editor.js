@@ -217,7 +217,7 @@ const LABELS = {
 const HELPERS = {
   haos_weight: "1 entspricht der Standard-Kartenhöhe der Shell. 2 ist doppelt so hoch, 0,4 knapp die Hälfte — für flache Fremdkarten.",
   suffix:
-    "Grenzt die automatische Auswahl ein, etwa _today für die Tageswerte. Ohne sie stehen Tages-, Gestern- und Gesamtwerte desselben Geräts nebeneinander in der Liste.",
+    "Grenzt die automatische Auswahl ein. Mehrere durch Komma, weil die Integrationen verschieden benennen — etwa _energy, _energieverbrauch. Ohne Angabe stehen Tages-, Gestern- und Gesamtwerte desselben Geräts nebeneinander.",
   max_rows: "0 zeigt alle. Der Rest wird als „x weitere“ in der Summe genannt.",
   show_line: "Ausschalten für eine reine Überschrift ohne Strich.",
   align:

@@ -737,6 +737,30 @@ console.log("\n14. Energieliste und Summen-Badge");
     karte.shadowRoot.querySelector(".energy-total").textContent === "Summe 60,7 kWh",
     karte.shadowRoot.querySelector(".energy-total").textContent);
 
+  // Shelly benennt auf Deutsch, Tasmota auf Englisch. Mehrere Endungen,
+  // durch Komma getrennt - und die Einspeisung bleibt bewusst draussen.
+  {
+    const gemischt = {
+      "sensor.tasmota_energy_today": zustand("sensor.tasmota_energy_today", "4", { device_class: "energy", friendly_name: "Steckdose" }),
+      "sensor.shelly_energieverbrauch": zustand("sensor.shelly_energieverbrauch", "9", { device_class: "energy", friendly_name: "Shelly" }),
+      "sensor.shelly_energieeinspeisung": zustand("sensor.shelly_energieeinspeisung", "300", { device_class: "energy", friendly_name: "Einspeisung" }),
+    };
+    const k = document.createElement("ha-os-card");
+    k.setConfig({
+      type: "custom:ha-os-card", card_type: "energy_list",
+      suffix: "_energy_today, _energieverbrauch",
+    });
+    document.body.append(k);
+    k.hass = { ...makeHass(), states: gemischt };
+
+    const namen = [...k.shadowRoot.querySelectorAll(".energy-name")].map((n) => n.textContent);
+    check("beide Schreibweisen werden gefunden", namen.join(" | ") === "Shelly | Steckdose", namen.join(" | "));
+    check("Einspeisung bleibt draussen", !namen.includes("Einspeisung"), namen.join(" | "));
+    check("Summe ohne Einspeisung",
+      k.shadowRoot.querySelector(".energy-total").textContent === "Summe 13,0 kWh",
+      k.shadowRoot.querySelector(".energy-total").textContent);
+  }
+
   const gekuerzt = document.createElement("ha-os-card");
   gekuerzt.setConfig({ type: "custom:ha-os-card", card_type: "energy_list", suffix: "_energy_today", max_rows: 2 });
   document.body.append(gekuerzt);

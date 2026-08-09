@@ -1,4 +1,4 @@
-/* HA-OS 0.30.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.30.2 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -498,6 +498,11 @@ var isEnergySensor = (state) => {
   if (attributes.device_class === "energy") return true;
   const unit = String(attributes.unit_of_measurement || "").toLowerCase();
   return unit === "kwh" || unit === "wh" || unit === "mwh";
+};
+var matchesSuffix = (entityId, suffixes) => {
+  const liste = String(suffixes || "").split(",").map((eintrag) => eintrag.trim()).filter(Boolean);
+  if (!liste.length) return true;
+  return liste.some((endung) => entityId.endsWith(endung));
 };
 var registerCard = (entry) => {
   window.customCards = window.customCards || [];
@@ -1715,11 +1720,9 @@ var HaOsShell = class extends HTMLElement {
       }
       if (badge.kind === "sum") {
         const states = this._hass?.states || {};
-        const ids = badge.entities.length ? badge.entities : Object.keys(states).filter((id) => {
-          if (!id.startsWith("sensor.")) return false;
-          if (!isEnergySensor(states[id])) return false;
-          return !badge.suffix || id.endsWith(badge.suffix);
-        });
+        const ids = badge.entities.length ? badge.entities : Object.keys(states).filter(
+          (id) => id.startsWith("sensor.") && isEnergySensor(states[id]) && matchesSuffix(id, badge.suffix)
+        );
         let summe = 0;
         let gezaehlt = 0;
         ids.forEach((id) => {
@@ -2183,7 +2186,7 @@ var HELPERS = {
   frame_height: "0 füllt die ganze Seite. Für eine eingebettete Ansicht mit einer einzigen Karte ist ein fester Wert meist besser – sonst wird die Karte über die volle Höhe gezogen.",
   hide_ha_chrome: "Blendet Kopfzeile und Seitenleiste von Home Assistant im Rahmen aus.",
   entities: "Leer lassen, um alle Sensoren mit Geräteklasse „Energie“ zu nehmen.",
-  suffix: "Grenzt die automatische Auswahl ein, etwa _today für die Tageswerte. Ohne sie werden Tages- und Gesamtwerte desselben Geräts doppelt gezählt."
+  suffix: "Grenzt die automatische Auswahl ein. Mehrere durch Komma, etwa _energy_today, _energieverbrauch. Ohne Angabe werden Tages- und Gesamtwerte desselben Geräts doppelt gezählt."
 };
 var APPEARANCE_SCHEMA = [
   { name: "gap", selector: { number: { min: 0, max: 48, step: 1, mode: "slider" } } },
@@ -4580,13 +4583,9 @@ var renderers = {
       const gewaehlt = Array.isArray(ctx.config.entities) ? ctx.config.entities.filter(Boolean) : [];
       if (gewaehlt.length) return gewaehlt;
       const states = ctx.hass?.states || {};
-      const endung = String(ctx.config.suffix || "").trim();
-      return Object.keys(states).filter((id) => {
-        if (!id.startsWith("sensor.")) return false;
-        if (!isEnergySensor(states[id])) return false;
-        if (endung && !id.endsWith(endung)) return false;
-        return true;
-      });
+      return Object.keys(states).filter(
+        (id) => id.startsWith("sensor.") && isEnergySensor(states[id]) && matchesSuffix(id, ctx.config.suffix)
+      );
     },
     update(ctx) {
       const states = ctx.hass?.states || {};
@@ -5465,7 +5464,7 @@ var LABELS2 = {
 };
 var HELPERS2 = {
   haos_weight: "1 entspricht der Standard-Kartenhöhe der Shell. 2 ist doppelt so hoch, 0,4 knapp die Hälfte — für flache Fremdkarten.",
-  suffix: "Grenzt die automatische Auswahl ein, etwa _today für die Tageswerte. Ohne sie stehen Tages-, Gestern- und Gesamtwerte desselben Geräts nebeneinander in der Liste.",
+  suffix: "Grenzt die automatische Auswahl ein. Mehrere durch Komma, weil die Integrationen verschieden benennen — etwa _energy, _energieverbrauch. Ohne Angabe stehen Tages-, Gestern- und Gesamtwerte desselben Geräts nebeneinander.",
   max_rows: "0 zeigt alle. Der Rest wird als „x weitere“ in der Summe genannt.",
   show_line: "Ausschalten für eine reine Überschrift ohne Strich.",
   align: "Mittig setzt die Linie auf beide Seiten. Ein Höhenfaktor um 0,3 passt gut – ein Trenner braucht keine volle Kartenhöhe.",
@@ -8003,7 +8002,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.30.1";
+var VERSION = "0.30.2";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

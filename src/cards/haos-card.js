@@ -19,6 +19,7 @@ import {
   friendlyName,
   handleAction,
   isEnergySensor,
+  matchesSuffix,
   isActive,
   isUnavailable,
   registerCard,
@@ -1848,14 +1849,10 @@ const renderers = {
       if (gewaehlt.length) return gewaehlt;
 
       const states = ctx.hass?.states || {};
-      const endung = String(ctx.config.suffix || "").trim();
 
-      return Object.keys(states).filter((id) => {
-        if (!id.startsWith("sensor.")) return false;
-        if (!isEnergySensor(states[id])) return false;
-        if (endung && !id.endsWith(endung)) return false;
-        return true;
-      });
+      return Object.keys(states).filter(
+        (id) => id.startsWith("sensor.") && isEnergySensor(states[id]) && matchesSuffix(id, ctx.config.suffix)
+      );
     },
 
     update(ctx) {

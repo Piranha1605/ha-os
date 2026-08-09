@@ -34,6 +34,7 @@ import {
   friendlyName,
   handleAction,
   isEnergySensor,
+  matchesSuffix,
   isEqualConfig,
   isUnavailable,
   registerCard,
@@ -1052,11 +1053,9 @@ class HaOsShell extends HTMLElement {
         const states = this._hass?.states || {};
         const ids = badge.entities.length
           ? badge.entities
-          : Object.keys(states).filter((id) => {
-              if (!id.startsWith("sensor.")) return false;
-              if (!isEnergySensor(states[id])) return false;
-              return !badge.suffix || id.endsWith(badge.suffix);
-            });
+          : Object.keys(states).filter(
+              (id) => id.startsWith("sensor.") && isEnergySensor(states[id]) && matchesSuffix(id, badge.suffix)
+            );
 
         let summe = 0;
         let gezaehlt = 0;

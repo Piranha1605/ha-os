@@ -291,6 +291,27 @@ export const isEnergySensor = (state) => {
   return unit === "kwh" || unit === "wh" || unit === "mwh";
 };
 
+/**
+ * Passt die Entitaets-ID zu einer der angegebenen Endungen?
+ *
+ * Mehrere durch Komma getrennt, weil die Benennung je Integration
+ * auseinandergeht: Tasmota schreibt `_energy_today`, Shelly auf Deutsch
+ * `_energieverbrauch`. Mit nur einer Endung faengt man immer nur einen Teil.
+ *
+ * Wichtig ist auch, was man NICHT auflistet: `_energieeinspeisung` ist
+ * eingespeiste Energie und hat in einer Verbrauchssumme nichts zu suchen.
+ *
+ * Ohne Angabe passt alles.
+ */
+export const matchesSuffix = (entityId, suffixes) => {
+  const liste = String(suffixes || "")
+    .split(",")
+    .map((eintrag) => eintrag.trim())
+    .filter(Boolean);
+  if (!liste.length) return true;
+  return liste.some((endung) => entityId.endsWith(endung));
+};
+
 /** Registriert eine Karte im HA-Kartenauswahldialog. */
 export const registerCard = (entry) => {
   window.customCards = window.customCards || [];

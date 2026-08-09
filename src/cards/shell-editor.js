@@ -67,7 +67,7 @@ const HELPERS = {
   hide_ha_chrome: "Blendet Kopfzeile und Seitenleiste von Home Assistant im Rahmen aus.",
   entities: "Leer lassen, um alle Sensoren mit Geräteklasse „Energie“ zu nehmen.",
   suffix:
-    "Grenzt die automatische Auswahl ein, etwa _today für die Tageswerte. Ohne sie werden Tages- und Gesamtwerte desselben Geräts doppelt gezählt.",
+    "Grenzt die automatische Auswahl ein. Mehrere durch Komma, etwa _energy_today, _energieverbrauch. Ohne Angabe werden Tages- und Gesamtwerte desselben Geräts doppelt gezählt.",
 };
 
 /** Nur die Maße der Shell. */
