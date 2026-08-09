@@ -219,6 +219,35 @@ check(
   "not_home darf nicht ausgeblendet werden"
 );
 check("Badge erzeugt", root.querySelectorAll(".badge").length === 1);
+
+// Summen-Badge in der Kopfzeile: rechnet mehrere Zaehler zusammen.
+{
+  const mitSumme = JSON.parse(JSON.stringify(shellConfig));
+  mitSumme.pages[0].badges = [
+    { kind: "sum", name: "Strom heute", suffix: "_energy_today", unit: "kWh" },
+  ];
+  const zustaende = {
+    ...baseStates,
+    "sensor.a_energy_today": makeState("sensor.a_energy_today", "12.5", { device_class: "energy" }),
+    "sensor.b_energy_today": makeState("sensor.b_energy_today", "3.2", { device_class: "energy" }),
+    "sensor.a_energy_total": makeState("sensor.a_energy_total", "980", { device_class: "energy" }),
+  };
+  shell.setConfig(mitSumme);
+  shell.hass = makeHass(zustaende);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  const badge = root.querySelector(".badge");
+  check("Summen-Badge zeigt den Namen", badge.querySelector("b")?.textContent === "Strom heute",
+    badge.querySelector("b")?.textContent);
+  // Der Gesamtzaehler desselben Geraets darf nicht mitzaehlen - sonst
+  // stuenden dort 995 statt 15,7.
+  check("Summe nur ueber die Tageswerte", badge.querySelector("small")?.textContent === "15,7 kWh",
+    badge.querySelector("small")?.textContent);
+
+  shell.setConfig(shellConfig);
+  shell.hass = makeHass(baseStates);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+}
 check("drei Raster auf Home", root.querySelector('.page[data-page-id="home"]')?.querySelectorAll(".grid-column").length === 3);
 check("Kinderkarten eingehängt", root.querySelectorAll(".slot").length === 4);
 

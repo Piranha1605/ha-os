@@ -1,4 +1,4 @@
-/* HA-OS 0.29.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.30.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -745,9 +745,10 @@ var normalizeAction = (action, fallbackAction = "more-info") => {
   if (!action || typeof action !== "object") return { action: fallbackAction };
   return { ...action, action: action.action || fallbackAction };
 };
+var BADGE_KINDS = ["entity", "link", "sum"];
 var normalizeBadge = (source, index, used) => {
   const raw = typeof source === "string" ? { entity: source } : source || {};
-  const kind = raw.kind === "link" ? "link" : "entity";
+  const kind = BADGE_KINDS.includes(raw.kind) ? raw.kind : "entity";
   return {
     id: uniqueId(raw.id || `badge-${index + 1}`, used, `badge-${index + 1}`),
     kind,
@@ -755,8 +756,14 @@ var normalizeBadge = (source, index, used) => {
     name: raw.name || "",
     icon: raw.icon || "",
     url: kind === "link" ? raw.url || "" : "",
+    // Summen-Badge: mehrere Zaehler zusammengerechnet. Ohne feste Auswahl
+    // nimmt es alle Sensoren mit device_class energy, wahlweise auf eine
+    // Endung eingegrenzt - dieselbe Regel wie in der Energieliste.
+    entities: kind === "sum" && Array.isArray(raw.entities) ? raw.entities.filter(Boolean) : [],
+    suffix: kind === "sum" ? raw.suffix || "" : "",
+    unit: kind === "sum" ? raw.unit || "kWh" : "",
     show_state: raw.show_state !== false,
-    tap_action: normalizeAction(raw.tap_action, kind === "link" ? "url" : "toggle")
+    tap_action: normalizeAction(raw.tap_action, kind === "link" ? "url" : kind === "sum" ? "none" : "toggle")
   };
 };
 var normalizeQuickAction = (source, index, used) => {
@@ -1699,6 +1706,30 @@ var HaOsShell = class extends HTMLElement {
         root.title = badge.name || badge.url || "Link";
         return;
       }
+      if (badge.kind === "sum") {
+        const states = this._hass?.states || {};
+        const ids = badge.entities.length ? badge.entities : Object.keys(states).filter((id) => {
+          if (!id.startsWith("sensor.")) return false;
+          if (states[id].attributes?.device_class !== "energy") return false;
+          return !badge.suffix || id.endsWith(badge.suffix);
+        });
+        let summe = 0;
+        let gezaehlt = 0;
+        ids.forEach((id) => {
+          const zahl = Number(states[id]?.state);
+          if (!Number.isFinite(zahl)) return;
+          summe += zahl;
+          gezaehlt += 1;
+        });
+        root.classList.remove("is-on", "is-off", "is-unavailable");
+        icon6.setAttribute("icon", badge.icon || "mdi:lightning-bolt");
+        if (name) name.textContent = badge.name || "Energie";
+        if (state) {
+          state.textContent = gezaehlt ? `${Math.abs(summe) >= 100 ? Math.round(summe).toLocaleString("de-DE") : summe.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${badge.unit || "kWh"}` : "–";
+        }
+        root.title = gezaehlt ? `${gezaehlt} Zähler` : "Keine Zähler gefunden";
+        return;
+      }
       const entityState = this._hass?.states?.[badge.entity];
       const label = badge.name || friendlyName(badge.entity, entityState);
       root.classList.remove("is-on", "is-off", "is-unavailable");
@@ -2129,7 +2160,10 @@ var LABELS = {
   frame_height: "Höhe des Rahmens in px",
   entity: "Entität",
   show_state: "Zustand anzeigen",
-  tap_action: "Tippen"
+  tap_action: "Tippen",
+  entities: "Zähler",
+  suffix: "Endung der Entitäts-ID",
+  unit: "Einheit"
 };
 var HELPERS = {
   sidebar_pages: "Jede Seite bekommt ein Symbol in der linken Leiste.",
@@ -2140,7 +2174,9 @@ var HELPERS = {
   fullscreen_entity: "Ein input_boolean, das den Vollbildmodus schaltet. Leer lassen, um den Knopf auszublenden.",
   users: "Leer lassen, um automatisch alle person-Entitäten anzuzeigen.",
   frame_height: "0 füllt die ganze Seite. Für eine eingebettete Ansicht mit einer einzigen Karte ist ein fester Wert meist besser – sonst wird die Karte über die volle Höhe gezogen.",
-  hide_ha_chrome: "Blendet Kopfzeile und Seitenleiste von Home Assistant im Rahmen aus."
+  hide_ha_chrome: "Blendet Kopfzeile und Seitenleiste von Home Assistant im Rahmen aus.",
+  entities: "Leer lassen, um alle Sensoren mit Geräteklasse „Energie“ zu nehmen.",
+  suffix: "Grenzt die automatische Auswahl ein, etwa _today für die Tageswerte. Ohne sie werden Tages- und Gesamtwerte desselben Geräts doppelt gezählt."
 };
 var APPEARANCE_SCHEMA = [
   { name: "gap", selector: { number: { min: 0, max: 48, step: 1, mode: "slider" } } },
@@ -2177,7 +2213,23 @@ var IFRAME_SCHEMA = [
   { name: "frame_height", selector: { number: { min: 0, max: 2e3, step: 10, mode: "box" } } }
 ];
 var BADGE_SCHEMA = [
+  {
+    name: "kind",
+    selector: {
+      select: {
+        mode: "dropdown",
+        options: [
+          { value: "entity", label: "Entität" },
+          { value: "sum", label: "Summe mehrerer Zähler" },
+          { value: "link", label: "Link" }
+        ]
+      }
+    }
+  },
   { name: "entity", selector: { entity: {} } },
+  { name: "entities", selector: { entity: { multiple: true } } },
+  { name: "suffix", selector: { text: {} } },
+  { name: "unit", selector: { text: {} } },
   { name: "name", selector: { text: {} } },
   { name: "icon", selector: { icon: {} } },
   { name: "show_state", selector: { boolean: {} } },
@@ -3094,7 +3146,8 @@ var CARD_TYPES = [
   { value: "select", label: "Auswahl", icon: "mdi:form-dropdown" },
   { value: "clock", label: "Uhr", icon: "mdi:clock-outline" },
   { value: "camera", label: "Kamera", icon: "mdi:cctv" },
-  { value: "separator", label: "Trenner", icon: "mdi:format-horizontal-align-center" }
+  { value: "separator", label: "Trenner", icon: "mdi:format-horizontal-align-center" },
+  { value: "energy_list", label: "Energieliste", icon: "mdi:format-list-numbered" }
 ];
 var el3 = (tag, className, text2) => {
   const node = document.createElement(tag);
@@ -3430,6 +3483,21 @@ var STYLES3 = `
   .sep-line { flex: 1; height: 1px; min-width: 12px; background: rgba(var(--haos-text-rgb, 255,255,255), .18); }
   .sep-line[hidden] { display: none; }
 
+  /* --- Energieliste --- */
+  .energy-list { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+  .energy-rows { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; gap: 7px; }
+  .energy-rows::-webkit-scrollbar { display: none; }
+  .energy-row { display: flex; flex-direction: column; gap: 4px; }
+  .energy-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12px; }
+  .energy-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(var(--haos-text-rgb, 255,255,255), .72); }
+  .energy-value { flex: 0 0 auto; font-weight: var(--haos-font-weight-medium, 500); font-variant-numeric: tabular-nums; }
+  .energy-bar { height: 4px; border-radius: 99px; overflow: hidden; background: rgba(var(--haos-text-rgb, 255,255,255), .12); }
+  .energy-bar span { display: block; height: 100%; width: 0; background: var(--haos-accent, #0a84ff); transition: width .3s ease; }
+  .energy-total { flex: 0 0 auto; padding-top: 6px; font-size: 12px; font-variant-numeric: tabular-nums; border-top: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .12); color: rgba(var(--haos-text-rgb, 255,255,255), .8); }
+  .energy-total[hidden] { display: none; }
+  .energy-empty { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
+  .energy-empty[hidden] { display: none; }
+
   .error { display: grid; place-content: center; height: 100%; text-align: center; gap: 6px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
 `;
 var pad = (value) => String(value).padStart(2, "0");
@@ -3457,6 +3525,7 @@ var CONDITION_ICONS = {
   hail: "mdi:weather-hail",
   exceptional: "mdi:alert-circle-outline"
 };
+var formatEnergy = (value) => Math.abs(value) >= 100 ? Math.round(value).toLocaleString("de-DE") : value.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 var MEDIA_FEATURE = {
   PAUSE: 1,
   SEEK: 2,
@@ -4475,6 +4544,96 @@ var renderers = {
       ctx.nodes.segmented?.update(state?.state ?? "", options);
     }
   },
+  // ------------------------------------------------------------- Energieliste
+  /**
+   * Mehrere Energiezaehler untereinander, nach Verbrauch sortiert.
+   *
+   * Gedacht fuer eine eigene Seite: wer dreissig Steckdosen misst, will sie
+   * nicht als dreissig Karten, sondern als Liste - mit einem Balken, der den
+   * Anteil zeigt, und einer Summe unten.
+   *
+   * Ohne feste Auswahl nimmt die Karte alle Sensoren mit `device_class:
+   * energy`. Das sind bei einer gewachsenen Anlage schnell fuenfzig, von
+   * denen die meisten Varianten desselben Zaehlers sind (heute, gestern,
+   * gesamt) - deshalb das Feld *Endung*: `_today` liefert genau die
+   * Tageswerte.
+   */
+  energy_list: {
+    build(ctx) {
+      const root = el3("div", "energy-list");
+      ctx.nodes.rows = el3("div", "energy-rows");
+      ctx.nodes.total = el3("div", "energy-total");
+      ctx.nodes.empty = el3("div", "energy-empty", "Keine Energiezähler gefunden.");
+      root.append(ctx.nodes.rows, ctx.nodes.empty, ctx.nodes.total);
+      ctx.nodes.rowCache = /* @__PURE__ */ new Map();
+      return root;
+    },
+    /** Welche Entitaeten gehoeren in die Liste? */
+    _entities(ctx) {
+      const gewaehlt = Array.isArray(ctx.config.entities) ? ctx.config.entities.filter(Boolean) : [];
+      if (gewaehlt.length) return gewaehlt;
+      const states = ctx.hass?.states || {};
+      const endung = String(ctx.config.suffix || "").trim();
+      return Object.keys(states).filter((id) => {
+        if (!id.startsWith("sensor.")) return false;
+        const attributes = states[id].attributes || {};
+        if (attributes.device_class !== "energy") return false;
+        if (endung && !id.endsWith(endung)) return false;
+        return true;
+      });
+    },
+    update(ctx) {
+      const states = ctx.hass?.states || {};
+      const einheit = ctx.config.unit || "kWh";
+      const werte = renderers.energy_list._entities(ctx).map((id) => {
+        const state = states[id];
+        const zahl = numeric(state?.state);
+        return {
+          id,
+          name: ctx.config.use_entity_names === false ? id : friendlyName(id, state),
+          wert: Number.isFinite(zahl) ? zahl : null
+        };
+      }).filter((eintrag) => eintrag.wert !== null).sort((a, b) => b.wert - a.wert);
+      const grenze = Number(ctx.config.max_rows) || 0;
+      const sichtbar = grenze > 0 ? werte.slice(0, grenze) : werte;
+      const summe = werte.reduce((gesamt, eintrag) => gesamt + eintrag.wert, 0);
+      const groesster = sichtbar[0]?.wert || 0;
+      ctx.nodes.empty.hidden = werte.length > 0;
+      const gebraucht = /* @__PURE__ */ new Set();
+      sichtbar.forEach((eintrag, index) => {
+        let zeile = ctx.nodes.rowCache.get(eintrag.id);
+        if (!zeile) {
+          const node = el3("div", "energy-row");
+          const kopf = el3("div", "energy-head");
+          const name = el3("span", "energy-name");
+          const wert = el3("span", "energy-value");
+          kopf.append(name, wert);
+          const bahn = el3("div", "energy-bar");
+          const fuellung = el3("span");
+          bahn.append(fuellung);
+          node.append(kopf, bahn);
+          zeile = { node, name, wert, fuellung };
+          ctx.nodes.rowCache.set(eintrag.id, zeile);
+        }
+        gebraucht.add(eintrag.id);
+        zeile.name.textContent = eintrag.name;
+        zeile.name.title = eintrag.name;
+        zeile.wert.textContent = `${formatEnergy(eintrag.wert)} ${einheit}`;
+        zeile.fuellung.style.width = groesster > 0 ? `${eintrag.wert / groesster * 100}%` : "0%";
+        if (ctx.nodes.rows.children[index] !== zeile.node) {
+          ctx.nodes.rows.insertBefore(zeile.node, ctx.nodes.rows.children[index] || null);
+        }
+      });
+      ctx.nodes.rowCache.forEach((zeile, id) => {
+        if (gebraucht.has(id)) return;
+        zeile.node.remove();
+        ctx.nodes.rowCache.delete(id);
+      });
+      const versteckt = werte.length - sichtbar.length;
+      ctx.nodes.total.textContent = werte.length ? `Summe ${formatEnergy(summe)} ${einheit}${versteckt > 0 ? ` · ${versteckt} weitere` : ""}` : "";
+      ctx.nodes.total.hidden = !ctx.nodes.total.textContent;
+    }
+  },
   // ------------------------------------------------------------- Trenner
   /**
    * Eine Beschriftung mit Linie, zum Gliedern eines Rasters.
@@ -5231,6 +5390,13 @@ var SCHEMAS = {
     },
     bool("show_line")
   ],
+  energy_list: [
+    entityField(["sensor"], true),
+    text("suffix"),
+    text("unit"),
+    number("max_rows", 0, 50),
+    text("name")
+  ],
   clock: [
     text("name"),
     { name: "timer_entity", selector: { entity: { domain: "timer" } } },
@@ -5283,6 +5449,9 @@ var LABELS2 = {
   sound_volume: "Lautstärke des Tons",
   sound_player: "Lautsprecher zum Abstellen",
   haos_weight: "Höhenfaktor",
+  suffix: "Endung der Entitäts-ID",
+  unit: "Einheit",
+  max_rows: "Höchstens so viele Zeilen",
   align: "Ausrichtung",
   show_line: "Linie anzeigen",
   camera_mode: "Bildart",
@@ -5290,6 +5459,8 @@ var LABELS2 = {
 };
 var HELPERS2 = {
   haos_weight: "1 entspricht der Standard-Kartenhöhe der Shell. 2 ist doppelt so hoch, 0,4 knapp die Hälfte — für flache Fremdkarten.",
+  suffix: "Grenzt die automatische Auswahl ein, etwa _today für die Tageswerte. Ohne sie stehen Tages-, Gestern- und Gesamtwerte desselben Geräts nebeneinander in der Liste.",
+  max_rows: "0 zeigt alle. Der Rest wird als „x weitere“ in der Summe genannt.",
   show_line: "Ausschalten für eine reine Überschrift ohne Strich.",
   align: "Mittig setzt die Linie auf beide Seiten. Ein Höhenfaktor um 0,3 passt gut – ein Trenner braucht keine volle Kartenhöhe.",
   camera_mode: "Standbild holt in festem Takt ein einzelnes Bild und schont die Leitung. Livebild überträgt dauerhaft – auf einem Wandtablet mit mehreren Kameras spürbar. Tippen öffnet in beiden Fällen den großen Kameradialog.",
@@ -7826,7 +7997,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.29.1";
+var VERSION = "0.30.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

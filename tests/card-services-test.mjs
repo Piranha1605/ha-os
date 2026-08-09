@@ -705,5 +705,44 @@ console.log("\n13. Kurzzeitwecker in der Uhr");
   check("Klick auf den Hintergrund schliesst", !sr4.querySelector(".sheet").open);
 }
 
+console.log("\n14. Energieliste und Summen-Badge");
+{
+  const energieZustaende = {
+    "sensor.a_energy_today": zustand("sensor.a_energy_today", "12.5", { device_class: "energy", friendly_name: "Aquarium" }),
+    "sensor.b_energy_today": zustand("sensor.b_energy_today", "3.2", { device_class: "energy", friendly_name: "Pumpe" }),
+    "sensor.c_energy_today": zustand("sensor.c_energy_today", "40", { device_class: "energy", friendly_name: "Ladestation" }),
+    // Gesamtwert desselben Geraets - darf die Tagessumme nicht verfaelschen.
+    "sensor.a_energy_total": zustand("sensor.a_energy_total", "980", { device_class: "energy", friendly_name: "Aquarium gesamt" }),
+    // Ohne Messwert: wird uebergangen, nicht als 0 gewertet.
+    "sensor.d_energy_today": zustand("sensor.d_energy_today", "unavailable", { device_class: "energy", friendly_name: "Tot" }),
+    "sensor.kein_energie": zustand("sensor.kein_energie", "7", { friendly_name: "Temperatur" }),
+  };
+
+  const karte = document.createElement("ha-os-card");
+  karte.setConfig({ type: "custom:ha-os-card", card_type: "energy_list", suffix: "_energy_today" });
+  document.body.append(karte);
+  karte.hass = { ...makeHass(), states: energieZustaende };
+
+  const zeilen = [...karte.shadowRoot.querySelectorAll(".energy-row")];
+  check("nur die passenden Zaehler", zeilen.length === 3, `${zeilen.length}`);
+  check("nach Verbrauch sortiert",
+    zeilen.map((z) => z.querySelector(".energy-name").textContent).join(" | ") === "Ladestation | Aquarium | Pumpe",
+    zeilen.map((z) => z.querySelector(".energy-name").textContent).join(" | "));
+  check("groesster Balken voll", zeilen[0].querySelector(".energy-bar span").style.width === "100%",
+    zeilen[0].querySelector(".energy-bar span").style.width);
+  check("Summe stimmt",
+    karte.shadowRoot.querySelector(".energy-total").textContent === "Summe 55,7 kWh",
+    karte.shadowRoot.querySelector(".energy-total").textContent);
+
+  const gekuerzt = document.createElement("ha-os-card");
+  gekuerzt.setConfig({ type: "custom:ha-os-card", card_type: "energy_list", suffix: "_energy_today", max_rows: 2 });
+  document.body.append(gekuerzt);
+  gekuerzt.hass = { ...makeHass(), states: energieZustaende };
+  check("Begrenzung wirkt", gekuerzt.shadowRoot.querySelectorAll(".energy-row").length === 2);
+  check("der Rest wird genannt",
+    gekuerzt.shadowRoot.querySelector(".energy-total").textContent.includes("1 weitere"),
+    gekuerzt.shadowRoot.querySelector(".energy-total").textContent);
+}
+
 console.log(failures === 0 ? "\nAlle Prüfungen bestanden.\n" : `\n${failures} Prüfung(en) fehlgeschlagen.\n`);
 process.exit(failures === 0 ? 0 : 1);

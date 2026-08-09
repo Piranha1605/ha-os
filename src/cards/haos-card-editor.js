@@ -145,6 +145,13 @@ const SCHEMAS = {
     },
     bool("show_line"),
   ],
+  energy_list: [
+    entityField(["sensor"], true),
+    text("suffix"),
+    text("unit"),
+    number("max_rows", 0, 50),
+    text("name"),
+  ],
   clock: [
     text("name"),
     { name: "timer_entity", selector: { entity: { domain: "timer" } } },
@@ -198,6 +205,9 @@ const LABELS = {
   sound_volume: "Lautstärke des Tons",
   sound_player: "Lautsprecher zum Abstellen",
   haos_weight: "Höhenfaktor",
+  suffix: "Endung der Entitäts-ID",
+  unit: "Einheit",
+  max_rows: "Höchstens so viele Zeilen",
   align: "Ausrichtung",
   show_line: "Linie anzeigen",
   camera_mode: "Bildart",
@@ -206,6 +216,9 @@ const LABELS = {
 
 const HELPERS = {
   haos_weight: "1 entspricht der Standard-Kartenhöhe der Shell. 2 ist doppelt so hoch, 0,4 knapp die Hälfte — für flache Fremdkarten.",
+  suffix:
+    "Grenzt die automatische Auswahl ein, etwa _today für die Tageswerte. Ohne sie stehen Tages-, Gestern- und Gesamtwerte desselben Geräts nebeneinander in der Liste.",
+  max_rows: "0 zeigt alle. Der Rest wird als „x weitere“ in der Summe genannt.",
   show_line: "Ausschalten für eine reine Überschrift ohne Strich.",
   align:
     "Mittig setzt die Linie auf beide Seiten. Ein Höhenfaktor um 0,3 passt gut – ein Trenner braucht keine volle Kartenhöhe.",

@@ -45,6 +45,7 @@ export const CARD_TYPES = [
   { value: "clock", label: "Uhr", icon: "mdi:clock-outline" },
   { value: "camera", label: "Kamera", icon: "mdi:cctv" },
   { value: "separator", label: "Trenner", icon: "mdi:format-horizontal-align-center" },
+  { value: "energy_list", label: "Energieliste", icon: "mdi:format-list-numbered" },
 ];
 
 const el = (tag, className, text) => {
@@ -383,6 +384,21 @@ const STYLES = `
   .sep-line { flex: 1; height: 1px; min-width: 12px; background: rgba(var(--haos-text-rgb, 255,255,255), .18); }
   .sep-line[hidden] { display: none; }
 
+  /* --- Energieliste --- */
+  .energy-list { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+  .energy-rows { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; gap: 7px; }
+  .energy-rows::-webkit-scrollbar { display: none; }
+  .energy-row { display: flex; flex-direction: column; gap: 4px; }
+  .energy-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12px; }
+  .energy-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(var(--haos-text-rgb, 255,255,255), .72); }
+  .energy-value { flex: 0 0 auto; font-weight: var(--haos-font-weight-medium, 500); font-variant-numeric: tabular-nums; }
+  .energy-bar { height: 4px; border-radius: 99px; overflow: hidden; background: rgba(var(--haos-text-rgb, 255,255,255), .12); }
+  .energy-bar span { display: block; height: 100%; width: 0; background: var(--haos-accent, #0a84ff); transition: width .3s ease; }
+  .energy-total { flex: 0 0 auto; padding-top: 6px; font-size: 12px; font-variant-numeric: tabular-nums; border-top: 1px solid rgba(var(--haos-text-rgb, 255,255,255), .12); color: rgba(var(--haos-text-rgb, 255,255,255), .8); }
+  .energy-total[hidden] { display: none; }
+  .energy-empty { font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .5); }
+  .energy-empty[hidden] { display: none; }
+
   .error { display: grid; place-content: center; height: 100%; text-align: center; gap: 6px; font-size: 12px; color: rgba(var(--haos-text-rgb, 255,255,255), .6); }
 `;
 
@@ -445,6 +461,12 @@ const CONDITION_ICONS = {
   hail: "mdi:weather-hail",
   exceptional: "mdi:alert-circle-outline",
 };
+
+/** Energiewerte: bis 100 mit einer Nachkommastelle, darueber ohne. */
+const formatEnergy = (value) =>
+  Math.abs(value) >= 100
+    ? Math.round(value).toLocaleString("de-DE")
+    : value.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 const MEDIA_FEATURE = {
   PAUSE: 1,
@@ -1791,6 +1813,119 @@ const renderers = {
 
       if (ctx.nodes.select && ctx.nodes.select.value !== state?.state) ctx.nodes.select.value = state?.state ?? "";
       ctx.nodes.segmented?.update(state?.state ?? "", options);
+    },
+  },
+
+  // ------------------------------------------------------------- Energieliste
+  /**
+   * Mehrere Energiezaehler untereinander, nach Verbrauch sortiert.
+   *
+   * Gedacht fuer eine eigene Seite: wer dreissig Steckdosen misst, will sie
+   * nicht als dreissig Karten, sondern als Liste - mit einem Balken, der den
+   * Anteil zeigt, und einer Summe unten.
+   *
+   * Ohne feste Auswahl nimmt die Karte alle Sensoren mit `device_class:
+   * energy`. Das sind bei einer gewachsenen Anlage schnell fuenfzig, von
+   * denen die meisten Varianten desselben Zaehlers sind (heute, gestern,
+   * gesamt) - deshalb das Feld *Endung*: `_today` liefert genau die
+   * Tageswerte.
+   */
+  energy_list: {
+    build(ctx) {
+      const root = el("div", "energy-list");
+      ctx.nodes.rows = el("div", "energy-rows");
+      ctx.nodes.total = el("div", "energy-total");
+      ctx.nodes.empty = el("div", "energy-empty", "Keine Energiezähler gefunden.");
+      root.append(ctx.nodes.rows, ctx.nodes.empty, ctx.nodes.total);
+      ctx.nodes.rowCache = new Map();
+      return root;
+    },
+
+    /** Welche Entitaeten gehoeren in die Liste? */
+    _entities(ctx) {
+      const gewaehlt = Array.isArray(ctx.config.entities) ? ctx.config.entities.filter(Boolean) : [];
+      if (gewaehlt.length) return gewaehlt;
+
+      const states = ctx.hass?.states || {};
+      const endung = String(ctx.config.suffix || "").trim();
+
+      return Object.keys(states).filter((id) => {
+        if (!id.startsWith("sensor.")) return false;
+        const attributes = states[id].attributes || {};
+        if (attributes.device_class !== "energy") return false;
+        if (endung && !id.endsWith(endung)) return false;
+        return true;
+      });
+    },
+
+    update(ctx) {
+      const states = ctx.hass?.states || {};
+      const einheit = ctx.config.unit || "kWh";
+
+      const werte = renderers.energy_list
+        ._entities(ctx)
+        .map((id) => {
+          const state = states[id];
+          const zahl = numeric(state?.state);
+          return {
+            id,
+            name: ctx.config.use_entity_names === false ? id : friendlyName(id, state),
+            wert: Number.isFinite(zahl) ? zahl : null,
+          };
+        })
+        // Zaehler ohne Wert fliegen raus statt als 0 zu erscheinen - eine
+        // Steckdose, die nichts meldet, hat nicht null verbraucht.
+        .filter((eintrag) => eintrag.wert !== null)
+        .sort((a, b) => b.wert - a.wert);
+
+      const grenze = Number(ctx.config.max_rows) || 0;
+      const sichtbar = grenze > 0 ? werte.slice(0, grenze) : werte;
+      const summe = werte.reduce((gesamt, eintrag) => gesamt + eintrag.wert, 0);
+      const groesster = sichtbar[0]?.wert || 0;
+
+      ctx.nodes.empty.hidden = werte.length > 0;
+
+      // Zeilen wiederverwenden: die Liste aendert sich bei jedem Messwert,
+      // ihr Aufbau aber selten.
+      const gebraucht = new Set();
+      sichtbar.forEach((eintrag, index) => {
+        let zeile = ctx.nodes.rowCache.get(eintrag.id);
+        if (!zeile) {
+          const node = el("div", "energy-row");
+          const kopf = el("div", "energy-head");
+          const name = el("span", "energy-name");
+          const wert = el("span", "energy-value");
+          kopf.append(name, wert);
+          const bahn = el("div", "energy-bar");
+          const fuellung = el("span");
+          bahn.append(fuellung);
+          node.append(kopf, bahn);
+          zeile = { node, name, wert, fuellung };
+          ctx.nodes.rowCache.set(eintrag.id, zeile);
+        }
+        gebraucht.add(eintrag.id);
+
+        zeile.name.textContent = eintrag.name;
+        zeile.name.title = eintrag.name;
+        zeile.wert.textContent = `${formatEnergy(eintrag.wert)} ${einheit}`;
+        zeile.fuellung.style.width = groesster > 0 ? `${(eintrag.wert / groesster) * 100}%` : "0%";
+
+        if (ctx.nodes.rows.children[index] !== zeile.node) {
+          ctx.nodes.rows.insertBefore(zeile.node, ctx.nodes.rows.children[index] || null);
+        }
+      });
+
+      ctx.nodes.rowCache.forEach((zeile, id) => {
+        if (gebraucht.has(id)) return;
+        zeile.node.remove();
+        ctx.nodes.rowCache.delete(id);
+      });
+
+      const versteckt = werte.length - sichtbar.length;
+      ctx.nodes.total.textContent = werte.length
+        ? `Summe ${formatEnergy(summe)} ${einheit}${versteckt > 0 ? ` · ${versteckt} weitere` : ""}`
+        : "";
+      ctx.nodes.total.hidden = !ctx.nodes.total.textContent;
     },
   },
 

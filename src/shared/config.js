@@ -52,9 +52,11 @@ const normalizeAction = (action, fallbackAction = "more-info") => {
   return { ...action, action: action.action || fallbackAction };
 };
 
+const BADGE_KINDS = ["entity", "link", "sum"];
+
 const normalizeBadge = (source, index, used) => {
   const raw = typeof source === "string" ? { entity: source } : source || {};
-  const kind = raw.kind === "link" ? "link" : "entity";
+  const kind = BADGE_KINDS.includes(raw.kind) ? raw.kind : "entity";
   return {
     id: uniqueId(raw.id || `badge-${index + 1}`, used, `badge-${index + 1}`),
     kind,
@@ -62,8 +64,16 @@ const normalizeBadge = (source, index, used) => {
     name: raw.name || "",
     icon: raw.icon || "",
     url: kind === "link" ? raw.url || "" : "",
+
+    // Summen-Badge: mehrere Zaehler zusammengerechnet. Ohne feste Auswahl
+    // nimmt es alle Sensoren mit device_class energy, wahlweise auf eine
+    // Endung eingegrenzt - dieselbe Regel wie in der Energieliste.
+    entities: kind === "sum" && Array.isArray(raw.entities) ? raw.entities.filter(Boolean) : [],
+    suffix: kind === "sum" ? raw.suffix || "" : "",
+    unit: kind === "sum" ? raw.unit || "kWh" : "",
+
     show_state: raw.show_state !== false,
-    tap_action: normalizeAction(raw.tap_action, kind === "link" ? "url" : "toggle"),
+    tap_action: normalizeAction(raw.tap_action, kind === "link" ? "url" : kind === "sum" ? "none" : "toggle"),
   };
 };
 

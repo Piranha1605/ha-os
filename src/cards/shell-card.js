@@ -1036,6 +1036,52 @@ class HaOsShell extends HTMLElement {
         return;
       }
 
+      if (badge.kind === "sum") {
+        /*
+         * Summen-Badge.
+         *
+         * Rechnet mehrere Zaehler zusammen. Ohne feste Auswahl alle Sensoren
+         * mit `device_class: energy`, wahlweise auf eine Endung eingegrenzt -
+         * `_today` liefert genau die Tageswerte, sonst zaehlt man Tages- und
+         * Gesamtwerte desselben Geraets doppelt.
+         *
+         * Zaehler ohne Messwert werden uebergangen, nicht als 0 gewertet:
+         * eine Steckdose, die nichts meldet, hat nicht nichts verbraucht.
+         */
+        const states = this._hass?.states || {};
+        const ids = badge.entities.length
+          ? badge.entities
+          : Object.keys(states).filter((id) => {
+              if (!id.startsWith("sensor.")) return false;
+              if (states[id].attributes?.device_class !== "energy") return false;
+              return !badge.suffix || id.endsWith(badge.suffix);
+            });
+
+        let summe = 0;
+        let gezaehlt = 0;
+        ids.forEach((id) => {
+          const zahl = Number(states[id]?.state);
+          if (!Number.isFinite(zahl)) return;
+          summe += zahl;
+          gezaehlt += 1;
+        });
+
+        root.classList.remove("is-on", "is-off", "is-unavailable");
+        icon.setAttribute("icon", badge.icon || "mdi:lightning-bolt");
+        if (name) name.textContent = badge.name || "Energie";
+        if (state) {
+          state.textContent = gezaehlt
+            ? `${
+                Math.abs(summe) >= 100
+                  ? Math.round(summe).toLocaleString("de-DE")
+                  : summe.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+              } ${badge.unit || "kWh"}`
+            : "–";
+        }
+        root.title = gezaehlt ? `${gezaehlt} Zähler` : "Keine Zähler gefunden";
+        return;
+      }
+
       const entityState = this._hass?.states?.[badge.entity];
       const label = badge.name || friendlyName(badge.entity, entityState);
 

@@ -48,6 +48,9 @@ const LABELS = {
   entity: "Entität",
   show_state: "Zustand anzeigen",
   tap_action: "Tippen",
+  entities: "Zähler",
+  suffix: "Endung der Entitäts-ID",
+  unit: "Einheit",
 };
 
 const HELPERS = {
@@ -62,6 +65,9 @@ const HELPERS = {
   frame_height:
     "0 füllt die ganze Seite. Für eine eingebettete Ansicht mit einer einzigen Karte ist ein fester Wert meist besser – sonst wird die Karte über die volle Höhe gezogen.",
   hide_ha_chrome: "Blendet Kopfzeile und Seitenleiste von Home Assistant im Rahmen aus.",
+  entities: "Leer lassen, um alle Sensoren mit Geräteklasse „Energie“ zu nehmen.",
+  suffix:
+    "Grenzt die automatische Auswahl ein, etwa _today für die Tageswerte. Ohne sie werden Tages- und Gesamtwerte desselben Geräts doppelt gezählt.",
 };
 
 /** Nur die Maße der Shell. */
@@ -105,7 +111,23 @@ const IFRAME_SCHEMA = [
 ];
 
 const BADGE_SCHEMA = [
+  {
+    name: "kind",
+    selector: {
+      select: {
+        mode: "dropdown",
+        options: [
+          { value: "entity", label: "Entität" },
+          { value: "sum", label: "Summe mehrerer Zähler" },
+          { value: "link", label: "Link" },
+        ],
+      },
+    },
+  },
   { name: "entity", selector: { entity: {} } },
+  { name: "entities", selector: { entity: { multiple: true } } },
+  { name: "suffix", selector: { text: {} } },
+  { name: "unit", selector: { text: {} } },
   { name: "name", selector: { text: {} } },
   { name: "icon", selector: { icon: {} } },
   { name: "show_state", selector: { boolean: {} } },
