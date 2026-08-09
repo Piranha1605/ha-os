@@ -150,6 +150,7 @@ const SCHEMAS = {
     { name: "timer_entity", selector: { entity: { domain: "timer" } } },
     text("sound"),
     number("sound_volume", 0, 100, 5),
+    { name: "sound_player", selector: { entity: { domain: "media_player" } } },
     {
       name: "hour_format",
       selector: {
@@ -195,6 +196,7 @@ const LABELS = {
   timer_entity: "Kurzzeitwecker",
   sound: "Ton beim Ablaufen",
   sound_volume: "Lautstärke des Tons",
+  sound_player: "Lautsprecher zum Abstellen",
   haos_weight: "Höhenfaktor",
   align: "Ausrichtung",
   show_line: "Linie anzeigen",
@@ -213,6 +215,8 @@ const HELPERS = {
   sound:
     "Pfad zu einer Tondatei in dieser Installation, etwa /local/gong.mp3. Der Ton kommt aus dem Gerät, das gerade hinsieht — für eine verlässliche Ansage besser eine Automation auf timer.finished.",
   sound_volume: "0 bis 100. Standard ist 80.",
+  sound_player:
+    "Spielt eine Automation den Ton über einen Lautsprecher, lässt er sich mit dem Knopf in der Karte abstellen. Derselbe Lautsprecher wie im Blueprint.",
   timer_entity:
     "Ein Timer-Helfer aus Home Assistant. Ohne ihn erscheint kein Weckersymbol. Anlegen unter Einstellungen → Geräte & Dienste → Helfer → Timer.",
   time_zone: "Leer lassen für die Zeitzone des Browsers, z. B. Europe/Berlin.",

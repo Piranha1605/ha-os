@@ -629,7 +629,45 @@ console.log("\n13. Kurzzeitwecker in der Uhr");
     karte.hass = mitTimer("idle", { duration: "0:05:00" });
     check("und nicht noch einmal danach", gespielt.length === 1, `${gespielt.length}`);
 
+    // Solange es klingelt, tritt der Stoppknopf an die Stelle des Weckers.
+    const sr5 = karte.shadowRoot;
+    check("Stoppknopf erscheint", !sr5.querySelector(".clock-timer-btn.is-ringing").hidden);
+    check("Weckerknopf tritt zurueck", sr5.querySelector(".clock-timer-btn:not(.is-ringing)").hidden);
+    check("Zeile meldet den Ablauf",
+      sr5.querySelector(".clock-timer").textContent === "Wecker abgelaufen",
+      sr5.querySelector(".clock-timer").textContent);
+
+    sr5.querySelector(".clock-timer-btn.is-ringing").click();
+    check("Stoppknopf beendet das Klingeln", sr5.querySelector(".clock-timer-btn.is-ringing").hidden);
+    check("Weckerknopf ist wieder da", !sr5.querySelector(".clock-timer-btn:not(.is-ringing)").hidden);
+
     globalThis.Audio = echtesAudio;
+  }
+
+  // Mit Lautsprecher: der Knopf stoppt auch die Automation - und erscheint
+  // selbst dann, wenn die Karte gar keine eigene Tondatei hat.
+  {
+    const karte = document.createElement("ha-os-card");
+    karte.setConfig({
+      type: "custom:ha-os-card", card_type: "clock",
+      timer_entity: "timer.kueche", sound_player: "media_player.buro",
+    });
+    document.body.append(karte);
+    const mitTimer = (zustandName) => ({
+      ...makeHass(),
+      states: { ...makeHass().states, "timer.kueche": zustand("timer.kueche", zustandName, { duration: "0:05:00" }) },
+    });
+
+    karte.hass = mitTimer("active");
+    karte.hass = mitTimer("idle");
+    const sr6 = karte.shadowRoot;
+    check("Knopf auch ohne eigene Tondatei", !sr6.querySelector(".clock-timer-btn.is-ringing").hidden);
+
+    calls.length = 0;
+    sr6.querySelector(".clock-timer-btn.is-ringing").click();
+    check("stoppt den Lautsprecher",
+      calls[0]?.dienst === "media_player.media_stop" && calls[0]?.daten?.entity_id === "media_player.buro",
+      JSON.stringify(calls[0] || {}));
   }
 
   const angehalten = bauen({ timer_entity: "timer.kueche" },

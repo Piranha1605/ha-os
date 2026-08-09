@@ -1,4 +1,4 @@
-/* HA-OS 0.28.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.29.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -3365,6 +3365,9 @@ var STYLES3 = `
   }
   .clock-timer-btn[hidden] { display: none; }
   .clock-timer-btn.is-active { color: var(--haos-accent, #0a84ff); }
+  /* Der Stoppknopf sitzt an derselben Stelle und tritt an die Stelle des
+     Weckers, solange es klingelt. */
+  .clock-timer-btn.is-ringing { color: var(--haos-bad, #ff6b6b); }
   .clock-timer-btn ha-icon { --mdc-icon-size: 17px; position: relative; z-index: 1; }
   /* Ring um das Symbol. Beginnt oben und laeuft im Uhrzeigersinn ab. */
   .timer-ring { position: absolute; inset: -1px; transform: rotate(-90deg); pointer-events: none; }
@@ -4636,6 +4639,14 @@ var renderers = {
       ctx.nodes.timerRing = ringWert;
       ctx.nodes.timerRingLength = ringUmfang;
       ctx.nodes.timerButton.append(ringSvg, icon2("mdi:timer-outline"));
+      ctx.nodes.silenceButton = el3("button", "clock-timer-btn is-ringing");
+      ctx.nodes.silenceButton.append(icon2("mdi:bell-off"));
+      ctx.nodes.silenceButton.title = "Ton abstellen";
+      ctx.nodes.silenceButton.hidden = true;
+      ctx.nodes.silenceButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        renderers.clock._silence(ctx);
+      });
       ctx.nodes.timerButton.title = "Kurzzeitwecker";
       ctx.nodes.timerButton.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -4643,7 +4654,7 @@ var renderers = {
         renderers.clock._openSheet(ctx);
         renderers.clock._paintDial(ctx);
       });
-      root.append(ctx.nodes.timerButton);
+      root.append(ctx.nodes.timerButton, ctx.nodes.silenceButton);
       const sheet = document.createElement("dialog");
       sheet.className = "sheet";
       const dial = el3("div", "dial timer-dial");
@@ -4843,6 +4854,14 @@ var renderers = {
       ctx.nodes.timerLine.hidden = !ctx.nodes.timerLine.textContent;
       const rest = renderers.clock._remainingSeconds(ctx);
       ctx.nodes.timerLine.classList.toggle("is-soon", rest <= 60 && state?.state === "active");
+      const klingelt = renderers.clock._isRinging(ctx);
+      ctx.nodes.silenceButton.hidden = !klingelt;
+      ctx.nodes.timerButton.hidden = klingelt || !ctx.config.timer_entity;
+      if (klingelt) {
+        ctx.nodes.timerLine.textContent = "Wecker abgelaufen";
+        ctx.nodes.timerLine.hidden = false;
+        ctx.nodes.timerLine.classList.add("is-soon");
+      }
       if (ctx.nodes.timerRing) {
         const teile = String(state?.attributes?.duration || "").split(":").map(Number);
         const gesamt = teile.length === 3 && teile.every(Number.isFinite) ? teile[0] * 3600 + teile[1] * 60 + teile[2] : 0;
@@ -4871,14 +4890,42 @@ var renderers = {
       const vorher = ctx.nodes.timerPrevState;
       ctx.nodes.timerPrevState = jetzt;
       if (vorher !== "active" || jetzt === "active" || jetzt === "paused") return;
+      ctx.nodes.ringingUntil = Date.now() + 9e4;
       if (!ctx.config.sound) return;
       try {
         const ton = new Audio(ctx.config.sound);
         ton.volume = clampNumber(ctx.config.sound_volume, 0, 100, 80) / 100;
+        ton.addEventListener?.("ended", () => {
+          if (ctx.nodes.audio === ton) ctx.nodes.audio = null;
+        });
+        ctx.nodes.audio = ton;
         ton.play?.().catch(() => {
         });
       } catch (_error) {
       }
+    },
+    /** Klingelt gerade etwas, das sich abstellen laesst? */
+    _isRinging(ctx) {
+      if (ctx.nodes.audio) return true;
+      if (!ctx.config.sound_player) return false;
+      return Date.now() < (ctx.nodes.ringingUntil || 0);
+    },
+    /** Stellt den Ton ab – im Browser und auf dem Lautsprecher. */
+    _silence(ctx) {
+      const ton = ctx.nodes.audio;
+      if (ton) {
+        try {
+          ton.pause?.();
+          ton.currentTime = 0;
+        } catch (_error) {
+        }
+        ctx.nodes.audio = null;
+      }
+      ctx.nodes.ringingUntil = 0;
+      if (ctx.config.sound_player) {
+        ctx.hass?.callService("media_player", "media_stop", { entity_id: ctx.config.sound_player });
+      }
+      renderers.clock._paintRemaining(ctx);
     },
     /** Zeichnet den Ring und die Zahl im Fenster. */
     _paintDial(ctx) {
@@ -4893,7 +4940,6 @@ var renderers = {
     },
     update(ctx) {
       const timer = ctx.config.timer_entity ? ctx.hass?.states?.[ctx.config.timer_entity] : null;
-      ctx.nodes.timerButton.hidden = !ctx.config.timer_entity;
       if (!ctx.config.timer_entity) renderers.clock._closeSheet(ctx);
       const laeuft = timer?.state === "active";
       ctx.nodes.timerCancel.hidden = !laeuft;
@@ -5170,6 +5216,7 @@ var SCHEMAS = {
     { name: "timer_entity", selector: { entity: { domain: "timer" } } },
     text("sound"),
     number("sound_volume", 0, 100, 5),
+    { name: "sound_player", selector: { entity: { domain: "media_player" } } },
     {
       name: "hour_format",
       selector: {
@@ -5214,6 +5261,7 @@ var LABELS2 = {
   timer_entity: "Kurzzeitwecker",
   sound: "Ton beim Ablaufen",
   sound_volume: "Lautstärke des Tons",
+  sound_player: "Lautsprecher zum Abstellen",
   haos_weight: "Höhenfaktor",
   align: "Ausrichtung",
   show_line: "Linie anzeigen",
@@ -5228,6 +5276,7 @@ var HELPERS2 = {
   refresh_interval: "Nur beim Standbild. Wie oft ein neues Bild geholt wird.",
   sound: "Pfad zu einer Tondatei in dieser Installation, etwa /local/gong.mp3. Der Ton kommt aus dem Gerät, das gerade hinsieht — für eine verlässliche Ansage besser eine Automation auf timer.finished.",
   sound_volume: "0 bis 100. Standard ist 80.",
+  sound_player: "Spielt eine Automation den Ton über einen Lautsprecher, lässt er sich mit dem Knopf in der Karte abstellen. Derselbe Lautsprecher wie im Blueprint.",
   timer_entity: "Ein Timer-Helfer aus Home Assistant. Ohne ihn erscheint kein Weckersymbol. Anlegen unter Einstellungen → Geräte & Dienste → Helfer → Timer.",
   time_zone: "Leer lassen für die Zeitzone des Browsers, z. B. Europe/Berlin.",
   days: "Zeitraum, der geladen wird.",
@@ -7757,7 +7806,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.28.0";
+var VERSION = "0.29.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

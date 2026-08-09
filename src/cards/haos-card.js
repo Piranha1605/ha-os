@@ -318,6 +318,9 @@ const STYLES = `
   }
   .clock-timer-btn[hidden] { display: none; }
   .clock-timer-btn.is-active { color: var(--haos-accent, #0a84ff); }
+  /* Der Stoppknopf sitzt an derselben Stelle und tritt an die Stelle des
+     Weckers, solange es klingelt. */
+  .clock-timer-btn.is-ringing { color: var(--haos-bad, #ff6b6b); }
   .clock-timer-btn ha-icon { --mdc-icon-size: 17px; position: relative; z-index: 1; }
   /* Ring um das Symbol. Beginnt oben und laeuft im Uhrzeigersinn ab. */
   .timer-ring { position: absolute; inset: -1px; transform: rotate(-90deg); pointer-events: none; }
@@ -2023,6 +2026,26 @@ const renderers = {
       ctx.nodes.timerRingLength = ringUmfang;
 
       ctx.nodes.timerButton.append(ringSvg, icon("mdi:timer-outline"));
+
+      /*
+       * Ton abstellen.
+       *
+       * Sitzt an derselben Stelle wie der Weckerknopf und tritt an dessen
+       * Platz, solange es klingelt. Zwei Knoepfe nebeneinander waeren in
+       * dieser Ecke zu eng, und der Wecker laesst sich ohnehin nicht neu
+       * stellen, waehrend der alte noch laeutet.
+       *
+       * Er stoppt beides: den Ton im Browser und - falls ein Lautsprecher
+       * eingetragen ist - den der Automation.
+       */
+      ctx.nodes.silenceButton = el("button", "clock-timer-btn is-ringing");
+      ctx.nodes.silenceButton.append(icon("mdi:bell-off"));
+      ctx.nodes.silenceButton.title = "Ton abstellen";
+      ctx.nodes.silenceButton.hidden = true;
+      ctx.nodes.silenceButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        renderers.clock._silence(ctx);
+      });
       ctx.nodes.timerButton.title = "Kurzzeitwecker";
       ctx.nodes.timerButton.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -2030,7 +2053,7 @@ const renderers = {
         renderers.clock._openSheet(ctx);
         renderers.clock._paintDial(ctx);
       });
-      root.append(ctx.nodes.timerButton);
+      root.append(ctx.nodes.timerButton, ctx.nodes.silenceButton);
 
       // --- Fenster mit Drehregler
       const sheet = document.createElement("dialog");
@@ -2276,6 +2299,16 @@ const renderers = {
       const rest = renderers.clock._remainingSeconds(ctx);
       ctx.nodes.timerLine.classList.toggle("is-soon", rest <= 60 && state?.state === "active");
 
+      // Solange es klingelt, tritt der Stoppknopf an die Stelle des Weckers.
+      const klingelt = renderers.clock._isRinging(ctx);
+      ctx.nodes.silenceButton.hidden = !klingelt;
+      ctx.nodes.timerButton.hidden = klingelt || !ctx.config.timer_entity;
+      if (klingelt) {
+        ctx.nodes.timerLine.textContent = "Wecker abgelaufen";
+        ctx.nodes.timerLine.hidden = false;
+        ctx.nodes.timerLine.classList.add("is-soon");
+      }
+
       // Ring: voll bei Start, leer am Ende. Die Gesamtdauer steht in
       // `duration` als "H:MM:SS" – ohne sie liesse sich kein Anteil bilden.
       if (ctx.nodes.timerRing) {
@@ -2310,17 +2343,56 @@ const renderers = {
       ctx.nodes.timerPrevState = jetzt;
 
       if (vorher !== "active" || jetzt === "active" || jetzt === "paused") return;
+
+      // Auch ohne eigene Tondatei gilt die Karte als klingelnd, sofern ein
+      // Lautsprecher eingetragen ist: dann laeuft der Ton ueber die
+      // Automation, und der Knopf soll ihn abstellen koennen.
+      ctx.nodes.ringingUntil = Date.now() + 90000;
+
       if (!ctx.config.sound) return;
 
       try {
         const ton = new Audio(ctx.config.sound);
         ton.volume = clampNumber(ctx.config.sound_volume, 0, 100, 80) / 100;
+        ton.addEventListener?.("ended", () => {
+          if (ctx.nodes.audio === ton) ctx.nodes.audio = null;
+        });
+        ctx.nodes.audio = ton;
         // Ein abgelehntes Abspielen ist kein Fehler, den jemand sehen muss:
         // dann fehlte die Bedienung, oder die Datei gibt es nicht.
         ton.play?.().catch(() => {});
       } catch (_error) {
         /* Kein Ton moeglich. */
       }
+    },
+
+    /** Klingelt gerade etwas, das sich abstellen laesst? */
+    _isRinging(ctx) {
+      if (ctx.nodes.audio) return true;
+      if (!ctx.config.sound_player) return false;
+      return Date.now() < (ctx.nodes.ringingUntil || 0);
+    },
+
+    /** Stellt den Ton ab – im Browser und auf dem Lautsprecher. */
+    _silence(ctx) {
+      const ton = ctx.nodes.audio;
+      if (ton) {
+        try {
+          ton.pause?.();
+          ton.currentTime = 0;
+        } catch (_error) {
+          /* Schon vorbei. */
+        }
+        ctx.nodes.audio = null;
+      }
+
+      ctx.nodes.ringingUntil = 0;
+
+      if (ctx.config.sound_player) {
+        ctx.hass?.callService("media_player", "media_stop", { entity_id: ctx.config.sound_player });
+      }
+
+      renderers.clock._paintRemaining(ctx);
     },
 
     /** Zeichnet den Ring und die Zahl im Fenster. */
@@ -2339,7 +2411,6 @@ const renderers = {
       // Kurzzeitwecker: der Knopf erscheint nur, wenn eine Timer-Entitaet
       // gesetzt ist. Ohne sie waere er ein Knopf ohne Wirkung.
       const timer = ctx.config.timer_entity ? ctx.hass?.states?.[ctx.config.timer_entity] : null;
-      ctx.nodes.timerButton.hidden = !ctx.config.timer_entity;
       if (!ctx.config.timer_entity) renderers.clock._closeSheet(ctx);
 
       const laeuft = timer?.state === "active";
