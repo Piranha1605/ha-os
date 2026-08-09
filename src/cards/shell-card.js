@@ -33,6 +33,7 @@ import {
   formatState,
   friendlyName,
   handleAction,
+  isEnergySensor,
   isEqualConfig,
   isUnavailable,
   registerCard,
@@ -1053,7 +1054,7 @@ class HaOsShell extends HTMLElement {
           ? badge.entities
           : Object.keys(states).filter((id) => {
               if (!id.startsWith("sensor.")) return false;
-              if (states[id].attributes?.device_class !== "energy") return false;
+              if (!isEnergySensor(states[id])) return false;
               return !badge.suffix || id.endsWith(badge.suffix);
             });
 

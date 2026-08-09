@@ -715,7 +715,10 @@ console.log("\n14. Energieliste und Summen-Badge");
     "sensor.a_energy_total": zustand("sensor.a_energy_total", "980", { device_class: "energy", friendly_name: "Aquarium gesamt" }),
     // Ohne Messwert: wird uebergangen, nicht als 0 gewertet.
     "sensor.d_energy_today": zustand("sensor.d_energy_today", "unavailable", { device_class: "energy", friendly_name: "Tot" }),
-    "sensor.kein_energie": zustand("sensor.kein_energie", "7", { friendly_name: "Temperatur" }),
+    "sensor.kein_energie": zustand("sensor.kein_energie", "7", { friendly_name: "Temperatur", unit_of_measurement: "°C" }),
+    // Ohne device_class, aber mit kWh: manche Integrationen liefern nur die
+    // Einheit. Wer nur die Klasse prueft, uebersieht diese Zaehler.
+    "sensor.e_energy_today": zustand("sensor.e_energy_today", "5", { unit_of_measurement: "kWh", friendly_name: "Ohne Klasse" }),
   };
 
   const karte = document.createElement("ha-os-card");
@@ -724,14 +727,14 @@ console.log("\n14. Energieliste und Summen-Badge");
   karte.hass = { ...makeHass(), states: energieZustaende };
 
   const zeilen = [...karte.shadowRoot.querySelectorAll(".energy-row")];
-  check("nur die passenden Zaehler", zeilen.length === 3, `${zeilen.length}`);
+  check("auch Zaehler ohne Geraeteklasse", zeilen.length === 4, `${zeilen.length}`);
   check("nach Verbrauch sortiert",
-    zeilen.map((z) => z.querySelector(".energy-name").textContent).join(" | ") === "Ladestation | Aquarium | Pumpe",
+    zeilen.map((z) => z.querySelector(".energy-name").textContent).join(" | ") === "Ladestation | Aquarium | Ohne Klasse | Pumpe",
     zeilen.map((z) => z.querySelector(".energy-name").textContent).join(" | "));
   check("groesster Balken voll", zeilen[0].querySelector(".energy-bar span").style.width === "100%",
     zeilen[0].querySelector(".energy-bar span").style.width);
   check("Summe stimmt",
-    karte.shadowRoot.querySelector(".energy-total").textContent === "Summe 55,7 kWh",
+    karte.shadowRoot.querySelector(".energy-total").textContent === "Summe 60,7 kWh",
     karte.shadowRoot.querySelector(".energy-total").textContent);
 
   const gekuerzt = document.createElement("ha-os-card");
@@ -740,7 +743,7 @@ console.log("\n14. Energieliste und Summen-Badge");
   gekuerzt.hass = { ...makeHass(), states: energieZustaende };
   check("Begrenzung wirkt", gekuerzt.shadowRoot.querySelectorAll(".energy-row").length === 2);
   check("der Rest wird genannt",
-    gekuerzt.shadowRoot.querySelector(".energy-total").textContent.includes("1 weitere"),
+    gekuerzt.shadowRoot.querySelector(".energy-total").textContent.includes("2 weitere"),
     gekuerzt.shadowRoot.querySelector(".energy-total").textContent);
 }
 

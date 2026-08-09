@@ -275,6 +275,22 @@ export const CARD_SURFACE_CSS = `
   -webkit-backdrop-filter: blur(var(--haos-card-blur, 14px)) saturate(var(--haos-card-saturation, 180%));
 `;
 
+/**
+ * Ist das ein Energiezaehler?
+ *
+ * Zwei Kennzeichen statt eines: die Geraeteklasse UND die Einheit. Nicht
+ * jede Integration setzt `device_class` - PowerCalc etwa liefert Sensoren
+ * ohne Einheit im Register, andere ohne Klasse. Wer nur eines prueft,
+ * uebersieht die Haelfte.
+ */
+export const isEnergySensor = (state) => {
+  if (!state) return false;
+  const attributes = state.attributes || {};
+  if (attributes.device_class === "energy") return true;
+  const unit = String(attributes.unit_of_measurement || "").toLowerCase();
+  return unit === "kwh" || unit === "wh" || unit === "mwh";
+};
+
 /** Registriert eine Karte im HA-Kartenauswahldialog. */
 export const registerCard = (entry) => {
   window.customCards = window.customCards || [];

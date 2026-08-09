@@ -1,4 +1,4 @@
-/* HA-OS 0.30.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.30.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -492,6 +492,13 @@ var CARD_SURFACE_CSS = `
   backdrop-filter: blur(var(--haos-card-blur, 14px)) saturate(var(--haos-card-saturation, 180%));
   -webkit-backdrop-filter: blur(var(--haos-card-blur, 14px)) saturate(var(--haos-card-saturation, 180%));
 `;
+var isEnergySensor = (state) => {
+  if (!state) return false;
+  const attributes = state.attributes || {};
+  if (attributes.device_class === "energy") return true;
+  const unit = String(attributes.unit_of_measurement || "").toLowerCase();
+  return unit === "kwh" || unit === "wh" || unit === "mwh";
+};
 var registerCard = (entry) => {
   window.customCards = window.customCards || [];
   if (!window.customCards.some((card) => card.type === entry.type)) window.customCards.push(entry);
@@ -1710,7 +1717,7 @@ var HaOsShell = class extends HTMLElement {
         const states = this._hass?.states || {};
         const ids = badge.entities.length ? badge.entities : Object.keys(states).filter((id) => {
           if (!id.startsWith("sensor.")) return false;
-          if (states[id].attributes?.device_class !== "energy") return false;
+          if (!isEnergySensor(states[id])) return false;
           return !badge.suffix || id.endsWith(badge.suffix);
         });
         let summe = 0;
@@ -4576,8 +4583,7 @@ var renderers = {
       const endung = String(ctx.config.suffix || "").trim();
       return Object.keys(states).filter((id) => {
         if (!id.startsWith("sensor.")) return false;
-        const attributes = states[id].attributes || {};
-        if (attributes.device_class !== "energy") return false;
+        if (!isEnergySensor(states[id])) return false;
         if (endung && !id.endsWith(endung)) return false;
         return true;
       });
@@ -7997,7 +8003,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.30.0";
+var VERSION = "0.30.1";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

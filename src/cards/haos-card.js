@@ -18,6 +18,7 @@ import {
   formatState,
   friendlyName,
   handleAction,
+  isEnergySensor,
   isActive,
   isUnavailable,
   registerCard,
@@ -1851,8 +1852,7 @@ const renderers = {
 
       return Object.keys(states).filter((id) => {
         if (!id.startsWith("sensor.")) return false;
-        const attributes = states[id].attributes || {};
-        if (attributes.device_class !== "energy") return false;
+        if (!isEnergySensor(states[id])) return false;
         if (endung && !id.endsWith(endung)) return false;
         return true;
       });
