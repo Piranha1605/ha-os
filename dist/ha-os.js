@@ -1,4 +1,4 @@
-/* HA-OS 0.27.1 – erzeugt aus src/, nicht von Hand bearbeiten. */
+/* HA-OS 0.28.0 – erzeugt aus src/, nicht von Hand bearbeiten. */
 
 // src/shared/theme.js
 var STORAGE_KEY = "ha-os-theme-v1";
@@ -3365,7 +3365,14 @@ var STYLES3 = `
   }
   .clock-timer-btn[hidden] { display: none; }
   .clock-timer-btn.is-active { color: var(--haos-accent, #0a84ff); }
-  .clock-timer-btn ha-icon { --mdc-icon-size: 17px; }
+  .clock-timer-btn ha-icon { --mdc-icon-size: 17px; position: relative; z-index: 1; }
+  /* Ring um das Symbol. Beginnt oben und laeuft im Uhrzeigersinn ab. */
+  .timer-ring { position: absolute; inset: -1px; transform: rotate(-90deg); pointer-events: none; }
+  .timer-ring .ring-track { fill: none; stroke: rgba(var(--haos-text-rgb, 255,255,255), .16); stroke-width: 2.5; }
+  .timer-ring .ring-value {
+    fill: none; stroke: var(--haos-accent, #0a84ff); stroke-width: 2.5; stroke-linecap: round;
+    transition: stroke-dashoffset .9s linear;
+  }
 
   /* Echtes Fenster: <dialog> mit showModal(). Es liegt in der Top Layer des
      Browsers, also ueber allem - unabhaengig davon, was die Karte an
@@ -4608,7 +4615,27 @@ var renderers = {
       ctx.nodes.timerLine = el3("div", "clock-timer");
       root.append(ctx.nodes.time, ctx.nodes.date, ctx.nodes.timerLine);
       ctx.nodes.timerButton = el3("button", "clock-timer-btn");
-      ctx.nodes.timerButton.append(icon2("mdi:timer-outline"));
+      const RING = "http://www.w3.org/2000/svg";
+      const ringSvg = document.createElementNS(RING, "svg");
+      ringSvg.setAttribute("viewBox", "0 0 36 36");
+      ringSvg.setAttribute("class", "timer-ring");
+      const ringUmfang = 2 * Math.PI * 16;
+      const ringBahn = document.createElementNS(RING, "circle");
+      ringBahn.setAttribute("class", "ring-track");
+      ringBahn.setAttribute("cx", "18");
+      ringBahn.setAttribute("cy", "18");
+      ringBahn.setAttribute("r", "16");
+      const ringWert = document.createElementNS(RING, "circle");
+      ringWert.setAttribute("class", "ring-value");
+      ringWert.setAttribute("cx", "18");
+      ringWert.setAttribute("cy", "18");
+      ringWert.setAttribute("r", "16");
+      ringWert.setAttribute("stroke-dasharray", String(ringUmfang));
+      ringWert.setAttribute("stroke-dashoffset", String(ringUmfang));
+      ringSvg.append(ringBahn, ringWert);
+      ctx.nodes.timerRing = ringWert;
+      ctx.nodes.timerRingLength = ringUmfang;
+      ctx.nodes.timerButton.append(ringSvg, icon2("mdi:timer-outline"));
       ctx.nodes.timerButton.title = "Kurzzeitwecker";
       ctx.nodes.timerButton.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -4729,6 +4756,7 @@ var renderers = {
           ctx.nodes.time.textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
           ctx.nodes.date.textContent = "";
         }
+        renderers.clock._maybeChime(ctx);
         renderers.clock._paintRemaining(ctx);
       };
       renderers.clock.reconnect(ctx);
@@ -4813,7 +4841,44 @@ var renderers = {
         ctx.nodes.timerLine.textContent = "";
       }
       ctx.nodes.timerLine.hidden = !ctx.nodes.timerLine.textContent;
-      ctx.nodes.timerLine.classList.toggle("is-soon", renderers.clock._remainingSeconds(ctx) <= 60 && state?.state === "active");
+      const rest = renderers.clock._remainingSeconds(ctx);
+      ctx.nodes.timerLine.classList.toggle("is-soon", rest <= 60 && state?.state === "active");
+      if (ctx.nodes.timerRing) {
+        const teile = String(state?.attributes?.duration || "").split(":").map(Number);
+        const gesamt = teile.length === 3 && teile.every(Number.isFinite) ? teile[0] * 3600 + teile[1] * 60 + teile[2] : 0;
+        const anteil = gesamt > 0 ? Math.max(0, Math.min(1, rest / gesamt)) : 0;
+        ctx.nodes.timerRing.setAttribute(
+          "stroke-dashoffset",
+          String(ctx.nodes.timerRingLength * (1 - anteil))
+        );
+      }
+    },
+    /**
+     * Ton beim Ablaufen.
+     *
+     * Abgespielt wird im Browser, sobald der Wecker von "active" auf etwas
+     * anderes springt. Das trifft nur zu, wenn dieses Geraet gerade
+     * hinsieht – laeuft der Wecker ab, waehrend das Tablet aus ist, hoert
+     * niemand etwas. Wer den Ton sicher haben will, laesst ihn per
+     * Automation auf `timer.finished` ueber einen Lautsprecher ansagen.
+     *
+     * Der Browser erlaubt Ton erst nach einer Bedienung durch den Anwender.
+     * Das ist hier gegeben: den Wecker startet man mit einem Tipp auf
+     * dieselbe Seite.
+     */
+    _maybeChime(ctx) {
+      const jetzt = ctx.hass?.states?.[ctx.config.timer_entity]?.state || "";
+      const vorher = ctx.nodes.timerPrevState;
+      ctx.nodes.timerPrevState = jetzt;
+      if (vorher !== "active" || jetzt === "active" || jetzt === "paused") return;
+      if (!ctx.config.sound) return;
+      try {
+        const ton = new Audio(ctx.config.sound);
+        ton.volume = clampNumber(ctx.config.sound_volume, 0, 100, 80) / 100;
+        ton.play?.().catch(() => {
+        });
+      } catch (_error) {
+      }
     },
     /** Zeichnet den Ring und die Zahl im Fenster. */
     _paintDial(ctx) {
@@ -4908,7 +4973,9 @@ var HaOsCard = class extends HTMLElement {
   /** Entitäten, auf die diese Karte tatsächlich reagieren muss. */
   _watchedEntities() {
     const config = this._config || {};
-    const ids = [config.entity, config.state_entity, ...config.entities || []].filter(Boolean);
+    const ids = [config.entity, config.state_entity, config.timer_entity, ...config.entities || []].filter(
+      Boolean
+    );
     if (config.card_type === "members" && !config.entities?.length) {
       return Object.keys(this._hass?.states || {}).filter((id) => id.startsWith("person."));
     }
@@ -5101,6 +5168,8 @@ var SCHEMAS = {
   clock: [
     text("name"),
     { name: "timer_entity", selector: { entity: { domain: "timer" } } },
+    text("sound"),
+    number("sound_volume", 0, 100, 5),
     {
       name: "hour_format",
       selector: {
@@ -5143,6 +5212,8 @@ var LABELS2 = {
   show_date: "Datum anzeigen",
   time_zone: "Zeitzone",
   timer_entity: "Kurzzeitwecker",
+  sound: "Ton beim Ablaufen",
+  sound_volume: "Lautstärke des Tons",
   haos_weight: "Höhenfaktor",
   align: "Ausrichtung",
   show_line: "Linie anzeigen",
@@ -5155,6 +5226,8 @@ var HELPERS2 = {
   align: "Mittig setzt die Linie auf beide Seiten. Ein Höhenfaktor um 0,3 passt gut – ein Trenner braucht keine volle Kartenhöhe.",
   camera_mode: "Standbild holt in festem Takt ein einzelnes Bild und schont die Leitung. Livebild überträgt dauerhaft – auf einem Wandtablet mit mehreren Kameras spürbar. Tippen öffnet in beiden Fällen den großen Kameradialog.",
   refresh_interval: "Nur beim Standbild. Wie oft ein neues Bild geholt wird.",
+  sound: "Pfad zu einer Tondatei in dieser Installation, etwa /local/gong.mp3. Der Ton kommt aus dem Gerät, das gerade hinsieht — für eine verlässliche Ansage besser eine Automation auf timer.finished.",
+  sound_volume: "0 bis 100. Standard ist 80.",
   timer_entity: "Ein Timer-Helfer aus Home Assistant. Ohne ihn erscheint kein Weckersymbol. Anlegen unter Einstellungen → Geräte & Dienste → Helfer → Timer.",
   time_zone: "Leer lassen für die Zeitzone des Browsers, z. B. Europe/Berlin.",
   days: "Zeitraum, der geladen wird.",
@@ -7684,7 +7757,7 @@ var HaOsPrinterEditor = class extends HTMLElement {
 if (!customElements.get(EDITOR_TAG9)) customElements.define(EDITOR_TAG9, HaOsPrinterEditor);
 
 // src/ha-os.js
-var VERSION = "0.27.1";
+var VERSION = "0.28.0";
 console.info(
   `%c HA-OS %c ${VERSION} `,
   "background:#0a84ff;color:#fff;font-weight:700;border-radius:3px 0 0 3px;padding:2px 6px",

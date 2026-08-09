@@ -577,6 +577,61 @@ console.log("\n13. Kurzzeitwecker in der Uhr");
     gleich.shadowRoot.querySelector(".clock-timer").classList.contains("is-soon"),
     gleich.shadowRoot.querySelector(".clock-timer").textContent);
 
+  // Ring: voll bei Start, leer am Ende.
+  const halb = bauen({ timer_entity: "timer.kueche" },
+    zustand("timer.kueche", "active", {
+      duration: "0:10:00",
+      finishes_at: new Date(Date.now() + 5 * 60000).toISOString(),
+    }));
+  const ring = halb.shadowRoot.querySelector(".ring-value");
+  const laenge = Number(ring.getAttribute("stroke-dasharray"));
+  const offen = Number(ring.getAttribute("stroke-dashoffset"));
+  check("Ring steht bei der Haelfte", Math.abs(offen / laenge - 0.5) < 0.02,
+    `${(offen / laenge).toFixed(2)}`);
+
+  const fast = bauen({ timer_entity: "timer.kueche" },
+    zustand("timer.kueche", "active", {
+      duration: "0:10:00",
+      finishes_at: new Date(Date.now() + 30000).toISOString(),
+    }));
+  const ring2 = fast.shadowRoot.querySelector(".ring-value");
+  check("kurz vor Schluss ist der Ring fast leer",
+    Number(ring2.getAttribute("stroke-dashoffset")) / Number(ring2.getAttribute("stroke-dasharray")) > 0.9);
+
+  // Ton beim Ablaufen: nur beim Uebergang von laufend auf fertig.
+  {
+    const gespielt = [];
+    const echtesAudio = dom.window.Audio;
+    globalThis.Audio = class {
+      constructor(url) { this.src = url; this.volume = 1; gespielt.push(url); }
+      play() { return Promise.resolve(); }
+    };
+
+    const karte = document.createElement("ha-os-card");
+    karte.setConfig({
+      type: "custom:ha-os-card", card_type: "clock",
+      timer_entity: "timer.kueche", sound: "/local/gong.mp3", sound_volume: 50,
+    });
+    document.body.append(karte);
+
+    const mitTimer = (zustandName, attrs = {}) => ({
+      ...makeHass(),
+      states: { ...makeHass().states, "timer.kueche": zustand("timer.kueche", zustandName, attrs) },
+    });
+
+    karte.hass = mitTimer("active", { duration: "0:05:00", finishes_at: new Date(Date.now() + 60000).toISOString() });
+    check("waehrend er laeuft kein Ton", gespielt.length === 0, gespielt.join(", "));
+
+    karte.hass = mitTimer("idle", { duration: "0:05:00" });
+    check("beim Ablaufen ertoent der Ton", gespielt.length === 1 && gespielt[0] === "/local/gong.mp3",
+      gespielt.join(", ") || "keiner");
+
+    karte.hass = mitTimer("idle", { duration: "0:05:00" });
+    check("und nicht noch einmal danach", gespielt.length === 1, `${gespielt.length}`);
+
+    globalThis.Audio = echtesAudio;
+  }
+
   const angehalten = bauen({ timer_entity: "timer.kueche" },
     zustand("timer.kueche", "paused", { remaining: "0:07:30" }));
   check("angehalten zeigt den Rest",

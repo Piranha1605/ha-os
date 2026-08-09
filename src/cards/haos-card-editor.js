@@ -148,6 +148,8 @@ const SCHEMAS = {
   clock: [
     text("name"),
     { name: "timer_entity", selector: { entity: { domain: "timer" } } },
+    text("sound"),
+    number("sound_volume", 0, 100, 5),
     {
       name: "hour_format",
       selector: {
@@ -191,6 +193,8 @@ const LABELS = {
   show_date: "Datum anzeigen",
   time_zone: "Zeitzone",
   timer_entity: "Kurzzeitwecker",
+  sound: "Ton beim Ablaufen",
+  sound_volume: "Lautstärke des Tons",
   haos_weight: "Höhenfaktor",
   align: "Ausrichtung",
   show_line: "Linie anzeigen",
@@ -206,6 +210,9 @@ const HELPERS = {
   camera_mode:
     "Standbild holt in festem Takt ein einzelnes Bild und schont die Leitung. Livebild überträgt dauerhaft – auf einem Wandtablet mit mehreren Kameras spürbar. Tippen öffnet in beiden Fällen den großen Kameradialog.",
   refresh_interval: "Nur beim Standbild. Wie oft ein neues Bild geholt wird.",
+  sound:
+    "Pfad zu einer Tondatei in dieser Installation, etwa /local/gong.mp3. Der Ton kommt aus dem Gerät, das gerade hinsieht — für eine verlässliche Ansage besser eine Automation auf timer.finished.",
+  sound_volume: "0 bis 100. Standard ist 80.",
   timer_entity:
     "Ein Timer-Helfer aus Home Assistant. Ohne ihn erscheint kein Weckersymbol. Anlegen unter Einstellungen → Geräte & Dienste → Helfer → Timer.",
   time_zone: "Leer lassen für die Zeitzone des Browsers, z. B. Europe/Berlin.",

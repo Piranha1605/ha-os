@@ -318,7 +318,14 @@ const STYLES = `
   }
   .clock-timer-btn[hidden] { display: none; }
   .clock-timer-btn.is-active { color: var(--haos-accent, #0a84ff); }
-  .clock-timer-btn ha-icon { --mdc-icon-size: 17px; }
+  .clock-timer-btn ha-icon { --mdc-icon-size: 17px; position: relative; z-index: 1; }
+  /* Ring um das Symbol. Beginnt oben und laeuft im Uhrzeigersinn ab. */
+  .timer-ring { position: absolute; inset: -1px; transform: rotate(-90deg); pointer-events: none; }
+  .timer-ring .ring-track { fill: none; stroke: rgba(var(--haos-text-rgb, 255,255,255), .16); stroke-width: 2.5; }
+  .timer-ring .ring-value {
+    fill: none; stroke: var(--haos-accent, #0a84ff); stroke-width: 2.5; stroke-linecap: round;
+    transition: stroke-dashoffset .9s linear;
+  }
 
   /* Echtes Fenster: <dialog> mit showModal(). Es liegt in der Top Layer des
      Browsers, also ueber allem - unabhaengig davon, was die Karte an
@@ -1991,7 +1998,31 @@ const renderers = {
        * also weiter. Esc und der Klick auf den Hintergrund schliessen.
        */
       ctx.nodes.timerButton = el("button", "clock-timer-btn");
-      ctx.nodes.timerButton.append(icon("mdi:timer-outline"));
+
+      // Ring um das Symbol. Er leert sich, waehrend der Wecker laeuft –
+      // die Zahl darunter sagt wie lange, der Ring sagt wie weit.
+      const RING = "http://www.w3.org/2000/svg";
+      const ringSvg = document.createElementNS(RING, "svg");
+      ringSvg.setAttribute("viewBox", "0 0 36 36");
+      ringSvg.setAttribute("class", "timer-ring");
+      const ringUmfang = 2 * Math.PI * 16;
+      const ringBahn = document.createElementNS(RING, "circle");
+      ringBahn.setAttribute("class", "ring-track");
+      ringBahn.setAttribute("cx", "18");
+      ringBahn.setAttribute("cy", "18");
+      ringBahn.setAttribute("r", "16");
+      const ringWert = document.createElementNS(RING, "circle");
+      ringWert.setAttribute("class", "ring-value");
+      ringWert.setAttribute("cx", "18");
+      ringWert.setAttribute("cy", "18");
+      ringWert.setAttribute("r", "16");
+      ringWert.setAttribute("stroke-dasharray", String(ringUmfang));
+      ringWert.setAttribute("stroke-dashoffset", String(ringUmfang));
+      ringSvg.append(ringBahn, ringWert);
+      ctx.nodes.timerRing = ringWert;
+      ctx.nodes.timerRingLength = ringUmfang;
+
+      ctx.nodes.timerButton.append(ringSvg, icon("mdi:timer-outline"));
       ctx.nodes.timerButton.title = "Kurzzeitwecker";
       ctx.nodes.timerButton.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -2145,6 +2176,7 @@ const renderers = {
           ctx.nodes.date.textContent = "";
         }
 
+        renderers.clock._maybeChime(ctx);
         renderers.clock._paintRemaining(ctx);
       };
 
@@ -2240,7 +2272,55 @@ const renderers = {
         ctx.nodes.timerLine.textContent = "";
       }
       ctx.nodes.timerLine.hidden = !ctx.nodes.timerLine.textContent;
-      ctx.nodes.timerLine.classList.toggle("is-soon", renderers.clock._remainingSeconds(ctx) <= 60 && state?.state === "active");
+
+      const rest = renderers.clock._remainingSeconds(ctx);
+      ctx.nodes.timerLine.classList.toggle("is-soon", rest <= 60 && state?.state === "active");
+
+      // Ring: voll bei Start, leer am Ende. Die Gesamtdauer steht in
+      // `duration` als "H:MM:SS" – ohne sie liesse sich kein Anteil bilden.
+      if (ctx.nodes.timerRing) {
+        const teile = String(state?.attributes?.duration || "").split(":").map(Number);
+        const gesamt = teile.length === 3 && teile.every(Number.isFinite)
+          ? teile[0] * 3600 + teile[1] * 60 + teile[2]
+          : 0;
+        const anteil = gesamt > 0 ? Math.max(0, Math.min(1, rest / gesamt)) : 0;
+        ctx.nodes.timerRing.setAttribute(
+          "stroke-dashoffset",
+          String(ctx.nodes.timerRingLength * (1 - anteil))
+        );
+      }
+    },
+
+    /**
+     * Ton beim Ablaufen.
+     *
+     * Abgespielt wird im Browser, sobald der Wecker von "active" auf etwas
+     * anderes springt. Das trifft nur zu, wenn dieses Geraet gerade
+     * hinsieht – laeuft der Wecker ab, waehrend das Tablet aus ist, hoert
+     * niemand etwas. Wer den Ton sicher haben will, laesst ihn per
+     * Automation auf `timer.finished` ueber einen Lautsprecher ansagen.
+     *
+     * Der Browser erlaubt Ton erst nach einer Bedienung durch den Anwender.
+     * Das ist hier gegeben: den Wecker startet man mit einem Tipp auf
+     * dieselbe Seite.
+     */
+    _maybeChime(ctx) {
+      const jetzt = ctx.hass?.states?.[ctx.config.timer_entity]?.state || "";
+      const vorher = ctx.nodes.timerPrevState;
+      ctx.nodes.timerPrevState = jetzt;
+
+      if (vorher !== "active" || jetzt === "active" || jetzt === "paused") return;
+      if (!ctx.config.sound) return;
+
+      try {
+        const ton = new Audio(ctx.config.sound);
+        ton.volume = clampNumber(ctx.config.sound_volume, 0, 100, 80) / 100;
+        // Ein abgelehntes Abspielen ist kein Fehler, den jemand sehen muss:
+        // dann fehlte die Bedienung, oder die Datei gibt es nicht.
+        ton.play?.().catch(() => {});
+      } catch (_error) {
+        /* Kein Ton moeglich. */
+      }
     },
 
     /** Zeichnet den Ring und die Zahl im Fenster. */
@@ -2377,7 +2457,12 @@ class HaOsCard extends HTMLElement {
   /** Entitäten, auf die diese Karte tatsächlich reagieren muss. */
   _watchedEntities() {
     const config = this._config || {};
-    const ids = [config.entity, config.state_entity, ...(config.entities || [])].filter(Boolean);
+    // `timer_entity` gehoert dazu, sonst erreichen den Wecker keine
+    // Zustandsmeldungen: die Uhr hat sonst gar keine Entitaet und wuerde
+    // vom Filter komplett uebergangen.
+    const ids = [config.entity, config.state_entity, config.timer_entity, ...(config.entities || [])].filter(
+      Boolean
+    );
 
     // Mitglieder ohne feste Liste beobachten alle Personen.
     if (config.card_type === "members" && !config.entities?.length) {
